@@ -33,11 +33,18 @@ func main() {
 		log.Fatalf("startup directory validation failed: %v", err)
 	}
 	selfCheckInput := buildSelfCheckInput(paths)
+	rtpTransport, err := filetransfer.NewTransport(selfCheckInput.NetworkConfig.RTP.Transport)
+	if err != nil {
+		log.Fatalf("init rtp transport failed: %v", err)
+	}
+	if err := rtpTransport.Bootstrap(selfCheckInput.NetworkConfig.RTP); err != nil {
+		log.Fatalf("bootstrap rtp transport mode=%s failed: %v", rtpTransport.Mode(), err)
+	}
 	portPool, err := filetransfer.NewMemoryRTPPortPool(selfCheckInput.NetworkConfig.RTP.PortStart, selfCheckInput.NetworkConfig.RTP.PortEnd)
 	if err != nil {
 		log.Fatalf("init rtp port pool failed: %v", err)
 	}
-	log.Printf("network config loaded sip_transport=%s sip_listen=%s:%d rtp_transport=%s rtp_port_range=[%d,%d]", selfCheckInput.NetworkConfig.SIP.Transport, selfCheckInput.NetworkConfig.SIP.ListenIP, selfCheckInput.NetworkConfig.SIP.ListenPort, selfCheckInput.NetworkConfig.RTP.Transport, selfCheckInput.NetworkConfig.RTP.PortStart, selfCheckInput.NetworkConfig.RTP.PortEnd)
+	log.Printf("network config loaded sip_transport=%s sip_listen=%s:%d rtp_transport=%s rtp_port_range=[%d,%d]", selfCheckInput.NetworkConfig.SIP.Transport, selfCheckInput.NetworkConfig.SIP.ListenIP, selfCheckInput.NetworkConfig.SIP.ListenPort, rtpTransport.Mode(), selfCheckInput.NetworkConfig.RTP.PortStart, selfCheckInput.NetworkConfig.RTP.PortEnd)
 	if selfCheckInput.NetworkConfig.SIP.UDPMessageSizeRisk() {
 		log.Printf("sip udp message size risk detected transport=%s max_message_bytes=%d recommended_max=%d", selfCheckInput.NetworkConfig.SIP.Transport, selfCheckInput.NetworkConfig.SIP.MaxMessageBytes, config.SIPUDPRecommendedMaxMessageBytes)
 	}
@@ -61,7 +68,7 @@ func main() {
 					ListenIP:           selfCheckInput.NetworkConfig.RTP.ListenIP,
 					PortStart:          selfCheckInput.NetworkConfig.RTP.PortStart,
 					PortEnd:            selfCheckInput.NetworkConfig.RTP.PortEnd,
-					Transport:          selfCheckInput.NetworkConfig.RTP.Transport,
+					Transport:          rtpTransport.Mode(),
 					ActiveTransfers:    poolStats.Used,
 					UsedPorts:          poolStats.Used,
 					AvailablePorts:     poolStats.Available,

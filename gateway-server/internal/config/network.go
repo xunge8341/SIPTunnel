@@ -159,7 +159,7 @@ func (c RTPConfig) Validate() error {
 		errs = append(errs, fmt.Errorf("rtp.advertise_ip %q is invalid", c.AdvertiseIP))
 	}
 	transport := strings.ToUpper(strings.TrimSpace(c.Transport))
-	if transport != "UDP" {
+	if transport != "UDP" && transport != "TCP" {
 		errs = append(errs, fmt.Errorf("rtp.transport %q is unsupported", c.Transport))
 	}
 	if c.PortStart < 1 || c.PortStart > 65535 {
