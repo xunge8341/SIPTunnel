@@ -19,6 +19,19 @@ jobs:
           go-version-file: gateway-server/go.mod
       - name: Go test
         run: go test ./...
+      - name: Benchmark smoke (critical path)
+        run: |
+          GOMAXPROCS=1 go test \
+            ./internal/protocol/sip \
+            ./internal/security \
+            ./internal/rtp \
+            ./internal/protocol/rtpfile \
+            ./internal/service/httpinvoke \
+            -run '^$' \
+            -bench 'Benchmark(SIPJSONDecodeValidate|Signer(Sign|Verify)|RTPHeader(Encode|Decode)|File(Split|Assemble)|HTTP(MapByTemplate|InvokeWrapper))$' \
+            -benchmem \
+            -benchtime=100ms \
+            -count=1
       - name: gofmt check
         run: |
           test -z "$(gofmt -l $(find . -name '*.go' -not -path './vendor/*'))"
