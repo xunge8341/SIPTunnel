@@ -60,6 +60,17 @@ npm run dev
 
 该包仅负责协议模型、JSON 编解码和校验，不包含 SIP 网络收发逻辑。
 
+
+## gateway-server SIP 控制面服务骨架
+
+`gateway-server/internal/service/sipcontrol` 新增控制面服务骨架，当前能力：
+
+- 抽象接口：`Receiver`、`Sender`、`Router`、`Handler`，便于后续替换真实 SIP 网络适配。
+- Dispatcher 路由：按 `message_type` 分发至 handler。
+- 统一处理流程：JSON 解析、签名校验、时间窗校验、统一请求上下文（`request_id/trace_id/session_id`）构建。
+- 内置 handler 骨架：`command.create`、`file.create`、`file.retransmit.request`、`task.cancel`，并返回 `command.accepted` / `file.accepted`。
+- 预留日志和 metrics 埋点，供观测系统接入。
+
 ## RTP 文件面应用层协议
 
 `gateway-server/internal/protocol/rtpfile` 提供 RTP 文件传输应用层协议库：
