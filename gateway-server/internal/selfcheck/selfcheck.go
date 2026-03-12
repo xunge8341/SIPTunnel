@@ -91,6 +91,7 @@ func (r *Runner) Run(ctx context.Context, in Input) Report {
 	items = append(items, r.checkSIPPortOccupancy(in.NetworkConfig.SIP)...)
 	items = append(items, r.checkSIPUDPMessageSizeRisk(in.NetworkConfig.SIP)...)
 	items = append(items, r.checkRTPRange(in.NetworkConfig.RTP)...)
+	items = append(items, r.checkRTPTransportPlan(in.NetworkConfig.RTP)...)
 	items = append(items, r.checkSIPRTPConflict(in.NetworkConfig)...)
 	items = append(items, r.checkWritableDirs(in.StoragePaths)...)
 	items = append(items, r.checkDownstreamReachability(ctx, in.DownstreamRoutes, in.DialTimeout)...)
@@ -192,6 +193,18 @@ func (r *Runner) checkRTPRange(rtp config.RTPConfig) []Item {
 		return []Item{{Name: name, Level: LevelError, Message: fmt.Sprintf("RTP 端口范围非法：start=%d 大于 end=%d", rtp.PortStart, rtp.PortEnd), Suggestion: "请确保 rtp.port_start <= rtp.port_end"}}
 	}
 	return []Item{{Name: name, Level: LevelInfo, Message: fmt.Sprintf("RTP 端口范围 [%d,%d] 合法", rtp.PortStart, rtp.PortEnd), Suggestion: "无需处理"}}
+}
+
+func (r *Runner) checkRTPTransportPlan(rtp config.RTPConfig) []Item {
+	const name = "rtp.transport_plan"
+	if !rtp.Enabled {
+		return []Item{{Name: name, Level: LevelInfo, Message: "RTP 已禁用，跳过传输模式规划检查", Suggestion: "如需启用 RTP，请配置 transport 并重新自检"}}
+	}
+	transport := strings.ToUpper(strings.TrimSpace(rtp.Transport))
+	if transport == "TCP" {
+		return []Item{{Name: name, Level: LevelWarn, Message: "当前 rtp.transport=TCP 仅为扩展预留，占位实现尚未纳入首轮正式上线能力", Suggestion: "生产环境请保持 rtp.transport=UDP"}}
+	}
+	return []Item{{Name: name, Level: LevelInfo, Message: "当前 rtp.transport=UDP（生产默认）", Suggestion: "无需处理"}}
 }
 
 func (r *Runner) checkSIPRTPConflict(cfg config.NetworkConfig) []Item {

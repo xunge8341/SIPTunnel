@@ -97,6 +97,29 @@ rtp:
 	}
 }
 
+func TestParseNetworkConfigYAML_RTPTransportTCPAccepted(t *testing.T) {
+	raw := `
+sip:
+  enabled: true
+  listen_ip: 127.0.0.1
+  listen_port: 5060
+  transport: TCP
+rtp:
+  enabled: true
+  listen_ip: 127.0.0.1
+  port_start: 23000
+  port_end: 23020
+  transport: tcp
+`
+	cfg, err := ParseNetworkConfigYAML([]byte(raw))
+	if err != nil {
+		t.Fatalf("ParseNetworkConfigYAML error: %v", err)
+	}
+	if cfg.RTP.Transport != "TCP" {
+		t.Fatalf("rtp transport=%s, want TCP", cfg.RTP.Transport)
+	}
+}
+
 func TestParseNetworkConfigYAML_ExplicitDisableRespected(t *testing.T) {
 	raw := `
 sip:

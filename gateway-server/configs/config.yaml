@@ -32,6 +32,7 @@ network:
     advertise_ip: 192.168.10.10
     port_start: 20000
     port_end: 20100
+    # 生产默认 UDP；TCP 仅作后续扩展预留（当前版本未正式上线）
     transport: UDP
     max_packet_bytes: 1400
     max_inflight_transfers: 64
