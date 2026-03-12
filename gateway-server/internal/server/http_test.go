@@ -2,15 +2,18 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"siptunnel/internal/observability"
 	"siptunnel/internal/repository"
 	memrepo "siptunnel/internal/repository/memory"
+	"siptunnel/internal/selfcheck"
 	"siptunnel/internal/service"
 	"siptunnel/internal/service/taskengine"
 )
@@ -27,6 +30,9 @@ func buildTestHandler(t *testing.T) (http.Handler, repository.TaskRepository, ob
 		limits: OpsLimits{RPS: 100, Burst: 200, MaxConcurrent: 50},
 		routes: map[string]OpsRoute{"asset.sync": {APICode: "asset.sync", HTTPMethod: "POST", HTTPPath: "/sync", Enabled: true}},
 		nodes:  []OpsNode{{NodeID: "n1", Role: "gateway", Status: "ready", Endpoint: "127.0.0.1:18080"}},
+		selfCheckProvider: func(_ context.Context) selfcheck.Report {
+			return selfcheck.Report{Overall: selfcheck.LevelInfo, Summary: selfcheck.Summary{Info: 1}, Items: []selfcheck.Item{{Name: "sample", Level: selfcheck.LevelInfo, Message: "ok", Suggestion: "none"}}}
+		},
 	}
 	return newMux(deps), repo, audit
 }
@@ -126,5 +132,18 @@ func TestLimitsRoutesNodesAndAudits(t *testing.T) {
 		if rr.Code != tc.code {
 			t.Fatalf("%s %s expected %d got %d body=%s", tc.method, tc.target, tc.code, rr.Code, rr.Body.String())
 		}
+	}
+}
+
+func TestSelfCheckEndpoint(t *testing.T) {
+	h, _, _ := buildTestHandler(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/selfcheck", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "sample") {
+		t.Fatalf("unexpected body: %s", rr.Body.String())
 	}
 }

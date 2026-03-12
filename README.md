@@ -107,6 +107,61 @@ GATEWAY_DATA_DIR=./runtime-data go run ./cmd/gateway
 
 默认值策略：首期默认 `SIP=TCP`、`RTP=UDP`；缺省字段由默认值注入器补齐，再执行分模块校验（含范围校验与端口冲突校验）。
 
+
+## gateway-server 运维环境自检
+
+gateway-server 启动前会执行环境自检，并提供统一报告对象（可复用于 API/CLI/日志）：
+
+- 分级：`info / warn / error`
+- 每项包含：`name/level/message/suggestion`
+- 覆盖：
+  - `listen_ip` 网卡存在性
+  - SIP 监听端口占用
+  - RTP 端口范围合法性
+  - SIP 与 RTP 端口冲突
+  - `temp/final/audit` 目录可写性
+  - 下游 HTTP 基础可达性（TCP）
+
+可选环境变量：
+
+- `GATEWAY_NETWORK_CONFIG`：网络配置文件路径（默认 `configs/config.yaml`）
+- `GATEWAY_HTTPINVOKE_CONFIG`：下游路由配置文件路径（用于可达性检查）
+
+运维 API：
+
+- `GET /api/selfcheck` 返回统一自检报告 JSON。
+
+CLI/日志示例：
+
+```text
+self-check generated_at=2026-01-02T03:04:05Z overall=warn info=6 warn=1 error=0
+- [WARN] sip.listen_ip: listen_ip=0.0.0.0 为通配地址，无法精确校验网卡存在性 | suggestion: 若需严格约束到指定网卡，请改为明确的本机 IP
+- [INFO] sip.listen_port_occupancy: SIP 监听地址 0.0.0.0:5060 可成功绑定 | suggestion: 无需处理
+- [INFO] downstream.http_base_reachability: 下游地址 127.0.0.1:19001 TCP 可达 | suggestion: 无需处理
+```
+
+API 示例：
+
+```json
+{
+  "code": "OK",
+  "message": "success",
+  "data": {
+    "generated_at": "2026-01-02T03:04:05Z",
+    "overall": "warn",
+    "summary": {"info": 6, "warn": 1, "error": 0},
+    "items": [
+      {
+        "name": "sip.listen_ip",
+        "level": "warn",
+        "message": "listen_ip=0.0.0.0 为通配地址，无法精确校验网卡存在性",
+        "suggestion": "若需严格约束到指定网卡，请改为明确的本机 IP"
+      }
+    ]
+  }
+}
+```
+
 ## 跨平台构建与部署检查
 
 ### 默认单文件编译
