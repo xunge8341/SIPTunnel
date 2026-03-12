@@ -20,6 +20,7 @@ type AuditEvent struct {
 
 type AuditQuery struct {
 	RequestID string
+	TraceID   string
 	APICode   string
 	Who       string
 	Limit     int
@@ -70,6 +71,9 @@ func (s *InMemoryAuditStore) List(_ context.Context, query AuditQuery) ([]AuditE
 	for i := len(s.events) - 1; i >= 0 && len(out) < limit; i-- {
 		e := s.events[i]
 		if query.RequestID != "" && e.Core.RequestID != query.RequestID {
+			continue
+		}
+		if query.TraceID != "" && e.Core.TraceID != query.TraceID {
 			continue
 		}
 		if query.APICode != "" && e.Core.APICode != query.APICode {

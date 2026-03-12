@@ -1,0 +1,67 @@
+openapi: 3.0.3
+info:
+  title: SIPTunnel Gateway Ops API
+  version: 1.0.0
+paths:
+  /api/tasks:
+    get:
+      summary: List tasks
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: page_size
+          schema: { type: integer, minimum: 1, maximum: 200, default: 20 }
+        - in: query
+          name: status
+          schema: { type: string }
+        - in: query
+          name: request_id
+          schema: { type: string }
+        - in: query
+          name: trace_id
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+  /api/tasks/{id}:
+    get:
+      summary: Get task detail
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+        '404': { description: Not found }
+  /api/tasks/{id}/retry:
+    post:
+      summary: Retry task
+      responses:
+        '200': { description: OK }
+  /api/tasks/{id}/cancel:
+    post:
+      summary: Cancel task
+      responses:
+        '200': { description: OK }
+  /api/limits:
+    get: { summary: Get runtime limits, responses: { '200': { description: OK } } }
+    put: { summary: Update runtime limits, responses: { '200': { description: OK } } }
+  /api/routes:
+    get: { summary: List api route templates, responses: { '200': { description: OK } } }
+    put: { summary: Update api route templates, responses: { '200': { description: OK } } }
+  /api/nodes:
+    get: { summary: List gateway nodes, responses: { '200': { description: OK } } }
+  /api/audits:
+    get:
+      summary: List audit logs
+      parameters:
+        - in: query
+          name: request_id
+          schema: { type: string }
+        - in: query
+          name: trace_id
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
