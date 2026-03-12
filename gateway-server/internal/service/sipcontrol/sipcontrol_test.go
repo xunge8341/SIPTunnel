@@ -92,6 +92,21 @@ func TestDispatcherUnhandledMessageType(t *testing.T) {
 	}
 }
 
+func TestDispatcherRejectsReplayRequest(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	d := NewDispatcher(verifierStub{}, slog.Default(), &metricsStub{})
+	d.clock = fixedClock{now: now}
+	d.RegisterHandler(NewCommandCreateHandler(fixedClock{now: now}))
+
+	body := mustMarshalCommandCreate(t, now, "sig-ok")
+	if _, err := d.Route(context.Background(), InboundMessage{Body: body}); err != nil {
+		t.Fatalf("first route failed: %v", err)
+	}
+	if _, err := d.Route(context.Background(), InboundMessage{Body: body}); err == nil {
+		t.Fatalf("expected replay error")
+	}
+}
+
 func mustMarshalCommandCreate(t *testing.T, now time.Time, signature string) []byte {
 	t.Helper()
 	msg := sip.CommandCreate{

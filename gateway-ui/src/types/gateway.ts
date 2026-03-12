@@ -1,6 +1,16 @@
 export type TaskKind = 'command' | 'file'
 
-export type TaskStatus = 'pending' | 'running' | 'success' | 'failed' | 'partial_success'
+export type TaskStatus =
+  | 'pending'
+  | 'accepted'
+  | 'running'
+  | 'transferring'
+  | 'verifying'
+  | 'retry_wait'
+  | 'succeeded'
+  | 'failed'
+  | 'dead_lettered'
+  | 'cancelled'
 
 export interface DashboardMetrics {
   successRate: number
@@ -117,4 +127,45 @@ export interface TaskDetail {
   }
   httpResult: HttpExecutionResult
   auditSnippets: AuditSnippet[]
+}
+
+export interface OpsLimits {
+  rps: number
+  burst: number
+  maxConcurrent: number
+}
+
+export interface OpsRoute {
+  api_code: string
+  http_method: string
+  http_path: string
+  enabled: boolean
+}
+
+export interface OpsNode {
+  node_id: string
+  role: string
+  status: string
+  endpoint: string
+}
+
+export interface OpsAuditEvent {
+  who: string
+  when: string
+  request_type: string
+  validation_passed: boolean
+  local_service_route: string
+  final_result: string
+  ops_action: string
+  core: {
+    request_id: string
+    trace_id: string
+    session_id: string
+    api_code: string
+    source_system: string
+    source_node: string
+    message_type: string
+    result_code: string
+    span_id: string
+  }
 }

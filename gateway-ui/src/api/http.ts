@@ -1,7 +1,8 @@
 import type { ApiResponse } from '../types'
 
-interface RequestOptions extends RequestInit {
+interface RequestOptions extends Omit<RequestInit, 'body'> {
   params?: Record<string, string | number | boolean | undefined>
+  body?: unknown
 }
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api'
@@ -22,13 +23,15 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   const { params, headers, body, ...rest } = options
   const url = withQuery(`${API_BASE}${path}`, params)
 
+  const payload = body === undefined || body === null ? undefined : typeof body === 'string' ? body : JSON.stringify(body)
+
   const response = await fetch(url, {
     ...rest,
     headers: {
       'Content-Type': 'application/json',
       ...headers
     },
-    body: body && typeof body !== 'string' ? JSON.stringify(body) : body
+    body: payload
   })
 
   if (!response.ok) {

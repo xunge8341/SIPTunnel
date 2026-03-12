@@ -53,18 +53,28 @@ const result = ref<TaskListResult<FileTask>>({ list: [], total: 0, page: 1, page
 
 const statusTextMap: Record<string, string> = {
   pending: '待执行',
+  accepted: '已受理',
   running: '执行中',
-  success: '成功',
+  transferring: '传输中',
+  verifying: '校验中',
+  retry_wait: '重试等待',
+  succeeded: '成功',
   failed: '失败',
-  partial_success: '部分成功'
+  dead_lettered: '死信',
+  cancelled: '已取消'
 }
 
 const statusColorMap: Record<string, string> = {
   pending: 'default',
+  accepted: 'blue',
   running: 'processing',
-  success: 'success',
+  transferring: 'cyan',
+  verifying: 'purple',
+  retry_wait: 'orange',
+  succeeded: 'success',
   failed: 'error',
-  partial_success: 'warning'
+  dead_lettered: 'red',
+  cancelled: 'default'
 }
 
 const statusOptions = Object.entries(statusTextMap).map(([value, label]) => ({ value, label }))

@@ -1,11 +1,11 @@
 export interface ApiResponse<T> {
-  code: number
+  code: string | number
   message: string
   data: T
 }
 
 export interface ApiError {
-  code: number
+  code: string | number
   message: string
 }
 

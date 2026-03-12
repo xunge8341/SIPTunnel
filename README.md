@@ -2,26 +2,19 @@
 
 SIPTunnel 是跨安全边界业务交换网关，当前仓库为 monorepo 结构：
 
-- `gateway-server/`：Go 网关服务（SIP/RTP/路由/签名等核心能力）
-- `gateway-ui/`：Vue3 运维前端
+- `gateway-server/`：Go 网关服务（SIP/RTP/签名验签/防重放/任务状态机/HTTP 映射/审计与可观测）
+- `gateway-ui/`：Vue3 运维前端（Dashboard、任务、路由、限流、审计）
 - `deploy/`：部署相关脚本与清单（预留）
 - `scripts/`：仓库级开发脚本（启动/测试/格式化/lint）
 
-## 目录结构
+## 关键能力与约束落实
 
-```text
-.
-├── gateway-server
-│   ├── cmd/gateway
-│   ├── internal
-│   ├── configs
-│   ├── scripts
-│   ├── Makefile
-│   └── Dockerfile
-├── gateway-ui
-├── scripts
-└── deploy
-```
+- SIP 控制面：JSON Body 承载完整业务字段，Header 仅镜像索引字段（request/trace/session/api_code/message_type/source_system）。
+- RTP 文件面：固定主头 + TLV 扩展协议结构在后端独立模块实现，业务代码不拼裸字节。
+- 签名验签：通过 `Signer` 接口注入，当前 HMAC-SHA256，保留 `SM3_HMAC` 升级位。
+- 防重放：基于 `request_id + nonce` 的接收防重放窗口。
+- HTTP 执行：仅支持 `api_code -> route template` 受控映射，不支持任意透传。
+- 生产基线：限流、审计日志、trace 字段透传和结构化日志。
 
 ## 如何启动
 
@@ -30,8 +23,6 @@ SIPTunnel 是跨安全边界业务交换网关，当前仓库为 monorepo 结构
 ```bash
 ./scripts/dev.sh
 ```
-
-该命令会先启动后端 `gateway-server`，再启动前端 `gateway-ui` 开发服务器。
 
 ### 分别启动
 
@@ -55,65 +46,35 @@ npm run dev
 - 后端健康检查：`http://127.0.0.1:18080/healthz`
 - 前端 Dashboard：`http://127.0.0.1:5173/dashboard`
 
-## 如何测试
+## 前端联调模式
 
-### 一键测试
+前端默认使用 mock 数据，联调时请切换 real 模式：
 
 ```bash
-./scripts/test.sh
+cd gateway-ui
+VITE_API_MODE=real VITE_API_BASE_URL=http://127.0.0.1:18080/api npm run dev
 ```
 
-### 分模块测试
+页面将直接调用后端运维接口：
+
+- `GET/PUT /api/limits`
+- `GET/PUT /api/routes`
+- `GET /api/tasks`
+- `GET /api/tasks/{id}`
+- `GET /api/audits`
+
+## 如何测试
 
 ```bash
 cd gateway-server && go test ./...
-cd gateway-ui && npm run test
+cd gateway-ui && npm run test -- --run
 ```
 
-当前测试覆盖包含：
+## 运维页面覆盖
 
-- 后端：协议编解码、签名、RTP 分片重组（含缺片/乱序）、HTTP 映射、限流
-- 前端：关键页面渲染、状态管理、关键组件交互
-
-## 如何查看 Dashboard
-
-1. 启动服务（`./scripts/dev.sh` 或分别启动）。
-2. 浏览器访问：`http://127.0.0.1:5173/dashboard`。
-3. 页面展示关键指标（成功率、失败率、并发、RTP 丢片率、限流命中）与近期任务趋势图。
-
-## 如何配置路由和限流
-
-### 路由模板（api_code -> HTTP）
-
-- 示例配置：`gateway-server/configs/httpinvoke_routes.example.yaml`
-- 设计约束：必须通过 `api_code` 命中白名单路由，禁止任意目标透传。
-
-建议流程：
-
-1. 复制示例文件并按业务新增 `api_code`。
-2. 配置目标服务地址、方法、路径、超时、重试。
-3. 配置 `header_mapping/body_mapping` 完成字段映射。
-4. 启动后通过接口请求验证路由是否按模板执行。
-
-### 限流策略
-
-- 后端限流器：`gateway-server/internal/service/rate_limiter.go`
-- 典型参数：`rps`（速率）+ `burst`（桶容量）
-
-可在接入层按 `api_code`、来源系统或节点维度装配不同实例，以实现细粒度限流策略。
-
-## 开发辅助脚本
-
-```bash
-./scripts/dev.sh      # 本地启动
-./scripts/test.sh     # 本地测试
-./scripts/format.sh   # 格式化（Go + 前端）
-./scripts/lint.sh     # lint（gofmt 检查 + eslint）
-```
-
-## CI
-
-新增 GitHub Actions：`.github/workflows/ci.yml`，默认执行：
-
-- 后端：`go test ./...` + `gofmt` 格式检查
-- 前端：`npm run lint` + `npm run build`
+- Dashboard：成功率/失败率/并发等指标总览
+- 命令任务与文件任务：过滤、分页、详情跳转
+- 任务详情：基础信息、状态流转、SIP/RTP/HTTP执行结果
+- 限流策略：在线查看/更新全局限流
+- 路由配置：按 api_code 编辑映射路由
+- 审计日志：查询与详情查看
