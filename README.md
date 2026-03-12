@@ -97,6 +97,16 @@ GATEWAY_DATA_DIR=./runtime-data go run ./cmd/gateway
 
 若目录不可创建或不可写，服务会在启动阶段直接失败并输出可读错误信息，便于运维快速定位。
 
+
+## SIP/RTP 独立网络配置模型
+
+`gateway-server/configs/config.yaml` 提供了 `network.sip` 与 `network.rtp` 两套完全独立的配置段：
+
+- SIP：`enabled/listen_ip/listen_port/transport/advertise_ip/domain/max_message_bytes/read_timeout_ms/write_timeout_ms/idle_timeout_ms`
+- RTP：`enabled/listen_ip/advertise_ip/port_start/port_end/transport/max_packet_bytes/max_inflight_transfers/receive_buffer_bytes/transfer_timeout_ms/retransmit_max_rounds`
+
+默认值策略：首期默认 `SIP=TCP`、`RTP=UDP`；缺省字段由默认值注入器补齐，再执行分模块校验（含范围校验与端口冲突校验）。
+
 ## 跨平台构建与部署检查
 
 ### 默认单文件编译

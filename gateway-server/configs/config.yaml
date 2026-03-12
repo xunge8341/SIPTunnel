@@ -11,6 +11,33 @@ storage:
   audit_dir: ./data/audit
   log_dir: ./data/logs
 
+# 网络面配置示例（SIP 与 RTP 独立配置、独立校验）
+network:
+  sip:
+    enabled: true
+    listen_ip: 0.0.0.0
+    listen_port: 5060
+    transport: TCP
+    advertise_ip: 192.168.10.10
+    domain: siptunnel.local
+    max_message_bytes: 65535
+    read_timeout_ms: 5000
+    write_timeout_ms: 5000
+    idle_timeout_ms: 60000
+
+  rtp:
+    enabled: true
+    listen_ip: 0.0.0.0
+    advertise_ip: 192.168.10.10
+    port_start: 20000
+    port_end: 20100
+    transport: UDP
+    max_packet_bytes: 1400
+    max_inflight_transfers: 64
+    receive_buffer_bytes: 4194304
+    transfer_timeout_ms: 30000
+    retransmit_max_rounds: 3
+
 # 以下字段用于部署规划与 preflight 校验：
 # - 当前服务进程实际读取 GATEWAY_PORT 作为监听端口。
 # - MEDIA_PORT_* 与 node.role 用于统一跨环境部署参数口径。
