@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -81,12 +82,47 @@ type updateRoutesRequest struct {
 	Routes []OpsRoute `json:"routes"`
 }
 
+type HandlerOptions struct {
+	LogDir   string
+	AuditDir string
+}
+
 func NewHandler() http.Handler {
+	h, _, err := NewHandlerWithOptions(HandlerOptions{})
+	if err != nil {
+		panic(err)
+	}
+	return h
+}
+
+func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, io.Closer, error) {
 	repo := memrepo.NewTaskRepository()
 	engine := taskengine.NewEngine(repo, service.RetryPolicy{MaxAttempts: 3, BaseBackoff: time.Second})
+	logger := observability.NewStructuredLogger(nil)
+	var logCloser io.Closer
+	if opts.LogDir != "" {
+		var err error
+		logger, logCloser, err = observability.NewStructuredLoggerWithFile(opts.LogDir)
+		if err != nil {
+			return nil, nil, fmt.Errorf("init logger: %w", err)
+		}
+	}
+	audit := observability.AuditStore(observability.NewInMemoryAuditStore())
+	var auditCloser io.Closer
+	if opts.AuditDir != "" {
+		store, err := observability.NewFileBackedAuditStore(opts.AuditDir)
+		if err != nil {
+			if logCloser != nil {
+				_ = logCloser.Close()
+			}
+			return nil, nil, fmt.Errorf("init audit store: %w", err)
+		}
+		audit = store
+		auditCloser = store
+	}
 	deps := handlerDeps{
-		logger: observability.NewStructuredLogger(nil),
-		audit:  observability.NewInMemoryAuditStore(),
+		logger: logger,
+		audit:  audit,
 		repo:   repo,
 		engine: engine,
 		limits: OpsLimits{RPS: 200, Burst: 400, MaxConcurrent: 100},
@@ -96,7 +132,35 @@ func NewHandler() http.Handler {
 		},
 		nodes: []OpsNode{{NodeID: "gateway-a-01", Role: "gateway", Status: "ready", Endpoint: "10.0.0.11:18080"}},
 	}
-	return newMux(deps)
+	return newMux(deps), joinClosers(logCloser, auditCloser), nil
+}
+
+type multiCloser []io.Closer
+
+func (m multiCloser) Close() error {
+	var first error
+	for _, c := range m {
+		if c == nil {
+			continue
+		}
+		if err := c.Close(); err != nil && first == nil {
+			first = err
+		}
+	}
+	return first
+}
+
+func joinClosers(closers ...io.Closer) io.Closer {
+	out := make(multiCloser, 0, len(closers))
+	for _, c := range closers {
+		if c != nil {
+			out = append(out, c)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func newMux(deps handlerDeps) http.Handler {
