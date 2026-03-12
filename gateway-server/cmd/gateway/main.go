@@ -16,6 +16,7 @@ import (
 	"siptunnel/internal/config"
 	"siptunnel/internal/selfcheck"
 	"siptunnel/internal/server"
+	"siptunnel/internal/service/filetransfer"
 	"siptunnel/internal/service/httpinvoke"
 )
 
@@ -32,6 +33,10 @@ func main() {
 		log.Fatalf("startup directory validation failed: %v", err)
 	}
 	selfCheckInput := buildSelfCheckInput(paths)
+	portPool, err := filetransfer.NewMemoryRTPPortPool(selfCheckInput.NetworkConfig.RTP.PortStart, selfCheckInput.NetworkConfig.RTP.PortEnd)
+	if err != nil {
+		log.Fatalf("init rtp port pool failed: %v", err)
+	}
 	log.Printf("network config loaded sip_transport=%s sip_listen=%s:%d rtp_transport=%s rtp_port_range=[%d,%d]", selfCheckInput.NetworkConfig.SIP.Transport, selfCheckInput.NetworkConfig.SIP.ListenIP, selfCheckInput.NetworkConfig.SIP.ListenPort, selfCheckInput.NetworkConfig.RTP.Transport, selfCheckInput.NetworkConfig.RTP.PortStart, selfCheckInput.NetworkConfig.RTP.PortEnd)
 	if selfCheckInput.NetworkConfig.SIP.UDPMessageSizeRisk() {
 		log.Printf("sip udp message size risk detected transport=%s max_message_bytes=%d recommended_max=%d", selfCheckInput.NetworkConfig.SIP.Transport, selfCheckInput.NetworkConfig.SIP.MaxMessageBytes, config.SIPUDPRecommendedMaxMessageBytes)
@@ -41,6 +46,32 @@ func main() {
 		AuditDir: paths.AuditDir,
 		SelfCheckProvider: func(ctx context.Context) selfcheck.Report {
 			return selfcheck.NewRunner().Run(ctx, selfCheckInput)
+		},
+		NetworkStatusFunc: func(context.Context) server.NodeNetworkStatus {
+			poolStats := portPool.Stats()
+			return server.NodeNetworkStatus{
+				SIP: server.SIPNetworkStatus{
+					ListenIP:           selfCheckInput.NetworkConfig.SIP.ListenIP,
+					ListenPort:         selfCheckInput.NetworkConfig.SIP.ListenPort,
+					Transport:          selfCheckInput.NetworkConfig.SIP.Transport,
+					CurrentSessions:    0,
+					CurrentConnections: 0,
+				},
+				RTP: server.RTPNetworkStatus{
+					ListenIP:           selfCheckInput.NetworkConfig.RTP.ListenIP,
+					PortStart:          selfCheckInput.NetworkConfig.RTP.PortStart,
+					PortEnd:            selfCheckInput.NetworkConfig.RTP.PortEnd,
+					Transport:          selfCheckInput.NetworkConfig.RTP.Transport,
+					ActiveTransfers:    poolStats.Used,
+					UsedPorts:          poolStats.Used,
+					AvailablePorts:     poolStats.Available,
+					PortPoolTotal:      poolStats.Total,
+					PortPoolUsed:       poolStats.Used,
+					PortAllocFailTotal: poolStats.AllocFailTotal,
+				},
+				RecentBindErrors:    []string{},
+				RecentNetworkErrors: []string{},
+			}
 		},
 	})
 	if err != nil {

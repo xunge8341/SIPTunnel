@@ -99,6 +99,9 @@ paths:
                           active_transfers: { type: integer }
                           used_ports: { type: integer }
                           available_ports: { type: integer }
+                          rtp_port_pool_total: { type: integer }
+                          rtp_port_pool_used: { type: integer }
+                          rtp_port_alloc_fail_total: { type: integer }
                       recent_bind_errors:
                         type: array
                         items: { type: string }

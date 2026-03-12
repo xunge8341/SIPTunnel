@@ -56,6 +56,7 @@ type ReceiveResult struct {
 type StorageConfig struct {
 	TempDir  string
 	FinalDir string
+	PortPool RTPPortPool
 }
 
 type Receiver struct {
@@ -63,6 +64,7 @@ type Receiver struct {
 	tasks    map[[16]byte]*TransferTask
 	tempDir  string
 	finalDir string
+	portPool RTPPortPool
 }
 
 func NewReceiver(dir string) *Receiver {
@@ -70,7 +72,14 @@ func NewReceiver(dir string) *Receiver {
 }
 
 func NewReceiverWithConfig(cfg StorageConfig) *Receiver {
-	return &Receiver{tasks: make(map[[16]byte]*TransferTask), tempDir: cfg.TempDir, finalDir: cfg.FinalDir}
+	return &Receiver{tasks: make(map[[16]byte]*TransferTask), tempDir: cfg.TempDir, finalDir: cfg.FinalDir, portPool: cfg.PortPool}
+}
+
+func (r *Receiver) PortPoolStats() PortPoolStats {
+	if r.portPool == nil {
+		return PortPoolStats{}
+	}
+	return r.portPool.Stats()
 }
 
 func (r *Receiver) AddChunk(packet rtpfile.ChunkPacket) (*ReceiveResult, error) {
@@ -80,8 +89,16 @@ func (r *Receiver) AddChunk(packet rtpfile.ChunkPacket) (*ReceiveResult, error) 
 	transferID := packet.Header.TransferID
 	task, ok := r.tasks[transferID]
 	if !ok {
+		if r.portPool != nil {
+			if _, err := r.portPool.Allocate(transferID); err != nil {
+				return nil, fmt.Errorf("allocate rtp port for transfer %x: %w", transferID, err)
+			}
+		}
 		created, err := newTransferTask(r.tempDir, r.finalDir, packet)
 		if err != nil {
+			if r.portPool != nil {
+				r.portPool.Release(transferID)
+			}
 			return nil, err
 		}
 		task = created
@@ -90,10 +107,17 @@ func (r *Receiver) AddChunk(packet rtpfile.ChunkPacket) (*ReceiveResult, error) 
 
 	res, err := task.AddChunk(packet)
 	if err != nil {
+		delete(r.tasks, transferID)
+		if r.portPool != nil {
+			r.portPool.Release(transferID)
+		}
 		return nil, err
 	}
 	if res.Completed {
 		delete(r.tasks, transferID)
+		if r.portPool != nil {
+			r.portPool.Release(transferID)
+		}
 	}
 	return res, nil
 }

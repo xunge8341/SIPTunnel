@@ -93,13 +93,16 @@ type SIPNetworkStatus struct {
 }
 
 type RTPNetworkStatus struct {
-	ListenIP        string `json:"listen_ip"`
-	PortStart       int    `json:"port_start"`
-	PortEnd         int    `json:"port_end"`
-	Transport       string `json:"transport"`
-	ActiveTransfers int    `json:"active_transfers"`
-	UsedPorts       int    `json:"used_ports"`
-	AvailablePorts  int    `json:"available_ports"`
+	ListenIP           string `json:"listen_ip"`
+	PortStart          int    `json:"port_start"`
+	PortEnd            int    `json:"port_end"`
+	Transport          string `json:"transport"`
+	ActiveTransfers    int    `json:"active_transfers"`
+	UsedPorts          int    `json:"used_ports"`
+	AvailablePorts     int    `json:"available_ports"`
+	PortPoolTotal      int    `json:"rtp_port_pool_total"`
+	PortPoolUsed       int    `json:"rtp_port_pool_used"`
+	PortAllocFailTotal int    `json:"rtp_port_alloc_fail_total"`
 }
 
 type updateLimitsRequest struct {
@@ -182,13 +185,16 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, io.Closer, error)
 					CurrentConnections: 0,
 				},
 				RTP: RTPNetworkStatus{
-					ListenIP:        defaults.RTP.ListenIP,
-					PortStart:       defaults.RTP.PortStart,
-					PortEnd:         defaults.RTP.PortEnd,
-					Transport:       defaults.RTP.Transport,
-					ActiveTransfers: 0,
-					UsedPorts:       0,
-					AvailablePorts:  availablePorts,
+					ListenIP:           defaults.RTP.ListenIP,
+					PortStart:          defaults.RTP.PortStart,
+					PortEnd:            defaults.RTP.PortEnd,
+					Transport:          defaults.RTP.Transport,
+					ActiveTransfers:    0,
+					UsedPorts:          0,
+					AvailablePorts:     availablePorts,
+					PortPoolTotal:      availablePorts,
+					PortPoolUsed:       0,
+					PortAllocFailTotal: 0,
 				},
 				RecentBindErrors:    []string{},
 				RecentNetworkErrors: []string{},
