@@ -1,4 +1,4 @@
-.PHONY: run test build build-linux-amd64 build-linux-arm64 docker-buildx release-local gen-config-docs
+.PHONY: run test build build-gatewayctl run-gatewayctl build-linux-amd64 build-linux-arm64 docker-buildx release-local gen-config-docs
 
 BINARY_NAME ?= gateway
 DIST_DIR ?= ../dist/bin
@@ -16,6 +16,12 @@ test:
 
 build:
 	go build ./cmd/gateway
+
+build-gatewayctl:
+	go build ./cmd/gatewayctl
+
+run-gatewayctl:
+	go run ./cmd/gatewayctl
 
 build-linux-amd64:
 	mkdir -p $(DIST_DIR)/linux/amd64
