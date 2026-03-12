@@ -1,0 +1,35 @@
+server:
+  port: 18080
+
+storage:
+  temp_dir: ./data/temp
+  final_dir: ./data/final
+  audit_dir: ./data/audit
+  log_dir: ./data/logs
+
+network:
+  sip:
+    enabled: true
+    listen_ip: 0.0.0.0
+    listen_port: 5060
+    transport: UDP
+    advertise_ip: 192.168.10.10
+    domain: siptunnel.local
+    # UDP 模式建议 <= 1300，降低 IP 分片风险
+    max_message_bytes: 1300
+    read_timeout_ms: 5000
+    write_timeout_ms: 5000
+    idle_timeout_ms: 60000
+
+  rtp:
+    enabled: true
+    listen_ip: 0.0.0.0
+    advertise_ip: 192.168.10.10
+    port_start: 20000
+    port_end: 20100
+    transport: UDP
+    max_packet_bytes: 1400
+    max_inflight_transfers: 64
+    receive_buffer_bytes: 4194304
+    transfer_timeout_ms: 30000
+    retransmit_max_rounds: 3

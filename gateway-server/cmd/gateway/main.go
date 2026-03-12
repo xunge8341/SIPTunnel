@@ -32,6 +32,10 @@ func main() {
 		log.Fatalf("startup directory validation failed: %v", err)
 	}
 	selfCheckInput := buildSelfCheckInput(paths)
+	log.Printf("network config loaded sip_transport=%s sip_listen=%s:%d rtp_transport=%s rtp_port_range=[%d,%d]", selfCheckInput.NetworkConfig.SIP.Transport, selfCheckInput.NetworkConfig.SIP.ListenIP, selfCheckInput.NetworkConfig.SIP.ListenPort, selfCheckInput.NetworkConfig.RTP.Transport, selfCheckInput.NetworkConfig.RTP.PortStart, selfCheckInput.NetworkConfig.RTP.PortEnd)
+	if selfCheckInput.NetworkConfig.SIP.UDPMessageSizeRisk() {
+		log.Printf("sip udp message size risk detected transport=%s max_message_bytes=%d recommended_max=%d", selfCheckInput.NetworkConfig.SIP.Transport, selfCheckInput.NetworkConfig.SIP.MaxMessageBytes, config.SIPUDPRecommendedMaxMessageBytes)
+	}
 	handler, closer, err := server.NewHandlerWithOptions(server.HandlerOptions{
 		LogDir:   paths.LogDir,
 		AuditDir: paths.AuditDir,

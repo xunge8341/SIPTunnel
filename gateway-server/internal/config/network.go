@@ -27,6 +27,8 @@ type SIPConfig struct {
 	IdleTimeoutMS   int    `yaml:"idle_timeout_ms"`
 }
 
+const SIPUDPRecommendedMaxMessageBytes = 1300
+
 type RTPConfig struct {
 	Enabled              bool   `yaml:"enabled"`
 	ListenIP             string `yaml:"listen_ip"`
@@ -136,6 +138,11 @@ func (c SIPConfig) Validate() error {
 		errs = append(errs, fmt.Errorf("sip.idle_timeout_ms %d must be > 0", c.IdleTimeoutMS))
 	}
 	return errors.Join(errs...)
+}
+
+func (c SIPConfig) UDPMessageSizeRisk() bool {
+	transport := strings.ToUpper(strings.TrimSpace(c.Transport))
+	return c.Enabled && transport == "UDP" && c.MaxMessageBytes > SIPUDPRecommendedMaxMessageBytes
 }
 
 func (c RTPConfig) Validate() error {

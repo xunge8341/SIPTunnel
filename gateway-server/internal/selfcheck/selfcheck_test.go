@@ -66,6 +66,15 @@ func TestRunnerRun_AllPass(t *testing.T) {
 	if report.Summary.Error != 0 || report.Summary.Warn != 0 {
 		t.Fatalf("unexpected summary: %+v", report.Summary)
 	}
+	foundUDPSize := false
+	for _, item := range report.Items {
+		if item.Name == "sip.udp_message_size_risk" && item.Level == LevelInfo {
+			foundUDPSize = true
+		}
+	}
+	if !foundUDPSize {
+		t.Fatalf("expected sip.udp_message_size_risk info item, items=%+v", report.Items)
+	}
 	if opened != 1 {
 		t.Fatalf("expected sip bind check called once, got %d", opened)
 	}
@@ -150,3 +159,36 @@ func (fakePacketConn) LocalAddr() net.Addr                   { return &net.UDPAd
 func (fakePacketConn) SetDeadline(time.Time) error           { return nil }
 func (fakePacketConn) SetReadDeadline(time.Time) error       { return nil }
 func (fakePacketConn) SetWriteDeadline(time.Time) error      { return nil }
+
+func TestRunnerRun_SIPUDPMessageSizeRiskWarn(t *testing.T) {
+	runner := &Runner{
+		nowFn: func() time.Time { return time.Now().UTC() },
+		interfaceIPs: func() (map[string]struct{}, error) {
+			return map[string]struct{}{"127.0.0.1": {}}, nil
+		},
+		listenTCP:      func(_, _ string) (net.Listener, error) { return fakeListener{}, nil },
+		listenUDP:      func(_, _ string) (net.PacketConn, error) { return fakePacketConn{}, nil },
+		ensureWritable: func(_ string) error { return nil },
+		dialTCP:        func(_ context.Context, _ string) error { return nil },
+	}
+	cfg := config.DefaultNetworkConfig()
+	cfg.SIP.ListenIP = "127.0.0.1"
+	cfg.SIP.Transport = "UDP"
+	cfg.SIP.MaxMessageBytes = config.SIPUDPRecommendedMaxMessageBytes + 100
+	cfg.RTP.Enabled = false
+
+	report := runner.Run(t.Context(), Input{
+		NetworkConfig: cfg,
+		StoragePaths:  config.StoragePaths{TempDir: "./tmp", FinalDir: "./final", AuditDir: "./audit"},
+	})
+
+	for _, item := range report.Items {
+		if item.Name == "sip.udp_message_size_risk" {
+			if item.Level != LevelWarn {
+				t.Fatalf("unexpected level=%s", item.Level)
+			}
+			return
+		}
+	}
+	t.Fatalf("risk item not found: %+v", report.Items)
+}

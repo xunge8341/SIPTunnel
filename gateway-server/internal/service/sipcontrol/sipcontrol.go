@@ -5,20 +5,36 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
 	"siptunnel/internal/protocol/sip"
 )
 
+const (
+	TransportTCP = "TCP"
+	TransportUDP = "UDP"
+)
+
+func normalizeTransport(transport string) string {
+	v := strings.ToUpper(strings.TrimSpace(transport))
+	if v == TransportUDP {
+		return TransportUDP
+	}
+	return TransportTCP
+}
+
 // Receiver 抽象 SIP 控制面接收端，便于后续替换真实 SIP 适配器。
 type Receiver interface {
 	Receive(ctx context.Context) (InboundMessage, error)
+	Transport() string
 }
 
 // Sender 抽象 SIP 控制面发送端，便于后续替换真实 SIP 适配器。
 type Sender interface {
 	Send(ctx context.Context, msg OutboundMessage) error
+	Transport() string
 }
 
 // Router 根据 message_type 将消息分发到不同 handler。
@@ -68,14 +84,15 @@ func (realClock) Now() time.Time {
 }
 
 type Dispatcher struct {
-	handlers map[string]Handler
-	verifier SignatureVerifier
-	replay   ReplayGuard
-	metrics  Metrics
-	logger   *slog.Logger
-	clock    Clock
-	timeSkew time.Duration
-	mutex    sync.RWMutex
+	handlers  map[string]Handler
+	verifier  SignatureVerifier
+	replay    ReplayGuard
+	metrics   Metrics
+	logger    *slog.Logger
+	clock     Clock
+	timeSkew  time.Duration
+	transport string
+	mutex     sync.RWMutex
 }
 
 func NewDispatcher(verifier SignatureVerifier, logger *slog.Logger, metrics Metrics) *Dispatcher {
@@ -86,13 +103,14 @@ func NewDispatcher(verifier SignatureVerifier, logger *slog.Logger, metrics Metr
 		metrics = NoopMetrics{}
 	}
 	return &Dispatcher{
-		handlers: make(map[string]Handler),
-		verifier: verifier,
-		replay:   NewInMemoryReplayGuard(15 * time.Minute),
-		metrics:  metrics,
-		logger:   logger,
-		clock:    realClock{},
-		timeSkew: 5 * time.Minute,
+		handlers:  make(map[string]Handler),
+		verifier:  verifier,
+		replay:    NewInMemoryReplayGuard(15 * time.Minute),
+		metrics:   metrics,
+		logger:    logger,
+		clock:     realClock{},
+		timeSkew:  5 * time.Minute,
+		transport: TransportTCP,
 	}
 }
 
@@ -102,11 +120,23 @@ func (d *Dispatcher) RegisterHandler(h Handler) {
 	d.handlers[h.MessageType()] = h
 }
 
+func (d *Dispatcher) SetTransport(transport string) {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+	d.transport = normalizeTransport(transport)
+}
+
+func (d *Dispatcher) Transport() string {
+	d.mutex.RLock()
+	defer d.mutex.RUnlock()
+	return d.transport
+}
+
 func (d *Dispatcher) Route(ctx context.Context, msg InboundMessage) (OutboundMessage, error) {
 	startedAt := d.clock.Now()
 	header, req, err := d.parseAndValidate(msg.Body)
 	if err != nil {
-		d.metrics.IncCounter("sip_control_route_total", map[string]string{"status": "rejected"})
+		d.metrics.IncCounter("sip_control_route_total", map[string]string{"status": "rejected", "transport": d.transport})
 		return OutboundMessage{}, err
 	}
 
@@ -115,13 +145,14 @@ func (d *Dispatcher) Route(ctx context.Context, msg InboundMessage) (OutboundMes
 		"request_id", header.RequestID,
 		"trace_id", header.TraceID,
 		"session_id", header.SessionID,
+		"transport", d.transport,
 	)
 
 	d.mutex.RLock()
 	handler, ok := d.handlers[header.MessageType]
 	d.mutex.RUnlock()
 	if !ok {
-		d.metrics.IncCounter("sip_control_route_total", map[string]string{"status": "unhandled", "message_type": header.MessageType})
+		d.metrics.IncCounter("sip_control_route_total", map[string]string{"status": "unhandled", "message_type": header.MessageType, "transport": d.transport})
 		return OutboundMessage{}, fmt.Errorf("no handler for message_type=%s", header.MessageType)
 	}
 
@@ -130,8 +161,8 @@ func (d *Dispatcher) Route(ctx context.Context, msg InboundMessage) (OutboundMes
 	if err != nil {
 		status = "failed"
 	}
-	d.metrics.IncCounter("sip_control_route_total", map[string]string{"status": status, "message_type": header.MessageType})
-	d.metrics.ObserveDuration("sip_control_route_duration", d.clock.Now().Sub(startedAt), map[string]string{"message_type": header.MessageType})
+	d.metrics.IncCounter("sip_control_route_total", map[string]string{"status": status, "message_type": header.MessageType, "transport": d.transport})
+	d.metrics.ObserveDuration("sip_control_route_duration", d.clock.Now().Sub(startedAt), map[string]string{"message_type": header.MessageType, "transport": d.transport})
 	if err != nil {
 		d.logger.Error("sip control handler failed", "message_type", header.MessageType, "error", err)
 		return OutboundMessage{}, err
@@ -142,6 +173,7 @@ func (d *Dispatcher) Route(ctx context.Context, msg InboundMessage) (OutboundMes
 		"request_id", header.RequestID,
 		"trace_id", header.TraceID,
 		"session_id", header.SessionID,
+		"transport", d.transport,
 	)
 	return resp, nil
 }
