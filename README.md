@@ -90,3 +90,16 @@ npm run dev
 - 可选 TLV 扩展段（type/length/value），解码时可跳过未知 type
 - `MarshalBinary()` / `UnmarshalBinary()` 编解码及头长校验
 - 分片与重组工具（按 chunk size 切片、生成每片头、计算 chunk/file digest、支持乱序与重复片）
+
+## gateway-server A 网 HTTP 落地执行模块
+
+`gateway-server/internal/service/httpinvoke` 提供基于 `api_code` 路由模板的 HTTP 执行能力，避免透传任意目标地址：
+
+- 路由白名单：仅允许命中配置的 `api_code`，未知编码会被拦截。
+- 配置加载：支持从 YAML 加载 `api_code/target_service/target_host/target_port/http_method/http_path/content_type/timeout_ms/retry_times/header_mapping/body_mapping`。
+- 参数映射：使用点路径（如 `body.order_id`）从入参映射到目标 Header 与 JSON Body。
+- 统一 Header 注入：`X-Request-ID`、`X-Trace-ID`、`X-Session-ID`、`X-Transfer-ID`、`X-Api-Code`、`X-Source-System`、`X-Idempotent-Key`。
+- 调用控制：支持超时控制与重试（429/5xx/504）。
+- 结果码映射：HTTP 状态码映射为统一 `result_code`（如 `OK`、`UPSTREAM_TIMEOUT`、`UPSTREAM_RATE_LIMIT`、`UPSTREAM_SERVER_ERROR`）。
+
+示例路由配置见：`gateway-server/configs/httpinvoke_routes.example.yaml`。
