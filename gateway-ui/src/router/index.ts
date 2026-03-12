@@ -1,7 +1,11 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import AdminLayout from '../layouts/AdminLayout.vue'
 import DashboardView from '../views/DashboardView.vue'
-import PlaceholderView from '../views/PlaceholderView.vue'
+import RateLimitPoliciesView from '../views/RateLimitPoliciesView.vue'
+import RouteConfigView from '../views/RouteConfigView.vue'
+import NodeStatusView from '../views/NodeStatusView.vue'
+import AlertsCenterView from '../views/AlertsCenterView.vue'
+import AuditLogsView from '../views/AuditLogsView.vue'
 import CommandTasksView from '../views/CommandTasksView.vue'
 import FileTasksView from '../views/FileTasksView.vue'
 import TaskDetailView from '../views/TaskDetailView.vue'
@@ -41,31 +45,31 @@ const router = createRouter({
         {
           path: 'route-config',
           name: 'route-config',
-          component: PlaceholderView,
+          component: RouteConfigView,
           meta: { title: '路由配置', description: '维护 api_code 到 HTTP 模板的映射关系。' }
         },
         {
           path: 'rate-limits',
           name: 'rate-limit',
-          component: PlaceholderView,
+          component: RateLimitPoliciesView,
           meta: { title: '限流策略', description: '为各节点与业务配置限流、熔断策略。' }
         },
         {
           path: 'node-status',
           name: 'node-status',
-          component: PlaceholderView,
+          component: NodeStatusView,
           meta: { title: '节点状态', description: '查看各边界节点连接与健康状态。' }
         },
         {
           path: 'alerts',
           name: 'alerts',
-          component: PlaceholderView,
+          component: AlertsCenterView,
           meta: { title: '告警中心', description: '统一查看并处理系统告警。' }
         },
         {
           path: 'audit-logs',
           name: 'audit-log',
-          component: PlaceholderView,
+          component: AuditLogsView,
           meta: { title: '审计日志', description: '查询控制面与执行面审计日志。' }
         }
       ]
