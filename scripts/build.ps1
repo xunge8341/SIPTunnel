@@ -6,7 +6,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $RootDir = Split-Path -Parent $PSScriptRoot
 $ServerDir = Join-Path $RootDir 'gateway-server'
-$DistDir = Join-Path $RootDir 'dist'
+$DistDir = Join-Path $RootDir 'dist/bin'
 $Version = if ($env:VERSION) { $env:VERSION } else { 'dev' }
 $Commit = if ($env:COMMIT) { $env:COMMIT } else { (git -C $RootDir rev-parse --short HEAD 2>$null) }
 if (-not $Commit) { $Commit = 'unknown' }
@@ -18,7 +18,9 @@ New-Item -ItemType Directory -Force -Path $DistDir | Out-Null
 function Build-One {
   param([string]$Goos, [string]$Goarch)
   $Ext = if ($Goos -eq 'windows') { '.exe' } else { '' }
-  $Output = Join-Path $DistDir "gateway-$Goos-$Goarch$Ext"
+  $OutputDir = Join-Path $DistDir "$Goos/$Goarch"
+  New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
+  $Output = Join-Path $OutputDir "gateway$Ext"
   Write-Host "[build] $Goos/$Goarch -> $Output"
 
   Push-Location $ServerDir
@@ -41,6 +43,7 @@ if ($Mode -eq 'native') {
   Build-One $hostOs $hostArch
 } else {
   Build-One 'linux' 'amd64'
+  Build-One 'linux' 'arm64'
   Build-One 'windows' 'amd64'
   Build-One 'darwin' 'amd64'
 }

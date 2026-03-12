@@ -70,7 +70,37 @@ VITE_API_MODE=real VITE_API_BASE_URL=http://127.0.0.1:18080/api npm run dev
 - Linux/macOS：`./scripts/build.sh`
 - Windows（PowerShell）：`./scripts/build.ps1`
 
-默认在 `dist/` 输出当前平台单可执行文件；如需一次构建多平台可使用 `matrix` 模式。
+默认在 `dist/bin/<os>/<arch>/` 输出当前平台单可执行文件；如需一次构建多平台可使用 `matrix` 模式。
+
+
+### 后端多架构构建（linux/amd64 + linux/arm64）
+
+```bash
+cd gateway-server
+make build-linux-amd64
+make build-linux-arm64
+```
+
+可执行文件输出目录规范：
+
+- `dist/bin/linux/amd64/gateway`
+- `dist/bin/linux/arm64/gateway`
+
+### Docker 多架构镜像（buildx）
+
+```bash
+cd gateway-server
+make docker-buildx IMAGE=your-registry/siptunnel-gateway TAG=v1.0.0 PUSH=true
+```
+
+默认（`PUSH=false`）会在本地生成 OCI 归档文件 `dist/images/gateway-<tag>.tar`，便于离线分发与验收。
+
+如果只想在本地聚合后端 Linux 双架构产物：
+
+```bash
+cd gateway-server
+make release-local
+```
 
 ### 部署前配置检查（监听端口/媒体端口范围/接收发送角色）
 
