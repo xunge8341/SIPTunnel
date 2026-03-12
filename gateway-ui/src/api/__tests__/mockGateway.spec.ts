@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { exportConfigYamlMock, fetchConfigGovernanceMock, rollbackConfigMock } from '../mockGateway'
+import {
+  createDiagnosticExportMock,
+  exportConfigYamlMock,
+  fetchConfigGovernanceMock,
+  getDiagnosticExportMock,
+  retryDiagnosticExportMock,
+  rollbackConfigMock
+} from '../mockGateway'
 
 describe('config governance mock api', () => {
   it('supports operator and version filtering', async () => {
@@ -19,5 +26,23 @@ describe('config governance mock api', () => {
     const result = await rollbackConfigMock('v2026.03.12.2')
     const target = result.snapshots.find((item) => item.version === 'v2026.03.12.2')
     expect(target?.status).toBe('active')
+  })
+
+  it('supports diagnostic export fail then retry success flow', async () => {
+    const created = await createDiagnosticExportMock({ nodeId: 'gateway-a-02' })
+    let status = created
+    for (let i = 0; i < 4; i += 1) {
+      status = await getDiagnosticExportMock(created.jobId)
+    }
+    expect(status.status).toBe('failed')
+    expect(status.errorMessage).toContain('导出包生成失败')
+
+    await retryDiagnosticExportMock(created.jobId)
+
+    for (let i = 0; i < 4; i += 1) {
+      status = await getDiagnosticExportMock(created.jobId)
+    }
+    expect(status.status).toBe('succeeded')
+    expect(status.downloadUrl).toContain('data:application/zip;base64')
   })
 })

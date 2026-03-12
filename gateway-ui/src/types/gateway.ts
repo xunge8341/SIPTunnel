@@ -250,3 +250,28 @@ export interface ConfigGovernancePayload {
   pendingConfig: RuntimeGatewayConfig
   diff: ConfigDiffItem[]
 }
+
+export type DiagnosticExportStatus = 'pending' | 'collecting' | 'packaging' | 'succeeded' | 'failed'
+
+export interface DiagnosticExportCreatePayload {
+  nodeId: string
+}
+
+export interface DiagnosticExportSection {
+  key: 'config_snapshot' | 'node_runtime' | 'failed_tasks' | 'log_index' | 'alerts_summary'
+  label: string
+  done: boolean
+}
+
+export interface DiagnosticExportJob {
+  jobId: string
+  nodeId: string
+  status: DiagnosticExportStatus
+  progress: number
+  startedAt: string
+  updatedAt: string
+  fileName: string
+  sections: DiagnosticExportSection[]
+  errorMessage?: string
+  downloadUrl?: string
+}

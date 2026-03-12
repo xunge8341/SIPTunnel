@@ -11,7 +11,9 @@ import type {
   UpdateNetworkConfigPayload,
   ConfigGovernancePayload,
   ConfigSnapshotFilters,
-  RuntimeGatewayConfig
+  RuntimeGatewayConfig,
+  DiagnosticExportJob,
+  DiagnosticExportCreatePayload
 } from '../types/gateway'
 
 const wait = (ms = 200) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -321,4 +323,101 @@ export async function rollbackConfigMock(version: string): Promise<ConfigGoverna
 export async function exportConfigYamlMock(target: 'current' | 'pending'): Promise<string> {
   await wait(120)
   return toYaml(target === 'current' ? runtimeCurrentConfig : runtimePendingConfig)
+}
+
+
+const diagnosticSectionsTemplate = [
+  { key: 'config_snapshot' as const, label: '当前配置快照' },
+  { key: 'node_runtime' as const, label: '节点运行状态' },
+  { key: 'failed_tasks' as const, label: '最近失败任务摘要' },
+  { key: 'log_index' as const, label: '关键日志索引' },
+  { key: 'alerts_summary' as const, label: '最近告警摘要' }
+]
+
+const diagnosticJobs = new Map<string, {
+  job: DiagnosticExportJob
+  polls: number
+  failOnce: boolean
+}>()
+
+const makeDiagnosticFileName = (nodeId: string, jobId: string) => {
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '')
+  return `diag_${nodeId}_${stamp}_${jobId}.zip`
+}
+
+const cloneJob = (job: DiagnosticExportJob): DiagnosticExportJob => JSON.parse(JSON.stringify(job))
+
+export async function createDiagnosticExportMock(payload: DiagnosticExportCreatePayload): Promise<DiagnosticExportJob> {
+  await wait(150)
+  const jobId = `diag-${Math.random().toString(36).slice(2, 8)}`
+  const now = new Date().toISOString()
+  const job: DiagnosticExportJob = {
+    jobId,
+    nodeId: payload.nodeId,
+    status: 'pending',
+    progress: 0,
+    startedAt: now,
+    updatedAt: now,
+    fileName: makeDiagnosticFileName(payload.nodeId, jobId),
+    sections: diagnosticSectionsTemplate.map((item) => ({ ...item, done: false }))
+  }
+  diagnosticJobs.set(jobId, {
+    job,
+    polls: 0,
+    failOnce: payload.nodeId.endsWith('02')
+  })
+  return cloneJob(job)
+}
+
+export async function getDiagnosticExportMock(jobId: string): Promise<DiagnosticExportJob> {
+  await wait(180)
+  const record = diagnosticJobs.get(jobId)
+  if (!record) {
+    throw new Error('诊断任务不存在，请重新发起导出')
+  }
+
+  if (record.job.status === 'succeeded' || record.job.status === 'failed') {
+    return cloneJob(record.job)
+  }
+
+  record.polls += 1
+  const progress = Math.min(100, record.polls * 25)
+  record.job.progress = progress
+  record.job.updatedAt = new Date().toISOString()
+  record.job.status = progress < 40 ? 'collecting' : 'packaging'
+
+  const completedCount = Math.floor((progress / 100) * record.job.sections.length)
+  record.job.sections = record.job.sections.map((item, index) => ({ ...item, done: index < completedCount }))
+
+  if (progress >= 100) {
+    if (record.failOnce) {
+      record.job.status = 'failed'
+      record.job.errorMessage = '导出包生成失败：日志索引服务暂时不可用。'
+      record.failOnce = false
+    } else {
+      record.job.status = 'succeeded'
+      record.job.errorMessage = undefined
+      record.job.sections = record.job.sections.map((item) => ({ ...item, done: true }))
+      record.job.downloadUrl = `data:application/zip;base64,UEsFBgAAAAAAAAAAAAAAAAAAAAAAAA==`
+    }
+  }
+
+  return cloneJob(record.job)
+}
+
+export async function retryDiagnosticExportMock(jobId: string): Promise<DiagnosticExportJob> {
+  await wait(160)
+  const record = diagnosticJobs.get(jobId)
+  if (!record) {
+    throw new Error('诊断任务不存在，请重新发起导出')
+  }
+  const now = new Date().toISOString()
+  record.polls = 0
+  record.job.status = 'pending'
+  record.job.progress = 0
+  record.job.updatedAt = now
+  record.job.errorMessage = undefined
+  record.job.downloadUrl = undefined
+  record.job.sections = diagnosticSectionsTemplate.map((item) => ({ ...item, done: false }))
+  return cloneJob(record.job)
 }
