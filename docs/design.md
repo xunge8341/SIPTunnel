@@ -43,3 +43,12 @@
 
 - `gateway-server/internal/observability/telemetry.go`：审计日志入口。
 - `gateway-ui/`：运维后台前端骨架（首页展示与状态占位）。
+
+## 7. 运维管理 API
+
+`gateway-server/internal/server/http.go`
+
+- 新增 `/api/tasks`、`/api/limits`、`/api/routes`、`/api/nodes`、`/api/audits` 等运维接口。
+- 返回体统一为 `{code,message,data}`，任务与审计列表统一携带分页结构。
+- 运维写操作（重试、取消、更新限流、更新路由）会写入审计日志，支持 `request_id/trace_id` 检索。
+- OpenAPI 描述见 `gateway-server/docs/openapi-ops.yaml`。
