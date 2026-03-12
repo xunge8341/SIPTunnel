@@ -162,6 +162,7 @@ systemctl restart siptunnel-gateway.service
 2. 升级前确认备份目录可用并记录变更单号。
 3. 升级完成后保留至少一个可回滚版本。
 4. 故障排查优先检查：端口占用、配置加载、目录权限、系统服务日志。
+5. 针对一线值班排障，优先参考 `docs/troubleshooting.md`（按错误类型给出可执行动作）。
 
 
 ## 9. gateway-server 环境自检（面向运维）
@@ -202,4 +203,3 @@ curl -fsS http://127.0.0.1:18080/api/selfcheck
 ```
 
 若启动阶段自检存在 `error` 级结果，进程会直接退出，避免带病上线。
-

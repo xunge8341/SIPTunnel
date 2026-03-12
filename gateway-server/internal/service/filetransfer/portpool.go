@@ -6,6 +6,8 @@ import (
 	"sync"
 )
 
+// ErrRTPPortExhausted 表示 RTP 端口池已耗尽。
+// 运维侧通常需结合 rtp_port_pool_used/total 与并发任务数做容量排查。
 var ErrRTPPortExhausted = errors.New("rtp port pool exhausted")
 
 type PortPoolStats struct {
