@@ -134,6 +134,43 @@ SIP `transport` 使用建议：
 - UDP 示例：`gateway-server/configs/config.sip-udp.example.yaml`
 
 
+
+## 配置参数手册自动生成
+
+为避免参数手册与代码漂移，`gateway-server` 增加了可重复执行的配置文档生成器：
+
+```bash
+cd gateway-server
+make gen-config-docs
+```
+
+生成结果：
+
+- 参数手册：`gateway-server/docs/generated/config-params.md`
+- 示例配置：`gateway-server/configs/generated/config.example.generated.yaml`
+- 环境模板：
+  - `gateway-server/configs/generated/config.dev.template.yaml`
+  - `gateway-server/configs/generated/config.test.template.yaml`
+  - `gateway-server/configs/generated/config.prod.template.yaml`
+
+手册表格包含以下字段，便于运维审阅和变更评估：
+
+- 参数名
+- 类型
+- 默认值
+- 是否支持热更新
+- 风险等级（高风险网络参数会标记为 `⚠️ HIGH-NET`）
+- 说明
+
+示例输出片段（Markdown）：
+
+```markdown
+| 参数名 | 类型 | 默认值 | 热更新 | 风险等级 | 说明 |
+|---|---|---|---|---|---|
+| `network.sip.listen_port` | `int` | `5060` | 否 | ⚠️ HIGH-NET | SIP 监听端口。 |
+| `network.rtp.transport` | `string` | `UDP` | 否 | ⚠️ HIGH-NET | RTP 传输协议（当前仅 UDP 正式上线）。 |
+```
+
 ## gateway-server 运维环境自检
 
 gateway-server 启动前会执行环境自检，并提供统一报告对象（可复用于 API/CLI/日志）：
