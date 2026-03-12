@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,15 +15,17 @@ import (
 	"siptunnel/internal/observability"
 	"siptunnel/internal/repository"
 	memrepo "siptunnel/internal/repository/memory"
+	"siptunnel/internal/selfcheck"
 	"siptunnel/internal/service"
 	"siptunnel/internal/service/taskengine"
 )
 
 type handlerDeps struct {
-	logger *observability.StructuredLogger
-	audit  observability.AuditStore
-	repo   repository.TaskRepository
-	engine *taskengine.Engine
+	logger            *observability.StructuredLogger
+	selfCheckProvider func(context.Context) selfcheck.Report
+	audit             observability.AuditStore
+	repo              repository.TaskRepository
+	engine            *taskengine.Engine
 
 	mu     sync.RWMutex
 	limits OpsLimits
@@ -83,8 +86,9 @@ type updateRoutesRequest struct {
 }
 
 type HandlerOptions struct {
-	LogDir   string
-	AuditDir string
+	LogDir            string
+	AuditDir          string
+	SelfCheckProvider func(context.Context) selfcheck.Report
 }
 
 func NewHandler() http.Handler {
@@ -130,7 +134,8 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, io.Closer, error)
 			"asset.sync":   {APICode: "asset.sync", HTTPMethod: "POST", HTTPPath: "/v1/assets/sync", Enabled: true},
 			"asset.delete": {APICode: "asset.delete", HTTPMethod: "DELETE", HTTPPath: "/v1/assets", Enabled: true},
 		},
-		nodes: []OpsNode{{NodeID: "gateway-a-01", Role: "gateway", Status: "ready", Endpoint: "10.0.0.11:18080"}},
+		nodes:             []OpsNode{{NodeID: "gateway-a-01", Role: "gateway", Status: "ready", Endpoint: "10.0.0.11:18080"}},
+		selfCheckProvider: opts.SelfCheckProvider,
 	}
 	return newMux(deps), joinClosers(logCloser, auditCloser), nil
 }
@@ -174,6 +179,7 @@ func newMux(deps handlerDeps) http.Handler {
 	mux.HandleFunc("/api/routes", deps.handleRoutes)
 	mux.HandleFunc("/api/nodes", deps.handleNodes)
 	mux.HandleFunc("/api/audits", deps.handleAudits)
+	mux.HandleFunc("/api/selfcheck", deps.handleSelfCheck)
 	return deps.withObservability(mux)
 }
 
@@ -513,6 +519,19 @@ func readOperator(r *http.Request) string {
 		return op
 	}
 	return "system"
+}
+
+func (d handlerDeps) handleSelfCheck(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
+		return
+	}
+	if d.selfCheckProvider == nil {
+		writeError(w, http.StatusNotImplemented, "SELF_CHECK_NOT_ENABLED", "self-check provider not configured")
+		return
+	}
+	report := d.selfCheckProvider(r.Context())
+	writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: report})
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload responseEnvelope) {

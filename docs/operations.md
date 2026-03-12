@@ -162,3 +162,44 @@ systemctl restart siptunnel-gateway.service
 2. 升级前确认备份目录可用并记录变更单号。
 3. 升级完成后保留至少一个可回滚版本。
 4. 故障排查优先检查：端口占用、配置加载、目录权限、系统服务日志。
+
+
+## 9. gateway-server 环境自检（面向运维）
+
+### 9.1 自检覆盖项
+
+启动阶段自动执行以下检查并输出统一报告：
+
+1. `listen_ip` 存在性（SIP/RTP）
+2. SIP 监听端口占用
+3. RTP 端口范围合法性
+4. SIP 与 RTP 端口冲突
+5. `temp/final/audit` 目录可写性
+6. 下游 HTTP 基础可达性（按 `target_host:target_port` 做 TCP 连通）
+
+报告分级：`info / warn / error`，每项均包含 `message` 与 `suggestion`，适用于 API、CLI、日志三端复用。
+
+### 9.2 配置入口
+
+- `GATEWAY_NETWORK_CONFIG`：网络配置文件路径（默认 `gateway-server/configs/config.yaml`）。
+- `GATEWAY_HTTPINVOKE_CONFIG`：下游路由配置（YAML，含 routes 列表）。
+
+示例：
+
+```bash
+cd gateway-server
+GATEWAY_NETWORK_CONFIG=./configs/config.yaml \
+GATEWAY_HTTPINVOKE_CONFIG=./configs/httpinvoke_routes.example.yaml \
+go run ./cmd/gateway
+```
+
+### 9.3 运维 API
+
+服务启动后可通过：
+
+```bash
+curl -fsS http://127.0.0.1:18080/api/selfcheck
+```
+
+若启动阶段自检存在 `error` 级结果，进程会直接退出，避免带病上线。
+
