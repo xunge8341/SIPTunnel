@@ -1,4 +1,4 @@
-.PHONY: run test build build-gatewayctl run-gatewayctl build-linux-amd64 build-linux-arm64 docker-buildx release-local gen-config-docs longrun-smoke longrun-1h longrun-6h longrun-24h
+.PHONY: run test build build-gatewayctl run-gatewayctl build-loadtest run-loadtest build-linux-amd64 build-linux-arm64 docker-buildx release-local gen-config-docs longrun-smoke longrun-1h longrun-6h longrun-24h
 
 BINARY_NAME ?= gateway
 DIST_DIR ?= ../dist/bin
@@ -23,6 +23,12 @@ build-gatewayctl:
 run-gatewayctl:
 	go run ./cmd/gatewayctl
 
+
+build-loadtest:
+	go build ./cmd/loadtest
+
+run-loadtest:
+	go run ./cmd/loadtest
 build-linux-amd64:
 	mkdir -p $(DIST_DIR)/linux/amd64
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o $(DIST_DIR)/linux/amd64/$(BINARY_NAME) ./cmd/gateway

@@ -395,3 +395,18 @@ cd gateway-ui && npm run test -- --run
 - 限流策略：在线查看/更新全局限流
 - 路由配置：按 api_code 编辑映射路由
 - 审计日志：查询与详情查看
+
+## 统一压测工具集（loadtest）
+
+仓库新增 Go 实现的统一压测工具，支持 SIP command.create、SIP 状态回执链路、RTP UDP/TCP 文件上传、A 网 HTTP invoke，并输出 JSONL + JSON 聚合报告，便于人读和自动分析。
+
+- CLI: `gateway-server/cmd/loadtest`
+- 核心实现: `gateway-server/loadtest`
+- 一键脚本: `scripts/loadtest/run.sh`
+- 文档: `docs/loadtest-toolkit.md`
+
+快速开始：
+
+```bash
+./scripts/loadtest/run.sh
+```
