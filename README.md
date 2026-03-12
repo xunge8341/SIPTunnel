@@ -193,6 +193,20 @@ make gen-config-docs
 若需接入现有探针，请通过 `NETEM_PROBE_COMMAND` 传入测试命令（输出 JSONL），框架会自动汇总成功率、平均时延、重传率与恢复时间并生成报告。
 
 
+## 性能基线与关键路径 Benchmark
+
+仓库已为关键路径补齐 benchmark，并提供统一基线记录与对比方法：
+
+- SIP JSON decode/validate
+- 签名/验签
+- RTP header encode/decode
+- 文件分片/文件组装
+- HTTP 映射与调用封装
+
+详见文档：`docs/performance-baseline.md`。
+
+CI 同步加入 benchmark smoke（低强度），用于持续校验关键基准可执行性。
+
 ## 长稳测试（1h / 6h / 24h）
 
 仓库新增长稳（soak）测试能力，用于持续验证控制面/文件面链路在长时间运行下的稳定性，重点关注 goroutine、FD、连接回收、内存与缓冲区增长、错误率。
