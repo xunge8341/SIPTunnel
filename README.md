@@ -71,6 +71,17 @@ npm run dev
 - 内置 handler 骨架：`command.create`、`file.create`、`file.retransmit.request`、`task.cancel`，并返回 `command.accepted` / `file.accepted`。
 - 预留日志和 metrics 埋点，供观测系统接入。
 
+## gateway-server 任务引擎与持久化
+
+`gateway-server/internal/service/taskengine` 与 `gateway-server/internal/repository` 新增任务域能力：
+
+- 双状态机：分别支持命令任务、文件任务的状态流转校验。
+- 仓储接口：统一定义 `CreateTask`、`UpdateTaskStatus`、`GetTaskByID`、`ListTasks`、`SaveTaskEvent`。
+- 内存实现：用于开发与单元测试场景。
+- SQL/SQLite 实现骨架：支持后续接入真实数据库驱动。
+- 基础重试与死信池：失败后进入重试等待，超过最大尝试次数进入死信队列，并支持重放。
+- 迁移脚本骨架：`gateway-server/migrations/0001_task_engine.up.sql` / `.down.sql`。
+
 ## RTP 文件面应用层协议
 
 `gateway-server/internal/protocol/rtpfile` 提供 RTP 文件传输应用层协议库：
