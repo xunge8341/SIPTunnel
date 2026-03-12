@@ -22,6 +22,9 @@ func TestDefaultNetworkConfig(t *testing.T) {
 	if cfg.SIP.TCPKeepAliveIntervalMS <= 0 || cfg.SIP.TCPReadBufferBytes <= 0 || cfg.SIP.TCPWriteBufferBytes <= 0 || cfg.SIP.MaxConnections <= 0 {
 		t.Fatal("SIP TCP lifecycle defaults should be positive")
 	}
+	if cfg.RTP.TCPReadTimeoutMS <= 0 || cfg.RTP.TCPWriteTimeoutMS <= 0 || cfg.RTP.MaxTCPSessions <= 0 {
+		t.Fatal("RTP TCP lifecycle defaults should be positive")
+	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("default config should be valid: %v", err)
 	}
@@ -67,13 +70,16 @@ rtp:
   port_start: 22000
   port_end: 21000
   max_packet_bytes: -1
+  tcp_read_timeout_ms: -1
+  tcp_write_timeout_ms: -1
+  max_tcp_sessions: -1
 `
 	_, err := ParseNetworkConfigYAML([]byte(raw))
 	if err == nil {
 		t.Fatal("expected validation error")
 	}
 	msg := err.Error()
-	for _, keyword := range []string{"sip.listen_port", "sip.transport", "rtp.port_start", "rtp.max_packet_bytes"} {
+	for _, keyword := range []string{"sip.listen_port", "sip.transport", "rtp.port_start", "rtp.max_packet_bytes", "rtp.tcp_read_timeout_ms", "rtp.tcp_write_timeout_ms", "rtp.max_tcp_sessions"} {
 		if !strings.Contains(msg, keyword) {
 			t.Fatalf("error %q should contain %q", msg, keyword)
 		}

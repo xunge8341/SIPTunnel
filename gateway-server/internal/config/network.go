@@ -46,6 +46,10 @@ type RTPConfig struct {
 	ReceiveBufferBytes   int    `yaml:"receive_buffer_bytes"`
 	TransferTimeoutMS    int    `yaml:"transfer_timeout_ms"`
 	RetransmitMaxRounds  int    `yaml:"retransmit_max_rounds"`
+	TCPReadTimeoutMS     int    `yaml:"tcp_read_timeout_ms"`
+	TCPWriteTimeoutMS    int    `yaml:"tcp_write_timeout_ms"`
+	TCPKeepAliveEnabled  bool   `yaml:"tcp_keepalive_enabled"`
+	MaxTCPSessions       int    `yaml:"max_tcp_sessions"`
 }
 
 func DefaultNetworkConfig() NetworkConfig {
@@ -79,6 +83,10 @@ func DefaultNetworkConfig() NetworkConfig {
 			ReceiveBufferBytes:   4 * 1024 * 1024,
 			TransferTimeoutMS:    30000,
 			RetransmitMaxRounds:  3,
+			TCPReadTimeoutMS:     5000,
+			TCPWriteTimeoutMS:    5000,
+			TCPKeepAliveEnabled:  true,
+			MaxTCPSessions:       128,
 		},
 	}
 }
@@ -208,6 +216,15 @@ func (c RTPConfig) Validate() error {
 	if c.RetransmitMaxRounds < 0 {
 		errs = append(errs, fmt.Errorf("rtp.retransmit_max_rounds %d must be >= 0", c.RetransmitMaxRounds))
 	}
+	if c.TCPReadTimeoutMS <= 0 {
+		errs = append(errs, fmt.Errorf("rtp.tcp_read_timeout_ms %d must be > 0", c.TCPReadTimeoutMS))
+	}
+	if c.TCPWriteTimeoutMS <= 0 {
+		errs = append(errs, fmt.Errorf("rtp.tcp_write_timeout_ms %d must be > 0", c.TCPWriteTimeoutMS))
+	}
+	if c.MaxTCPSessions <= 0 {
+		errs = append(errs, fmt.Errorf("rtp.max_tcp_sessions %d must be > 0", c.MaxTCPSessions))
+	}
 	return errors.Join(errs...)
 }
 
@@ -302,5 +319,17 @@ func (c *RTPConfig) applyDefaults(d RTPConfig) {
 	}
 	if c.TransferTimeoutMS == 0 {
 		c.TransferTimeoutMS = d.TransferTimeoutMS
+	}
+	if c.RetransmitMaxRounds == 0 {
+		c.RetransmitMaxRounds = d.RetransmitMaxRounds
+	}
+	if c.TCPReadTimeoutMS == 0 {
+		c.TCPReadTimeoutMS = d.TCPReadTimeoutMS
+	}
+	if c.TCPWriteTimeoutMS == 0 {
+		c.TCPWriteTimeoutMS = d.TCPWriteTimeoutMS
+	}
+	if c.MaxTCPSessions == 0 {
+		c.MaxTCPSessions = d.MaxTCPSessions
 	}
 }

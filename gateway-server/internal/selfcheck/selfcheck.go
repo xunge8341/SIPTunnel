@@ -202,7 +202,7 @@ func (r *Runner) checkRTPTransportPlan(rtp config.RTPConfig) []Item {
 	}
 	transport := strings.ToUpper(strings.TrimSpace(rtp.Transport))
 	if transport == "TCP" {
-		return []Item{{Name: name, Level: LevelWarn, Message: "当前 rtp.transport=TCP 仅为扩展预留，占位实现尚未纳入首轮正式上线能力", Suggestion: "生产环境请保持 rtp.transport=UDP"}}
+		return []Item{{Name: name, Level: LevelWarn, Message: "当前 rtp.transport=TCP 已可用于联调验证（受控发布）", Suggestion: "生产环境建议保持 rtp.transport=UDP，TCP 仅用于跨网调试与防丢包验证"}}
 	}
 	return []Item{{Name: name, Level: LevelInfo, Message: "当前 rtp.transport=UDP（生产默认）", Suggestion: "无需处理"}}
 }

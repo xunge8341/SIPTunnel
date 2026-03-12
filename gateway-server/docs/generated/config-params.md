@@ -31,12 +31,16 @@
 | `network.rtp.advertise_ip` | `string` | `""` | 否 | MEDIUM | RTP 对端可见地址。 |
 | `network.rtp.port_start` | `int` | `20000` | 否 | ⚠️ HIGH-NET | RTP 端口池起始端口。 |
 | `network.rtp.port_end` | `int` | `20100` | 否 | ⚠️ HIGH-NET | RTP 端口池结束端口。 |
-| `network.rtp.transport` | `string` | `UDP` | 否 | ⚠️ HIGH-NET | RTP 传输协议（当前仅 UDP 正式上线）。 |
+| `network.rtp.transport` | `string` | `UDP` | 否 | ⚠️ HIGH-NET | RTP 传输协议（UDP 生产默认，TCP 可联调验证）。 |
 | `network.rtp.max_packet_bytes` | `int` | `1400` | 是 | ⚠️ HIGH-NET | RTP 单包大小。 |
 | `network.rtp.max_inflight_transfers` | `int` | `64` | 是 | MEDIUM | 并发传输上限。 |
 | `network.rtp.receive_buffer_bytes` | `int` | `4194304` | 是 | MEDIUM | RTP 接收缓冲区大小。 |
 | `network.rtp.transfer_timeout_ms` | `int` | `30000` | 是 | MEDIUM | 文件传输超时（毫秒）。 |
 | `network.rtp.retransmit_max_rounds` | `int` | `3` | 是 | LOW | 重传最大轮次。 |
+| `network.rtp.tcp_read_timeout_ms` | `int` | `5000` | 是 | MEDIUM | RTP TCP 读超时（毫秒）。 |
+| `network.rtp.tcp_write_timeout_ms` | `int` | `5000` | 是 | MEDIUM | RTP TCP 写超时（毫秒）。 |
+| `network.rtp.tcp_keepalive_enabled` | `bool` | `true` | 是 | LOW | 启用 RTP TCP keepalive。 |
+| `network.rtp.max_tcp_sessions` | `int` | `128` | 是 | ⚠️ HIGH-NET | RTP TCP 最大并发会话数。 |
 | `media.port_range.start` | `int` | `20000` | 否 | MEDIUM | 部署规划媒体端口起始值。 |
 | `media.port_range.end` | `int` | `20100` | 否 | MEDIUM | 部署规划媒体端口结束值。 |
 | `node.role` | `string` | `receiver` | 否 | MEDIUM | 节点角色（receiver/sender）。 |
