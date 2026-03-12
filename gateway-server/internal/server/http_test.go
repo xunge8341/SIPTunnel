@@ -36,7 +36,7 @@ func buildTestHandler(t *testing.T) (http.Handler, repository.TaskRepository, ob
 		networkStatusFunc: func(_ context.Context) NodeNetworkStatus {
 			return NodeNetworkStatus{
 				SIP:                 SIPNetworkStatus{ListenIP: "10.10.1.10", ListenPort: 5060, Transport: "TCP", CurrentSessions: 12, CurrentConnections: 7},
-				RTP:                 RTPNetworkStatus{ListenIP: "10.10.1.10", PortStart: 30000, PortEnd: 30020, Transport: "UDP", ActiveTransfers: 3, UsedPorts: 6, AvailablePorts: 15},
+				RTP:                 RTPNetworkStatus{ListenIP: "10.10.1.10", PortStart: 30000, PortEnd: 30020, Transport: "UDP", ActiveTransfers: 3, UsedPorts: 6, AvailablePorts: 15, PortPoolTotal: 21, PortPoolUsed: 6, PortAllocFailTotal: 2},
 				RecentBindErrors:    []string{"sip: bind 10.10.1.10:5061 failed"},
 				RecentNetworkErrors: []string{"rtp: write timeout to 10.20.1.20:30001"},
 			}
@@ -164,7 +164,7 @@ func TestNodeNetworkStatusEndpointAndAudit(t *testing.T) {
 	if payload.Code != "OK" {
 		t.Fatalf("unexpected code: %s", payload.Code)
 	}
-	if payload.Data.SIP.ListenIP != "10.10.1.10" || payload.Data.RTP.AvailablePorts != 15 {
+	if payload.Data.SIP.ListenIP != "10.10.1.10" || payload.Data.RTP.AvailablePorts != 15 || payload.Data.RTP.PortAllocFailTotal != 2 {
 		t.Fatalf("unexpected network status payload: %+v", payload.Data)
 	}
 

@@ -184,3 +184,48 @@ func assertTempFileContent(t *testing.T, path string, want []byte) {
 		t.Fatalf("assembled file mismatch got=%q want=%q", string(data), string(want))
 	}
 }
+
+func TestReceiverIntegratesPortPoolAllocateAndReleaseOnComplete(t *testing.T) {
+	pool, err := NewMemoryRTPPortPool(32000, 32001)
+	if err != nil {
+		t.Fatalf("NewMemoryRTPPortPool error: %v", err)
+	}
+	receiver := NewReceiverWithConfig(StorageConfig{TempDir: t.TempDir(), FinalDir: t.TempDir(), PortPool: pool})
+	packets, _ := buildPackets(t, 7)
+	transferID := packets[0].Header.TransferID
+
+	for _, packet := range packets {
+		if _, err := receiver.AddChunk(packet); err != nil {
+			t.Fatalf("AddChunk error: %v", err)
+		}
+	}
+	if _, ok := pool.PortOf(transferID); ok {
+		t.Fatalf("port should be released after transfer complete")
+	}
+	stats := receiver.PortPoolStats()
+	if stats.Total != 2 || stats.Used != 0 || stats.Available != 2 {
+		t.Fatalf("unexpected stats: %+v", stats)
+	}
+}
+
+func TestReceiverIntegratesPortPoolAllocateFailure(t *testing.T) {
+	pool, err := NewMemoryRTPPortPool(33000, 33000)
+	if err != nil {
+		t.Fatalf("NewMemoryRTPPortPool error: %v", err)
+	}
+	receiver := NewReceiverWithConfig(StorageConfig{TempDir: t.TempDir(), FinalDir: t.TempDir(), PortPool: pool})
+	packets1, _ := buildPackets(t, 10)
+	packets2, _ := buildPackets(t, 11)
+	packets2[0].Header.TransferID = [16]byte{7, 7, 7}
+
+	if _, err := receiver.AddChunk(packets1[0]); err != nil {
+		t.Fatalf("first transfer allocate should succeed: %v", err)
+	}
+	if _, err := receiver.AddChunk(packets2[0]); !errors.Is(err, ErrRTPPortExhausted) {
+		t.Fatalf("expected ErrRTPPortExhausted, got %v", err)
+	}
+	stats := receiver.PortPoolStats()
+	if stats.AllocFailTotal != 1 || stats.Used != 1 {
+		t.Fatalf("unexpected pool stats: %+v", stats)
+	}
+}
