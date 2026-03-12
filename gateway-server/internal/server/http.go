@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"siptunnel/internal/config"
 	"siptunnel/internal/observability"
 	"siptunnel/internal/repository"
 	memrepo "siptunnel/internal/repository/memory"
@@ -23,6 +24,7 @@ import (
 type handlerDeps struct {
 	logger            *observability.StructuredLogger
 	selfCheckProvider func(context.Context) selfcheck.Report
+	networkStatusFunc func(context.Context) NodeNetworkStatus
 	audit             observability.AuditStore
 	repo              repository.TaskRepository
 	engine            *taskengine.Engine
@@ -75,6 +77,31 @@ type opsActionRequest struct {
 	Reason   string `json:"reason"`
 }
 
+type NodeNetworkStatus struct {
+	SIP                 SIPNetworkStatus `json:"sip"`
+	RTP                 RTPNetworkStatus `json:"rtp"`
+	RecentBindErrors    []string         `json:"recent_bind_errors"`
+	RecentNetworkErrors []string         `json:"recent_network_errors"`
+}
+
+type SIPNetworkStatus struct {
+	ListenIP           string `json:"listen_ip"`
+	ListenPort         int    `json:"listen_port"`
+	Transport          string `json:"transport"`
+	CurrentSessions    int    `json:"current_sessions"`
+	CurrentConnections int    `json:"current_connections"`
+}
+
+type RTPNetworkStatus struct {
+	ListenIP        string `json:"listen_ip"`
+	PortStart       int    `json:"port_start"`
+	PortEnd         int    `json:"port_end"`
+	Transport       string `json:"transport"`
+	ActiveTransfers int    `json:"active_transfers"`
+	UsedPorts       int    `json:"used_ports"`
+	AvailablePorts  int    `json:"available_ports"`
+}
+
 type updateLimitsRequest struct {
 	RPS           int `json:"rps"`
 	Burst         int `json:"burst"`
@@ -89,6 +116,7 @@ type HandlerOptions struct {
 	LogDir            string
 	AuditDir          string
 	SelfCheckProvider func(context.Context) selfcheck.Report
+	NetworkStatusFunc func(context.Context) NodeNetworkStatus
 }
 
 func NewHandler() http.Handler {
@@ -136,6 +164,36 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, io.Closer, error)
 		},
 		nodes:             []OpsNode{{NodeID: "gateway-a-01", Role: "gateway", Status: "ready", Endpoint: "10.0.0.11:18080"}},
 		selfCheckProvider: opts.SelfCheckProvider,
+		networkStatusFunc: opts.NetworkStatusFunc,
+	}
+	if deps.networkStatusFunc == nil {
+		defaults := config.DefaultNetworkConfig()
+		deps.networkStatusFunc = func(context.Context) NodeNetworkStatus {
+			availablePorts := defaults.RTP.PortEnd - defaults.RTP.PortStart + 1
+			if availablePorts < 0 {
+				availablePorts = 0
+			}
+			return NodeNetworkStatus{
+				SIP: SIPNetworkStatus{
+					ListenIP:           defaults.SIP.ListenIP,
+					ListenPort:         defaults.SIP.ListenPort,
+					Transport:          defaults.SIP.Transport,
+					CurrentSessions:    0,
+					CurrentConnections: 0,
+				},
+				RTP: RTPNetworkStatus{
+					ListenIP:        defaults.RTP.ListenIP,
+					PortStart:       defaults.RTP.PortStart,
+					PortEnd:         defaults.RTP.PortEnd,
+					Transport:       defaults.RTP.Transport,
+					ActiveTransfers: 0,
+					UsedPorts:       0,
+					AvailablePorts:  availablePorts,
+				},
+				RecentBindErrors:    []string{},
+				RecentNetworkErrors: []string{},
+			}
+		}
 	}
 	return newMux(deps), joinClosers(logCloser, auditCloser), nil
 }
@@ -180,6 +238,7 @@ func newMux(deps handlerDeps) http.Handler {
 	mux.HandleFunc("/api/nodes", deps.handleNodes)
 	mux.HandleFunc("/api/audits", deps.handleAudits)
 	mux.HandleFunc("/api/selfcheck", deps.handleSelfCheck)
+	mux.HandleFunc("/api/node/network-status", deps.handleNodeNetworkStatus)
 	return deps.withObservability(mux)
 }
 
@@ -532,6 +591,16 @@ func (d handlerDeps) handleSelfCheck(w http.ResponseWriter, r *http.Request) {
 	}
 	report := d.selfCheckProvider(r.Context())
 	writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: report})
+}
+
+func (d handlerDeps) handleNodeNetworkStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
+		return
+	}
+	status := d.networkStatusFunc(r.Context())
+	d.recordOpsAudit(r, readOperator(r), "QUERY_NODE_NETWORK_STATUS", map[string]any{"path": r.URL.Path})
+	writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: status})
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload responseEnvelope) {
