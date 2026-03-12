@@ -89,6 +89,7 @@ func (r *Runner) Run(ctx context.Context, in Input) Report {
 	items = append(items, r.checkListenIP("sip.listen_ip", in.NetworkConfig.SIP.Enabled, in.NetworkConfig.SIP.ListenIP)...)
 	items = append(items, r.checkListenIP("rtp.listen_ip", in.NetworkConfig.RTP.Enabled, in.NetworkConfig.RTP.ListenIP)...)
 	items = append(items, r.checkSIPPortOccupancy(in.NetworkConfig.SIP)...)
+	items = append(items, r.checkSIPUDPMessageSizeRisk(in.NetworkConfig.SIP)...)
 	items = append(items, r.checkRTPRange(in.NetworkConfig.RTP)...)
 	items = append(items, r.checkSIPRTPConflict(in.NetworkConfig)...)
 	items = append(items, r.checkWritableDirs(in.StoragePaths)...)
@@ -166,6 +167,17 @@ func (r *Runner) checkSIPPortOccupancy(sip config.SIPConfig) []Item {
 		return []Item{{Name: name, Level: LevelError, Message: fmt.Sprintf("不支持的 SIP transport=%s", sip.Transport), Suggestion: "请将 sip.transport 设置为 TCP/UDP/TLS"}}
 	}
 	return []Item{{Name: name, Level: LevelInfo, Message: fmt.Sprintf("SIP 监听地址 %s 可成功绑定", addr), Suggestion: "无需处理"}}
+}
+
+func (r *Runner) checkSIPUDPMessageSizeRisk(sip config.SIPConfig) []Item {
+	const name = "sip.udp_message_size_risk"
+	if !sip.Enabled {
+		return []Item{{Name: name, Level: LevelInfo, Message: "SIP 已禁用，跳过 UDP 报文长度风险检查", Suggestion: "如需启用 SIP，请配置后重新自检"}}
+	}
+	if !sip.UDPMessageSizeRisk() {
+		return []Item{{Name: name, Level: LevelInfo, Message: "SIP 报文大小与 transport 匹配，无明显分片风险", Suggestion: "无需处理"}}
+	}
+	return []Item{{Name: name, Level: LevelWarn, Message: fmt.Sprintf("当前 sip.transport=UDP 且 max_message_bytes=%d，超过推荐值 %d，存在分片/丢包风险", sip.MaxMessageBytes, config.SIPUDPRecommendedMaxMessageBytes), Suggestion: "建议降低 sip.max_message_bytes（如 <= 1300）或切换 sip.transport=TCP"}}
 }
 
 func (r *Runner) checkRTPRange(rtp config.RTPConfig) []Item {

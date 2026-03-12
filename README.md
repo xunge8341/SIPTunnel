@@ -111,6 +111,22 @@ GATEWAY_DATA_DIR=./runtime-data go run ./cmd/gateway
 
 默认值策略：首期默认 `SIP=TCP`、`RTP=UDP`；缺省字段由默认值注入器补齐，再执行分模块校验（含范围校验与端口冲突校验）。
 
+SIP `transport` 使用建议：
+
+- `TCP`（默认）：适合控制消息体较大、链路稳定且需要降低分片风险的场景。
+- `UDP`：适合低时延、轻量控制消息场景；建议 `sip.max_message_bytes <= 1300`。若超过该值，系统会在自检中输出 `sip.udp_message_size_risk` 告警，并在启动日志中提示风险。
+
+观测暴露：
+
+- **metrics**：`sip_control_route_total/sip_control_route_duration` 增加 `transport` 标签（`TCP|UDP`）。
+- **节点状态 API**：`GET /api/node/network-status` 的 `data.sip.transport` 持续回传当前协议。
+- **日志字段**：SIP 控制面处理日志追加 `transport` 字段，启动日志打印 `sip_transport/rtp_transport`。
+
+配置示例：
+
+- 默认 TCP：`gateway-server/configs/config.yaml`
+- UDP 示例：`gateway-server/configs/config.sip-udp.example.yaml`
+
 
 ## gateway-server 运维环境自检
 

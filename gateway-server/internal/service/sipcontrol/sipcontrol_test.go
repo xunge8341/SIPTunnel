@@ -64,6 +64,9 @@ func TestDispatcherRouteCommandCreate(t *testing.T) {
 	if len(metrics.inc) == 0 || metrics.inc[len(metrics.inc)-1].labels["status"] != "success" {
 		t.Fatalf("expected success metric, got %+v", metrics.inc)
 	}
+	if got := metrics.inc[len(metrics.inc)-1].labels["transport"]; got != TransportTCP {
+		t.Fatalf("metric transport=%s, want %s", got, TransportTCP)
+	}
 }
 
 func TestDispatcherRejectsBadSignature(t *testing.T) {
@@ -138,5 +141,26 @@ func newHeader(msgType string, now time.Time, signature string) sip.Header {
 		PayloadDigest:   "digest",
 		SignAlg:         "HMAC_SHA256",
 		Signature:       signature,
+	}
+}
+
+func TestDispatcherTransportSwitchAffectsMetricsLabel(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	metrics := &metricsStub{}
+	d := NewDispatcher(verifierStub{}, slog.Default(), metrics)
+	d.SetTransport("udp")
+	d.clock = fixedClock{now: now}
+	d.RegisterHandler(NewCommandCreateHandler(fixedClock{now: now}))
+
+	if got := d.Transport(); got != TransportUDP {
+		t.Fatalf("transport=%s, want %s", got, TransportUDP)
+	}
+
+	_, err := d.Route(context.Background(), InboundMessage{Body: mustMarshalCommandCreate(t, now, "sig-ok")})
+	if err != nil {
+		t.Fatalf("Route() err=%v", err)
+	}
+	if got := metrics.inc[len(metrics.inc)-1].labels["transport"]; got != TransportUDP {
+		t.Fatalf("metric transport=%s, want %s", got, TransportUDP)
 	}
 }

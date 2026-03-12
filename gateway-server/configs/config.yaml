@@ -20,6 +20,7 @@ network:
     transport: TCP
     advertise_ip: 192.168.10.10
     domain: siptunnel.local
+    # TCP 默认可保持较大消息；若切换 UDP，建议不超过 1300 以降低分片风险
     max_message_bytes: 65535
     read_timeout_ms: 5000
     write_timeout_ms: 5000

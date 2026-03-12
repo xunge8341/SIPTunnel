@@ -132,3 +132,16 @@ func TestConfigYAMLSample_NetworkSectionValid(t *testing.T) {
 		t.Fatalf("network section should be valid: %v", err)
 	}
 }
+
+func TestSIPConfigUDPMessageSizeRisk(t *testing.T) {
+	cfg := DefaultNetworkConfig().SIP
+	cfg.Transport = "UDP"
+	cfg.MaxMessageBytes = SIPUDPRecommendedMaxMessageBytes + 1
+	if !cfg.UDPMessageSizeRisk() {
+		t.Fatal("expected UDP message size risk")
+	}
+	cfg.MaxMessageBytes = SIPUDPRecommendedMaxMessageBytes
+	if cfg.UDPMessageSizeRisk() {
+		t.Fatal("expected no risk when equals recommended limit")
+	}
+}
