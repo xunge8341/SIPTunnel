@@ -1,4 +1,4 @@
-.PHONY: run test build build-linux-amd64 build-linux-arm64 docker-buildx release-local
+.PHONY: run test build build-linux-amd64 build-linux-arm64 docker-buildx release-local gen-config-docs
 
 BINARY_NAME ?= gateway
 DIST_DIR ?= ../dist/bin
@@ -31,3 +31,6 @@ docker-buildx:
 
 release-local: build-linux-amd64 build-linux-arm64
 	@echo "Local release artifacts are available under $(DIST_DIR)/linux/{amd64,arm64}/$(BINARY_NAME)"
+
+gen-config-docs:
+	go run ./cmd/configdocgen
