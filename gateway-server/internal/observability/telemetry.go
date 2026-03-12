@@ -2,18 +2,19 @@ package observability
 
 import (
 	"context"
-	"log/slog"
 )
 
 type Telemetry struct {
-	Logger *slog.Logger
+	Logger *StructuredLogger
+	Audit  *AuditLogger
 }
 
 func NewTelemetry() *Telemetry {
-	return &Telemetry{Logger: slog.Default()}
+	logger := NewStructuredLogger(nil)
+	store := NewInMemoryAuditStore()
+	return &Telemetry{Logger: logger, Audit: NewAuditLogger(logger, store)}
 }
 
-func (t *Telemetry) Audit(ctx context.Context, action string, attrs ...any) {
-	_ = ctx
-	t.Logger.Info("audit", append([]any{"action", action}, attrs...)...)
+func (t *Telemetry) AuditEvent(ctx context.Context, event AuditEvent) error {
+	return t.Audit.Record(ctx, event)
 }

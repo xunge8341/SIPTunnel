@@ -103,3 +103,27 @@ npm run dev
 - 结果码映射：HTTP 状态码映射为统一 `result_code`（如 `OK`、`UPSTREAM_TIMEOUT`、`UPSTREAM_RATE_LIMIT`、`UPSTREAM_SERVER_ERROR`）。
 
 示例路由配置见：`gateway-server/configs/httpinvoke_routes.example.yaml`。
+
+## gateway-server 可观测与审计最小 Demo
+
+`gateway-server/internal/server` 已接入统一观测字段与审计日志能力：
+
+- 统一核心字段：`trace_id/request_id/session_id/transfer_id/api_code/source_system/result_code`
+- 结构化 JSON 日志输出（`log/slog`）
+- OpenTelemetry TraceContext 传播（提取 `traceparent`，响应注入追踪头）
+- 审计记录与查询抽象（内存实现，便于前端后续查询展示）
+
+启动后可执行：
+
+```bash
+# 1) 触发一个 demo 请求
+curl -i -X POST 'http://127.0.0.1:18080/demo/process' \
+  -H 'X-Api-Code: demo.asset.sync' \
+  -H 'X-Source-System: b-zone' \
+  -H 'X-Initiator: ops-admin' \
+  -H 'traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01' \
+  -d '{}'
+
+# 2) 查询审计事件
+curl 'http://127.0.0.1:18080/audit/events?who=ops-admin&limit=20'
+```
