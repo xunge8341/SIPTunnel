@@ -33,6 +33,14 @@ func buildTestHandler(t *testing.T) (http.Handler, repository.TaskRepository, ob
 		selfCheckProvider: func(_ context.Context) selfcheck.Report {
 			return selfcheck.Report{Overall: selfcheck.LevelInfo, Summary: selfcheck.Summary{Info: 1}, Items: []selfcheck.Item{{Name: "sample", Level: selfcheck.LevelInfo, Message: "ok", Suggestion: "none"}}}
 		},
+		networkStatusFunc: func(_ context.Context) NodeNetworkStatus {
+			return NodeNetworkStatus{
+				SIP:                 SIPNetworkStatus{ListenIP: "10.10.1.10", ListenPort: 5060, Transport: "TCP", CurrentSessions: 12, CurrentConnections: 7},
+				RTP:                 RTPNetworkStatus{ListenIP: "10.10.1.10", PortStart: 30000, PortEnd: 30020, Transport: "UDP", ActiveTransfers: 3, UsedPorts: 6, AvailablePorts: 15},
+				RecentBindErrors:    []string{"sip: bind 10.10.1.10:5061 failed"},
+				RecentNetworkErrors: []string{"rtp: write timeout to 10.20.1.20:30001"},
+			}
+		},
 	}
 	return newMux(deps), repo, audit
 }
@@ -132,6 +140,43 @@ func TestLimitsRoutesNodesAndAudits(t *testing.T) {
 		if rr.Code != tc.code {
 			t.Fatalf("%s %s expected %d got %d body=%s", tc.method, tc.target, tc.code, rr.Code, rr.Body.String())
 		}
+	}
+}
+
+func TestNodeNetworkStatusEndpointAndAudit(t *testing.T) {
+	h, _, audit := buildTestHandler(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/node/network-status", nil)
+	req.Header.Set("X-Initiator", "net-ops")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var payload struct {
+		Code string            `json:"code"`
+		Data NodeNetworkStatus `json:"data"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal response failed: %v", err)
+	}
+	if payload.Code != "OK" {
+		t.Fatalf("unexpected code: %s", payload.Code)
+	}
+	if payload.Data.SIP.ListenIP != "10.10.1.10" || payload.Data.RTP.AvailablePorts != 15 {
+		t.Fatalf("unexpected network status payload: %+v", payload.Data)
+	}
+
+	events, err := audit.List(t.Context(), observability.AuditQuery{Who: "net-ops", Limit: 10})
+	if err != nil {
+		t.Fatalf("query audit failed: %v", err)
+	}
+	if len(events) == 0 {
+		t.Fatalf("expected audit event for network status query")
+	}
+	if events[0].OpsAction != "QUERY_NODE_NETWORK_STATUS" {
+		t.Fatalf("unexpected ops action: %s", events[0].OpsAction)
 	}
 }
 

@@ -65,3 +65,43 @@ paths:
           schema: { type: string }
       responses:
         '200': { description: OK }
+  /api/node/network-status:
+    get:
+      summary: Get current node network configuration and runtime status
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: string, example: OK }
+                  message: { type: string, example: success }
+                  data:
+                    type: object
+                    properties:
+                      sip:
+                        type: object
+                        properties:
+                          listen_ip: { type: string }
+                          listen_port: { type: integer }
+                          transport: { type: string }
+                          current_sessions: { type: integer }
+                          current_connections: { type: integer }
+                      rtp:
+                        type: object
+                        properties:
+                          listen_ip: { type: string }
+                          port_start: { type: integer }
+                          port_end: { type: integer }
+                          transport: { type: string }
+                          active_transfers: { type: integer }
+                          used_ports: { type: integer }
+                          available_ports: { type: integer }
+                      recent_bind_errors:
+                        type: array
+                        items: { type: string }
+                      recent_network_errors:
+                        type: array
+                        items: { type: string }
