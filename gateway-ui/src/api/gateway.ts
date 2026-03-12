@@ -84,7 +84,15 @@ export const gatewayApi = {
         failureRate: (failedCount / total) * 100,
         concurrency: allTasks.filter((item) => item.status === 'running' || item.status === 'transferring').length,
         rtpLossRate: 0,
-        rateLimitHits: 0
+        rateLimitHits: 0,
+        sipProtocol: 'UDP',
+        sipListenPort: 5060,
+        rtpProtocol: 'UDP',
+        rtpPortRange: '20000-20999',
+        activeSessions: allTasks.filter((item) => item.status !== 'cancelled').length,
+        activeTransfers: allTasks.filter((item) => item.status === 'transferring').length,
+        failedTasks24h: failedCount,
+        rateLimitHits24h: 0
       },
       recentTrends: []
     } as DashboardPayload

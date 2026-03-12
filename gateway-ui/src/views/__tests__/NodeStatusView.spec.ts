@@ -26,6 +26,9 @@ const stubs = {
   'a-empty': { template: '<div />' },
   'a-list': { template: '<ul><slot name="renderItem" :item="{}" /></ul>' },
   'a-list-item': { template: '<li><slot /></li>' },
+  'a-table': { template: '<div />' },
+  'a-table-column': { template: '<div />' },
+  'a-tag': { template: '<span><slot /></span>' },
   'a-button': { template: '<button @click="$emit(`click`)"><slot /></button>' },
   StatusPill: { template: '<span />' }
 }
@@ -73,5 +76,6 @@ describe('NodeStatusView', () => {
     expect(gatewayApi.fetchDiagnosticExport).toHaveBeenCalled()
     expect(wrapper.text()).toContain('diag-001')
     expect(wrapper.text()).toContain('正在采集信息')
+    expect(wrapper.text()).toContain('自检通过')
   })
 })

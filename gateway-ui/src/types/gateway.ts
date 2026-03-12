@@ -18,6 +18,14 @@ export interface DashboardMetrics {
   concurrency: number
   rtpLossRate: number
   rateLimitHits: number
+  sipProtocol: TransportProtocol
+  sipListenPort: number
+  rtpProtocol: TransportProtocol
+  rtpPortRange: string
+  activeSessions: number
+  activeTransfers: number
+  failedTasks24h: number
+  rateLimitHits24h: number
 }
 
 export interface TrendPoint {
@@ -274,4 +282,40 @@ export interface DiagnosticExportJob {
   sections: DiagnosticExportSection[]
   errorMessage?: string
   downloadUrl?: string
+}
+
+export interface NodePortBindingStatus {
+  service: 'SIP' | 'RTP'
+  protocol: TransportProtocol
+  bindAddress: string
+  status: 'bound' | 'unbound' | 'degraded'
+  updatedAt: string
+}
+
+export interface PortBindingFailureEvent {
+  id: string
+  occurredAt: string
+  service: 'SIP' | 'RTP'
+  reason: string
+}
+
+export interface NodeSelfCheckSummary {
+  status: 'pass' | 'warn' | 'fail'
+  checkedAt: string
+  passed: number
+  warning: number
+  failed: number
+  summary: string
+}
+
+export interface NodeOpsSnapshot {
+  id: string
+  status: 'online' | 'offline' | 'degraded'
+  cpu: number
+  memory: number
+  backlog: number
+  concurrency: number
+  portBindings: NodePortBindingStatus[]
+  bindingFailures: PortBindingFailureEvent[]
+  selfCheck: NodeSelfCheckSummary
 }
