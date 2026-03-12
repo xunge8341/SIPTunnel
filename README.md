@@ -148,6 +148,25 @@ make release-local
 
 完整部署与操作步骤请参考 `docs/operations.md` 与 `deploy/README.md`。
 
+## 生产交付脚本（安装/升级/回滚）
+
+仓库已提供 Linux/systemd 交付脚本与模板：
+
+- 安装前检查：`deploy/scripts/precheck.sh`
+- 安装：`deploy/scripts/install.sh`
+- 升级：`deploy/scripts/upgrade.sh`
+- 回滚：`deploy/scripts/rollback.sh`
+- systemd unit 模板：`deploy/systemd/siptunnel-gateway.service`
+
+示例：
+
+```bash
+./deploy/scripts/precheck.sh all
+RELEASE_FILE=./dist/gateway-linux-amd64 ./deploy/scripts/install.sh
+RELEASE_FILE=./dist/gateway-linux-amd64 ./deploy/scripts/upgrade.sh
+./deploy/scripts/rollback.sh
+```
+
 ## 如何测试
 
 ```bash
