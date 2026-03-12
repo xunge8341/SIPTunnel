@@ -1,12 +1,18 @@
-FROM golang:1.22-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.22-alpine AS builder
 WORKDIR /app
+
+ARG TARGETOS
+ARG TARGETARCH
+
 COPY go.mod ./
 COPY cmd ./cmd
 COPY internal ./internal
-RUN go build -o gateway ./cmd/gateway
+
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
+    go build -trimpath -o /out/gateway ./cmd/gateway
 
 FROM alpine:3.20
 WORKDIR /app
-COPY --from=builder /app/gateway ./gateway
+COPY --from=builder /out/gateway ./gateway
 EXPOSE 18080
 CMD ["./gateway"]

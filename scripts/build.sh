@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SERVER_DIR="$ROOT_DIR/gateway-server"
-DIST_DIR="$ROOT_DIR/dist"
+DIST_DIR="$ROOT_DIR/dist/bin"
 
 MODE="${1:-native}"
 VERSION="${VERSION:-dev}"
@@ -20,7 +20,9 @@ build_one() {
   if [[ "$goos" == "windows" ]]; then
     ext=".exe"
   fi
-  local output="$DIST_DIR/gateway-${goos}-${goarch}${ext}"
+  local output_dir="$DIST_DIR/${goos}/${goarch}"
+  local output="$output_dir/gateway${ext}"
+  mkdir -p "$output_dir"
   echo "[build] ${goos}/${goarch} -> ${output}"
   (
     cd "$SERVER_DIR"
@@ -37,6 +39,7 @@ case "$MODE" in
     ;;
   matrix)
     build_one linux amd64
+    build_one linux arm64
     build_one windows amd64
     build_one darwin amd64
     ;;
