@@ -5,7 +5,10 @@ import {
   fetchFileTasksMock,
   fetchTaskDetailMock,
   fetchNetworkConfigMock,
-  updateNetworkConfigMock
+  updateNetworkConfigMock,
+  fetchConfigGovernanceMock,
+  rollbackConfigMock,
+  exportConfigYamlMock
 } from './mockGateway'
 import type {
   CommandTask,
@@ -20,7 +23,9 @@ import type {
   TaskDetail,
   TaskKind,
   TaskListFilters,
-  TaskListResult
+  TaskListResult,
+  ConfigGovernancePayload,
+  ConfigSnapshotFilters
 } from '../types/gateway'
 
 const useMock = import.meta.env.VITE_API_MODE !== 'real'
@@ -174,6 +179,42 @@ export const gatewayApi = {
     }
     return unwrap(request<NetworkConfigPayload>('/network/config', { method: 'PUT', body: payload }))
   },
+
+
+  async fetchConfigGovernance(filters: ConfigSnapshotFilters) {
+    if (useMock) {
+      return fetchConfigGovernanceMock(filters)
+    }
+    return unwrap(
+      request<ConfigGovernancePayload>('/config-governance', {
+        method: 'GET',
+        params: {
+          startTime: filters.startTime,
+          endTime: filters.endTime,
+          operator: filters.operator,
+          version: filters.version
+        }
+      })
+    )
+  },
+
+  async rollbackConfig(version: string) {
+    if (useMock) {
+      return rollbackConfigMock(version)
+    }
+    return unwrap(request<ConfigGovernancePayload>('/config-governance/rollback', { method: 'POST', body: { version } }))
+  },
+
+  async exportConfigYaml(target: 'current' | 'pending') {
+    if (useMock) {
+      return exportConfigYamlMock(target)
+    }
+    const result = await unwrap<{ content: string }>(
+      request('/config-governance/export', { method: 'GET', params: { target } })
+    )
+    return result.content
+  },
+
   fetchLimits() {
     return unwrap(request<OpsLimits>('/limits', { method: 'GET' }))
   },

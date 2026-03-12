@@ -8,7 +8,10 @@ import type {
   TaskListResult,
   TaskStatus,
   NetworkConfigPayload,
-  UpdateNetworkConfigPayload
+  UpdateNetworkConfigPayload,
+  ConfigGovernancePayload,
+  ConfigSnapshotFilters,
+  RuntimeGatewayConfig
 } from '../types/gateway'
 
 const wait = (ms = 200) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -214,4 +217,108 @@ export async function updateNetworkConfigMock(payload: UpdateNetworkConfigPayloa
     Math.round(payload.rtp.maxConcurrentTransfers * 0.35)
   )
   return JSON.parse(JSON.stringify(networkConfigState))
+}
+
+
+const configSnapshotsSeed = [
+  { version: 'v2026.03.12.1', createdAt: '2026-03-12 09:10:00', operator: 'ops_admin', changeSummary: '调整 RTP 端口池容量', status: 'active' as const },
+  { version: 'v2026.03.12.2', createdAt: '2026-03-12 11:32:00', operator: 'secops', changeSummary: '切换 SIP 传输协议到 TCP', status: 'archived' as const },
+  { version: 'v2026.03.12.3', createdAt: '2026-03-12 13:45:00', operator: 'ops_admin', changeSummary: '提升 max_message_bytes 以支持大报文', status: 'pending' as const },
+  { version: 'v2026.03.12.4', createdAt: '2026-03-12 15:21:00', operator: 'release_bot', changeSummary: '校准 RTP 端口区间', status: 'archived' as const }
+]
+
+let snapshotState = [...configSnapshotsSeed]
+
+const runtimeCurrentConfig: RuntimeGatewayConfig = {
+  sip: {
+    listen_port: 5060,
+    transport: 'UDP',
+    listen_ip: '0.0.0.0'
+  },
+  rtp: {
+    port_start: 20000,
+    port_end: 20999,
+    transport: 'UDP',
+    listen_ip: '0.0.0.0'
+  },
+  max_message_bytes: 1048576,
+  heartbeat_interval_sec: 15
+}
+
+let runtimePendingConfig: RuntimeGatewayConfig = {
+  sip: {
+    listen_port: 5061,
+    transport: 'TCP',
+    listen_ip: '0.0.0.0'
+  },
+  rtp: {
+    port_start: 21000,
+    port_end: 21999,
+    transport: 'UDP',
+    listen_ip: '0.0.0.0'
+  },
+  max_message_bytes: 2097152,
+  heartbeat_interval_sec: 15
+}
+
+const buildDiff = (before: RuntimeGatewayConfig, after: RuntimeGatewayConfig) => [
+  { path: 'sip.listen_port', before: String(before.sip.listen_port), after: String(after.sip.listen_port), riskLevel: 'high' as const },
+  { path: 'sip.transport', before: before.sip.transport, after: after.sip.transport, riskLevel: 'high' as const },
+  { path: 'rtp.port_start', before: String(before.rtp.port_start), after: String(after.rtp.port_start), riskLevel: 'high' as const },
+  { path: 'rtp.port_end', before: String(before.rtp.port_end), after: String(after.rtp.port_end), riskLevel: 'high' as const },
+  { path: 'rtp.transport', before: before.rtp.transport, after: after.rtp.transport, riskLevel: 'high' as const },
+  { path: 'max_message_bytes', before: String(before.max_message_bytes), after: String(after.max_message_bytes), riskLevel: 'high' as const },
+  { path: 'heartbeat_interval_sec', before: String(before.heartbeat_interval_sec), after: String(after.heartbeat_interval_sec), riskLevel: 'low' as const }
+]
+
+const toYaml = (config: RuntimeGatewayConfig) => `sip:
+  listen_port: ${config.sip.listen_port}
+  transport: ${config.sip.transport}
+  listen_ip: ${config.sip.listen_ip}
+rtp:
+  port_start: ${config.rtp.port_start}
+  port_end: ${config.rtp.port_end}
+  transport: ${config.rtp.transport}
+  listen_ip: ${config.rtp.listen_ip}
+max_message_bytes: ${config.max_message_bytes}
+heartbeat_interval_sec: ${config.heartbeat_interval_sec}
+`
+
+export async function fetchConfigGovernanceMock(filters: ConfigSnapshotFilters): Promise<ConfigGovernancePayload> {
+  await wait()
+  const snapshots = snapshotState.filter((item) => {
+    if (filters.operator && !item.operator.includes(filters.operator.trim())) return false
+    if (filters.version && !item.version.includes(filters.version.trim())) return false
+    if (filters.startTime && item.createdAt < filters.startTime) return false
+    if (filters.endTime && item.createdAt > filters.endTime) return false
+    return true
+  })
+
+  return {
+    snapshots,
+    currentConfig: JSON.parse(JSON.stringify(runtimeCurrentConfig)),
+    pendingConfig: JSON.parse(JSON.stringify(runtimePendingConfig)),
+    diff: buildDiff(runtimeCurrentConfig, runtimePendingConfig)
+  }
+}
+
+export async function rollbackConfigMock(version: string): Promise<ConfigGovernancePayload> {
+  await wait()
+  snapshotState = snapshotState.map((item) => ({
+    ...item,
+    status: item.version === version ? 'active' : item.status === 'active' ? 'archived' : item.status
+  }))
+  runtimePendingConfig = JSON.parse(JSON.stringify(runtimeCurrentConfig))
+
+  return {
+    snapshots: snapshotState,
+    currentConfig: JSON.parse(JSON.stringify(runtimeCurrentConfig)),
+    pendingConfig: JSON.parse(JSON.stringify(runtimePendingConfig)),
+    diff: buildDiff(runtimeCurrentConfig, runtimePendingConfig)
+  }
+}
+
+export async function exportConfigYamlMock(target: 'current' | 'pending'): Promise<string> {
+  await wait(120)
+  return toYaml(target === 'current' ? runtimeCurrentConfig : runtimePendingConfig)
 }

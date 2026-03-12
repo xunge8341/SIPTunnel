@@ -10,6 +10,7 @@ import CommandTasksView from '../views/CommandTasksView.vue'
 import FileTasksView from '../views/FileTasksView.vue'
 import TaskDetailView from '../views/TaskDetailView.vue'
 import NetworkConfigView from '../views/NetworkConfigView.vue'
+import ConfigGovernanceView from '../views/ConfigGovernanceView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -48,6 +49,12 @@ const router = createRouter({
           name: 'network-config',
           component: NetworkConfigView,
           meta: { title: '网络配置', description: '统一管理 SIP/RTP 网络参数与端口池状态。' }
+        },
+        {
+          path: 'config-governance',
+          name: 'config-governance',
+          component: ConfigGovernanceView,
+          meta: { title: '配置治理', description: '快照、对比、回滚与 YAML 导出。' }
         },
         {
           path: 'route-config',

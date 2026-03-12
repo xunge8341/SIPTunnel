@@ -205,3 +205,48 @@ export interface UpdateNetworkConfigPayload {
   sip: SipNetworkConfig
   rtp: RtpNetworkConfig
 }
+
+export interface ConfigGovernanceSnapshot {
+  version: string
+  createdAt: string
+  operator: string
+  changeSummary: string
+  status: 'active' | 'pending' | 'archived'
+}
+
+export interface RuntimeGatewayConfig {
+  sip: {
+    listen_port: number
+    transport: TransportProtocol
+    listen_ip: string
+  }
+  rtp: {
+    port_start: number
+    port_end: number
+    transport: TransportProtocol
+    listen_ip: string
+  }
+  max_message_bytes: number
+  heartbeat_interval_sec: number
+}
+
+export interface ConfigDiffItem {
+  path: string
+  before: string
+  after: string
+  riskLevel: 'high' | 'medium' | 'low'
+}
+
+export interface ConfigSnapshotFilters {
+  startTime?: string
+  endTime?: string
+  operator?: string
+  version?: string
+}
+
+export interface ConfigGovernancePayload {
+  snapshots: ConfigGovernanceSnapshot[]
+  currentConfig: RuntimeGatewayConfig
+  pendingConfig: RuntimeGatewayConfig
+  diff: ConfigDiffItem[]
+}
