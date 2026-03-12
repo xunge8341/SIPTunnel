@@ -8,7 +8,10 @@ import {
   updateNetworkConfigMock,
   fetchConfigGovernanceMock,
   rollbackConfigMock,
-  exportConfigYamlMock
+  exportConfigYamlMock,
+  createDiagnosticExportMock,
+  getDiagnosticExportMock,
+  retryDiagnosticExportMock
 } from './mockGateway'
 import type {
   CommandTask,
@@ -25,7 +28,9 @@ import type {
   TaskListFilters,
   TaskListResult,
   ConfigGovernancePayload,
-  ConfigSnapshotFilters
+  ConfigSnapshotFilters,
+  DiagnosticExportCreatePayload,
+  DiagnosticExportJob
 } from '../types/gateway'
 
 const useMock = import.meta.env.VITE_API_MODE !== 'real'
@@ -203,6 +208,28 @@ export const gatewayApi = {
       return rollbackConfigMock(version)
     }
     return unwrap(request<ConfigGovernancePayload>('/config-governance/rollback', { method: 'POST', body: { version } }))
+  },
+
+
+  async createDiagnosticExport(payload: DiagnosticExportCreatePayload) {
+    if (useMock) {
+      return createDiagnosticExportMock(payload)
+    }
+    return unwrap(request<DiagnosticExportJob>('/diagnostics/exports', { method: 'POST', body: payload }))
+  },
+
+  async fetchDiagnosticExport(jobId: string) {
+    if (useMock) {
+      return getDiagnosticExportMock(jobId)
+    }
+    return unwrap(request<DiagnosticExportJob>(`/diagnostics/exports/${jobId}`, { method: 'GET' }))
+  },
+
+  async retryDiagnosticExport(jobId: string) {
+    if (useMock) {
+      return retryDiagnosticExportMock(jobId)
+    }
+    return unwrap(request<DiagnosticExportJob>(`/diagnostics/exports/${jobId}/retry`, { method: 'POST' }))
   },
 
   async exportConfigYaml(target: 'current' | 'pending') {
