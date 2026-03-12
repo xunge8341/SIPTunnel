@@ -6,7 +6,9 @@ import type {
   TaskKind,
   TaskListFilters,
   TaskListResult,
-  TaskStatus
+  TaskStatus,
+  NetworkConfigPayload,
+  UpdateNetworkConfigPayload
 } from '../types/gateway'
 
 const wait = (ms = 200) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -166,4 +168,50 @@ export async function fetchTaskDetailMock(id: string, taskKind: TaskKind): Promi
       }
     ]
   }
+}
+
+
+let networkConfigState: NetworkConfigPayload = {
+  sip: {
+    listenIp: '0.0.0.0',
+    listenPort: 5060,
+    protocol: 'UDP',
+    advertisedAddress: 'sip.siptunnel.local:5060',
+    domain: 'siptunnel.local'
+  },
+  rtp: {
+    listenIp: '0.0.0.0',
+    portRangeStart: 20000,
+    portRangeEnd: 20999,
+    protocol: 'UDP',
+    advertisedAddress: 'rtp.siptunnel.local',
+    maxConcurrentTransfers: 240
+  },
+  portPool: {
+    totalAvailablePorts: 1000,
+    occupiedPorts: 126,
+    activeTransfers: 58
+  }
+}
+
+export async function fetchNetworkConfigMock(): Promise<NetworkConfigPayload> {
+  await wait()
+  return JSON.parse(JSON.stringify(networkConfigState))
+}
+
+export async function updateNetworkConfigMock(payload: UpdateNetworkConfigPayload): Promise<NetworkConfigPayload> {
+  await wait()
+  networkConfigState = {
+    ...networkConfigState,
+    sip: JSON.parse(JSON.stringify(payload.sip)),
+    rtp: JSON.parse(JSON.stringify(payload.rtp))
+  }
+  const span = Math.max(0, networkConfigState.rtp.portRangeEnd - networkConfigState.rtp.portRangeStart + 1)
+  networkConfigState.portPool.totalAvailablePorts = span
+  networkConfigState.portPool.occupiedPorts = Math.min(span, Math.round(payload.rtp.maxConcurrentTransfers * 0.6))
+  networkConfigState.portPool.activeTransfers = Math.min(
+    networkConfigState.portPool.occupiedPorts,
+    Math.round(payload.rtp.maxConcurrentTransfers * 0.35)
+  )
+  return JSON.parse(JSON.stringify(networkConfigState))
 }

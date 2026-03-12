@@ -9,6 +9,7 @@ import AuditLogsView from '../views/AuditLogsView.vue'
 import CommandTasksView from '../views/CommandTasksView.vue'
 import FileTasksView from '../views/FileTasksView.vue'
 import TaskDetailView from '../views/TaskDetailView.vue'
+import NetworkConfigView from '../views/NetworkConfigView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -41,6 +42,12 @@ const router = createRouter({
           name: 'task-detail',
           component: TaskDetailView,
           meta: { title: '任务详情', description: '查看任务全链路执行详情。' }
+        },
+        {
+          path: 'network-config',
+          name: 'network-config',
+          component: NetworkConfigView,
+          meta: { title: '网络配置', description: '统一管理 SIP/RTP 网络参数与端口池状态。' }
         },
         {
           path: 'route-config',

@@ -3,7 +3,9 @@ import {
   fetchCommandTasksMock,
   fetchDashboardMock,
   fetchFileTasksMock,
-  fetchTaskDetailMock
+  fetchTaskDetailMock,
+  fetchNetworkConfigMock,
+  updateNetworkConfigMock
 } from './mockGateway'
 import type {
   CommandTask,
@@ -13,6 +15,8 @@ import type {
   OpsLimits,
   OpsNode,
   OpsRoute,
+  NetworkConfigPayload,
+  UpdateNetworkConfigPayload,
   TaskDetail,
   TaskKind,
   TaskListFilters,
@@ -156,6 +160,19 @@ export const gatewayApi = {
       httpResult: { apiCode: task.APICode, url: '-', method: '-', statusCode: 0, durationMs: 0, responseSnippet: '-' },
       auditSnippets: []
     } as TaskDetail
+  },
+
+  async fetchNetworkConfig() {
+    if (useMock) {
+      return fetchNetworkConfigMock()
+    }
+    return unwrap(request<NetworkConfigPayload>('/network/config', { method: 'GET' }))
+  },
+  async updateNetworkConfig(payload: UpdateNetworkConfigPayload) {
+    if (useMock) {
+      return updateNetworkConfigMock(payload)
+    }
+    return unwrap(request<NetworkConfigPayload>('/network/config', { method: 'PUT', body: payload }))
   },
   fetchLimits() {
     return unwrap(request<OpsLimits>('/limits', { method: 'GET' }))
