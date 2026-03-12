@@ -1,2 +1,13 @@
 server:
   port: 18080
+
+# 以下字段用于部署规划与 preflight 校验：
+# - 当前服务进程实际读取 GATEWAY_PORT 作为监听端口。
+# - MEDIA_PORT_* 与 node.role 用于统一跨环境部署参数口径。
+media:
+  port_range:
+    start: 20000
+    end: 20100
+
+node:
+  role: receiver # receiver / sender
