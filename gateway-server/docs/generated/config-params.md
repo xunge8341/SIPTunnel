@@ -21,6 +21,11 @@
 | `network.sip.read_timeout_ms` | `int` | `5000` | 是 | MEDIUM | SIP 读超时（毫秒）。 |
 | `network.sip.write_timeout_ms` | `int` | `5000` | 是 | MEDIUM | SIP 写超时（毫秒）。 |
 | `network.sip.idle_timeout_ms` | `int` | `60000` | 是 | LOW | SIP 空闲连接超时（毫秒）。 |
+| `network.sip.tcp_keepalive_enabled` | `bool` | `true` | 是 | LOW | 启用 SIP TCP keepalive。 |
+| `network.sip.tcp_keepalive_interval_ms` | `int` | `30000` | 是 | LOW | SIP TCP keepalive 间隔（毫秒）。 |
+| `network.sip.tcp_read_buffer_bytes` | `int` | `65536` | 是 | MEDIUM | SIP TCP 连接读缓冲区大小。 |
+| `network.sip.tcp_write_buffer_bytes` | `int` | `65536` | 是 | MEDIUM | SIP TCP 连接写缓冲区大小。 |
+| `network.sip.max_connections` | `int` | `2048` | 是 | ⚠️ HIGH-NET | SIP TCP 最大并发连接数。 |
 | `network.rtp.enabled` | `bool` | `true` | 是 | MEDIUM | 启用 RTP 文件面。 |
 | `network.rtp.listen_ip` | `string` | `0.0.0.0` | 否 | ⚠️ HIGH-NET | RTP 监听 IP。 |
 | `network.rtp.advertise_ip` | `string` | `""` | 否 | MEDIUM | RTP 对端可见地址。 |

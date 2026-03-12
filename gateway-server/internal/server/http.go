@@ -85,11 +85,21 @@ type NodeNetworkStatus struct {
 }
 
 type SIPNetworkStatus struct {
-	ListenIP           string `json:"listen_ip"`
-	ListenPort         int    `json:"listen_port"`
-	Transport          string `json:"transport"`
-	CurrentSessions    int    `json:"current_sessions"`
-	CurrentConnections int    `json:"current_connections"`
+	ListenIP                 string `json:"listen_ip"`
+	ListenPort               int    `json:"listen_port"`
+	Transport                string `json:"transport"`
+	CurrentSessions          int    `json:"current_sessions"`
+	CurrentConnections       int    `json:"current_connections"`
+	AcceptedConnectionsTotal uint64 `json:"accepted_connections_total"`
+	ClosedConnectionsTotal   uint64 `json:"closed_connections_total"`
+	ReadTimeoutTotal         uint64 `json:"read_timeout_total"`
+	WriteTimeoutTotal        uint64 `json:"write_timeout_total"`
+	ConnectionErrorTotal     uint64 `json:"connection_error_total"`
+	TCPKeepAliveEnabled      bool   `json:"tcp_keepalive_enabled"`
+	TCPKeepAliveIntervalMS   int    `json:"tcp_keepalive_interval_ms"`
+	TCPReadBufferBytes       int    `json:"tcp_read_buffer_bytes"`
+	TCPWriteBufferBytes      int    `json:"tcp_write_buffer_bytes"`
+	MaxConnections           int    `json:"max_connections"`
 }
 
 type RTPNetworkStatus struct {

@@ -186,6 +186,11 @@ export interface SipNetworkConfig {
   protocol: TransportProtocol
   advertisedAddress: string
   domain: string
+  tcpKeepaliveEnabled: boolean
+  tcpKeepaliveIntervalMs: number
+  tcpReadBufferBytes: number
+  tcpWriteBufferBytes: number
+  maxConnections: number
 }
 
 export interface RtpNetworkConfig {
