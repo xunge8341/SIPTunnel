@@ -3,7 +3,7 @@
 SIPTunnel 是跨安全边界业务交换网关，当前仓库为 monorepo 结构：
 
 - `gateway-server/`：Go 网关服务（SIP/RTP/签名验签/防重放/任务状态机/HTTP 映射/审计与可观测）
-- `gateway-ui/`：Vue3 运维前端（Dashboard、任务、路由、限流、审计）
+- `gateway-ui/`：Vue3 运维前端（Dashboard、任务、网络配置、路由、限流、审计）
 - `deploy/`：部署相关脚本与清单（预留）
 - `scripts/`：仓库级开发脚本（启动/测试/格式化/lint）
 
@@ -62,6 +62,7 @@ VITE_API_MODE=real VITE_API_BASE_URL=http://127.0.0.1:18080/api npm run dev
 - `GET /api/tasks`
 - `GET /api/tasks/{id}`
 - `GET /api/audits`
+- `GET/PUT /api/network/config`
 
 
 ## gateway-server 路径与文件系统配置（跨平台）

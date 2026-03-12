@@ -169,3 +169,39 @@ export interface OpsAuditEvent {
     span_id: string
   }
 }
+
+export type TransportProtocol = 'TCP' | 'UDP'
+
+export interface SipNetworkConfig {
+  listenIp: string
+  listenPort: number
+  protocol: TransportProtocol
+  advertisedAddress: string
+  domain: string
+}
+
+export interface RtpNetworkConfig {
+  listenIp: string
+  portRangeStart: number
+  portRangeEnd: number
+  protocol: TransportProtocol
+  advertisedAddress: string
+  maxConcurrentTransfers: number
+}
+
+export interface PortPoolStatus {
+  totalAvailablePorts: number
+  occupiedPorts: number
+  activeTransfers: number
+}
+
+export interface NetworkConfigPayload {
+  sip: SipNetworkConfig
+  rtp: RtpNetworkConfig
+  portPool: PortPoolStatus
+}
+
+export interface UpdateNetworkConfigPayload {
+  sip: SipNetworkConfig
+  rtp: RtpNetworkConfig
+}
