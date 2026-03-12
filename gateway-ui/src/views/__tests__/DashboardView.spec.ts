@@ -16,7 +16,15 @@ describe('DashboardView', () => {
         failureRate: 0.2,
         concurrency: 8,
         rtpLossRate: 0.01,
-        rateLimitHits: 3
+        rateLimitHits: 3,
+        sipProtocol: 'UDP',
+        sipListenPort: 5060,
+        rtpProtocol: 'UDP',
+        rtpPortRange: '20000-20999',
+        activeSessions: 20,
+        activeTransfers: 8,
+        failedTasks24h: 2,
+        rateLimitHits24h: 3
       },
       recentTrends: [
         { time: '10:00', total: 10, success: 9, failed: 1 },
@@ -29,6 +37,8 @@ describe('DashboardView', () => {
 
     expect(gatewayApi.fetchDashboard).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).toContain('成功率')
+    expect(wrapper.text()).toContain('UDP / 5060')
+    expect(wrapper.text()).toContain('活跃会话数')
     expect(wrapper.findAll('circle')).toHaveLength(2)
   })
 })

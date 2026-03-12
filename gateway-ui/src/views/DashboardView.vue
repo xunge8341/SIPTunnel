@@ -1,7 +1,40 @@
 <template>
   <a-space direction="vertical" size="large" style="width: 100%">
-    <a-row :gutter="16">
-      <a-col :xs="24" :sm="12" :lg="8" :xl="4" v-for="item in metricCards" :key="item.title">
+    <a-row :gutter="[16, 16]">
+      <a-col :xs="24" :lg="12">
+        <a-card title="协议监听概况" :bordered="false">
+          <a-descriptions :column="1" size="small" class="overview-descriptions">
+            <a-descriptions-item label="SIP 协议 / 监听端口">
+              {{ dashboard.metrics.sipProtocol }} / {{ dashboard.metrics.sipListenPort }}
+            </a-descriptions-item>
+            <a-descriptions-item label="RTP 协议 / 端口范围">
+              {{ dashboard.metrics.rtpProtocol }} / {{ dashboard.metrics.rtpPortRange }}
+            </a-descriptions-item>
+          </a-descriptions>
+        </a-card>
+      </a-col>
+      <a-col :xs="24" :lg="12">
+        <a-card title="24h 关键指标" :bordered="false">
+          <a-row :gutter="[12, 12]">
+            <a-col :span="12">
+              <a-statistic title="活跃会话数" :value="dashboard.metrics.activeSessions" />
+            </a-col>
+            <a-col :span="12">
+              <a-statistic title="活跃传输数" :value="dashboard.metrics.activeTransfers" />
+            </a-col>
+            <a-col :span="12">
+              <a-statistic title="24h 失败任务" :value="dashboard.metrics.failedTasks24h" suffix="个" />
+            </a-col>
+            <a-col :span="12">
+              <a-statistic title="24h 限流命中" :value="dashboard.metrics.rateLimitHits24h" suffix="次" />
+            </a-col>
+          </a-row>
+        </a-card>
+      </a-col>
+    </a-row>
+
+    <a-row :gutter="[16, 16]">
+      <a-col :xs="24" :sm="12" :xl="6" v-for="item in metricCards" :key="item.title">
         <a-card>
           <a-statistic :title="item.title" :value="item.value" :suffix="item.suffix" :precision="item.precision" />
         </a-card>
@@ -40,7 +73,15 @@ const dashboard = ref<DashboardPayload>({
     failureRate: 0,
     concurrency: 0,
     rtpLossRate: 0,
-    rateLimitHits: 0
+    rateLimitHits: 0,
+    sipProtocol: 'UDP',
+    sipListenPort: 5060,
+    rtpProtocol: 'UDP',
+    rtpPortRange: '-',
+    activeSessions: 0,
+    activeTransfers: 0,
+    failedTasks24h: 0,
+    rateLimitHits24h: 0
   },
   recentTrends: []
 })
@@ -53,8 +94,7 @@ const metricCards = computed(() => [
   { title: '成功率', value: dashboard.value.metrics.successRate, suffix: '%', precision: 2 },
   { title: '失败率', value: dashboard.value.metrics.failureRate, suffix: '%', precision: 2 },
   { title: '当前并发', value: dashboard.value.metrics.concurrency, suffix: '', precision: 0 },
-  { title: 'RTP 丢片率', value: dashboard.value.metrics.rtpLossRate, suffix: '%', precision: 2 },
-  { title: '限流命中次数', value: dashboard.value.metrics.rateLimitHits, suffix: '次', precision: 0 }
+  { title: 'RTP 丢片率', value: dashboard.value.metrics.rtpLossRate, suffix: '%', precision: 2 }
 ])
 
 const chartPoints = computed(() => {
@@ -80,6 +120,10 @@ const failedLine = computed(() => chartPoints.value.map((p) => `${p.x},${p.faile
   width: 100%;
   overflow-x: auto;
   margin-bottom: 12px;
+}
+
+.overview-descriptions :deep(.ant-descriptions-item-label) {
+  width: 168px;
 }
 
 svg {

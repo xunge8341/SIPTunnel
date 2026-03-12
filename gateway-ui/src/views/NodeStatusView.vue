@@ -3,13 +3,18 @@
     <a-card>
       <div class="toolbar">
         <a-typography-text>节点健康监控（每 30s 刷新）</a-typography-text>
-        <a-button @click="refresh">手动刷新</a-button>
+        <a-space>
+          <a-select v-model:value="selectedNodeId" style="min-width: 220px">
+            <a-select-option v-for="node in nodes" :key="node.id" :value="node.id">{{ node.id }}</a-select-option>
+          </a-select>
+          <a-button @click="refresh">手动刷新</a-button>
+        </a-space>
       </div>
     </a-card>
 
-    <a-row :gutter="16">
-      <a-col v-for="node in nodes" :key="node.id" :xs="24" :md="12">
-        <a-card :title="node.id">
+    <a-row :gutter="[16, 16]">
+      <a-col v-for="node in nodes" :key="node.id" :xs="24" :xl="12">
+        <a-card :title="node.id" :class="{ 'node-selected': node.id === selectedNodeId }">
           <a-descriptions :column="2" size="small">
             <a-descriptions-item label="在线状态"><status-pill :value="node.status" kind="online" /></a-descriptions-item>
             <a-descriptions-item label="当前并发">{{ node.concurrency }}</a-descriptions-item>
@@ -23,84 +28,183 @@
       </a-col>
     </a-row>
 
-    <a-card title="运维工具：一键诊断导出">
-      <a-space direction="vertical" size="middle" style="width: 100%">
-        <a-alert
-          type="info"
-          show-icon
-          message="导出内容含配置快照、节点状态、失败任务、日志索引、告警摘要，适合排障时直接打包传递。"
-        />
+    <a-card title="节点详情（端口与自检）" v-if="selectedNode">
+      <a-row :gutter="[16, 16]">
+        <a-col :xs="24" :lg="12">
+          <a-card size="small" title="端口绑定状态">
+            <a-table :data-source="selectedNode.portBindings" :pagination="false" size="small" row-key="service">
+              <a-table-column title="服务" data-index="service" key="service" />
+              <a-table-column title="协议" data-index="protocol" key="protocol" />
+              <a-table-column title="绑定地址" data-index="bindAddress" key="bindAddress" />
+              <a-table-column title="状态" key="status">
+                <template #default="{ record }">
+                  <a-tag :color="portStatusColor(record.status)">{{ portStatusLabel(record.status) }}</a-tag>
+                </template>
+              </a-table-column>
+            </a-table>
+          </a-card>
+        </a-col>
 
-        <div class="diagnostic-toolbar">
-          <a-space wrap>
-            <a-typography-text>目标节点</a-typography-text>
-            <a-select v-model:value="selectedNodeId" style="min-width: 180px">
-              <a-select-option v-for="node in nodes" :key="node.id" :value="node.id">{{ node.id }}</a-select-option>
-            </a-select>
-            <a-button type="primary" :loading="creating" @click="startExport">导出诊断包</a-button>
-          </a-space>
-          <a-typography-text type="secondary">文件命名：{{ fileNameRule }}</a-typography-text>
-        </div>
+        <a-col :xs="24" :lg="12">
+          <a-card size="small" title="最近端口绑定失败事件">
+            <a-list :data-source="selectedNode.bindingFailures" size="small" bordered>
+              <template #renderItem="{ item }">
+                <a-list-item>
+                  <a-space direction="vertical" size="small" style="width: 100%">
+                    <a-space>
+                      <a-tag color="error">{{ item.service }}</a-tag>
+                      <a-typography-text>{{ item.occurredAt }}</a-typography-text>
+                    </a-space>
+                    <a-typography-text type="secondary">{{ item.reason }}</a-typography-text>
+                  </a-space>
+                </a-list-item>
+              </template>
+            </a-list>
+          </a-card>
+        </a-col>
 
-        <a-empty v-if="!job" description="尚未发起导出任务" />
+        <a-col :xs="24" :lg="12">
+          <a-card size="small" title="自检结果摘要">
+            <a-space direction="vertical" style="width: 100%" size="middle">
+              <a-tag :color="selfCheckColor(selectedNode.selfCheck.status)">{{ selfCheckLabel(selectedNode.selfCheck.status) }}</a-tag>
+              <a-descriptions :column="3" size="small" bordered>
+                <a-descriptions-item label="通过">{{ selectedNode.selfCheck.passed }}</a-descriptions-item>
+                <a-descriptions-item label="告警">{{ selectedNode.selfCheck.warning }}</a-descriptions-item>
+                <a-descriptions-item label="失败">{{ selectedNode.selfCheck.failed }}</a-descriptions-item>
+              </a-descriptions>
+              <a-typography-text type="secondary">{{ selectedNode.selfCheck.summary }}</a-typography-text>
+              <a-typography-text type="secondary">检查时间：{{ selectedNode.selfCheck.checkedAt }}</a-typography-text>
+            </a-space>
+          </a-card>
+        </a-col>
 
-        <template v-else>
-          <a-descriptions bordered size="small" :column="2">
-            <a-descriptions-item label="任务编号">{{ job.jobId }}</a-descriptions-item>
-            <a-descriptions-item label="当前状态">{{ statusTextMap[job.status] }}</a-descriptions-item>
-            <a-descriptions-item label="目标节点">{{ job.nodeId }}</a-descriptions-item>
-            <a-descriptions-item label="输出文件">{{ job.fileName }}</a-descriptions-item>
-          </a-descriptions>
-
-          <a-progress :percent="job.progress" :status="job.status === 'failed' ? 'exception' : undefined" />
-
-          <a-list size="small" bordered :data-source="job.sections">
-            <template #renderItem="{ item }">
-              <a-list-item>
-                <a-space>
-                  <status-pill :value="item.done ? 'online' : 'degraded'" kind="online" />
-                  <span>{{ item.label }}</span>
+        <a-col :xs="24" :lg="12">
+          <a-card size="small" title="导出诊断入口">
+            <a-alert
+              type="info"
+              show-icon
+              message="导出内容含配置快照、节点状态、失败任务、日志索引、告警摘要，适合排障时直接打包传递。"
+            />
+            <a-space direction="vertical" size="middle" style="width: 100%; margin-top: 12px">
+              <div class="diagnostic-toolbar">
+                <a-space wrap>
+                  <a-typography-text>目标节点</a-typography-text>
+                  <a-select v-model:value="selectedNodeId" style="min-width: 180px">
+                    <a-select-option v-for="node in nodes" :key="node.id" :value="node.id">{{ node.id }}</a-select-option>
+                  </a-select>
+                  <a-button type="primary" :loading="creating" @click="startExport">导出诊断包</a-button>
                 </a-space>
-              </a-list-item>
-            </template>
-          </a-list>
+                <a-typography-text type="secondary">文件命名：{{ fileNameRule }}</a-typography-text>
+              </div>
 
-          <a-alert v-if="job.errorMessage" type="error" show-icon :message="job.errorMessage" />
+              <a-empty v-if="!job" description="尚未发起导出任务" />
 
-          <a-space>
-            <a-button v-if="job.status === 'failed'" @click="retryExport">重试导出</a-button>
-            <a-button type="primary" :disabled="job.status !== 'succeeded'" @click="downloadResult">下载诊断包</a-button>
-            <a-button :disabled="!polling || job.status === 'succeeded' || job.status === 'failed'" @click="refreshJob">
-              刷新状态
-            </a-button>
-          </a-space>
-        </template>
-      </a-space>
+              <template v-else>
+                <a-descriptions bordered size="small" :column="2">
+                  <a-descriptions-item label="任务编号">{{ job.jobId }}</a-descriptions-item>
+                  <a-descriptions-item label="当前状态">{{ statusTextMap[job.status] }}</a-descriptions-item>
+                  <a-descriptions-item label="目标节点">{{ job.nodeId }}</a-descriptions-item>
+                  <a-descriptions-item label="输出文件">{{ job.fileName }}</a-descriptions-item>
+                </a-descriptions>
+
+                <a-progress :percent="job.progress" :status="job.status === 'failed' ? 'exception' : undefined" />
+
+                <a-list size="small" bordered :data-source="job.sections">
+                  <template #renderItem="{ item }">
+                    <a-list-item>
+                      <a-space>
+                        <status-pill :value="item.done ? 'online' : 'degraded'" kind="online" />
+                        <span>{{ item.label }}</span>
+                      </a-space>
+                    </a-list-item>
+                  </template>
+                </a-list>
+
+                <a-alert v-if="job.errorMessage" type="error" show-icon :message="job.errorMessage" />
+
+                <a-space>
+                  <a-button v-if="job.status === 'failed'" @click="retryExport">重试导出</a-button>
+                  <a-button type="primary" :disabled="job.status !== 'succeeded'" @click="downloadResult">下载诊断包</a-button>
+                  <a-button :disabled="!polling || job.status === 'succeeded' || job.status === 'failed'" @click="refreshJob">
+                    刷新状态
+                  </a-button>
+                </a-space>
+              </template>
+            </a-space>
+          </a-card>
+        </a-col>
+      </a-row>
     </a-card>
   </a-space>
 </template>
 
 <script setup lang="ts">
 import { message } from 'ant-design-vue'
-import { onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { gatewayApi } from '../api/gateway'
 import StatusPill from '../components/StatusPill.vue'
-import type { DiagnosticExportJob } from '../types/gateway'
+import type { DiagnosticExportJob, NodeOpsSnapshot } from '../types/gateway'
 
-interface NodeStatus {
-  id: string
-  status: 'online' | 'offline' | 'degraded'
-  cpu: number
-  memory: number
-  backlog: number
-  concurrency: number
-}
-
-const nodes = ref<NodeStatus[]>([
-  { id: 'gateway-a-01', status: 'online', cpu: 38, memory: 52, backlog: 21, concurrency: 140 },
-  { id: 'gateway-a-02', status: 'degraded', cpu: 84, memory: 76, backlog: 189, concurrency: 96 },
-  { id: 'gateway-b-01', status: 'online', cpu: 41, memory: 48, backlog: 15, concurrency: 112 },
-  { id: 'gateway-b-02', status: 'offline', cpu: 0, memory: 0, backlog: 0, concurrency: 0 }
+const nodes = ref<NodeOpsSnapshot[]>([
+  {
+    id: 'gateway-a-01',
+    status: 'online',
+    cpu: 38,
+    memory: 52,
+    backlog: 21,
+    concurrency: 140,
+    portBindings: [
+      { service: 'SIP', protocol: 'UDP', bindAddress: '0.0.0.0:5060', status: 'bound', updatedAt: '2026-03-12 14:30:11' },
+      { service: 'RTP', protocol: 'UDP', bindAddress: '0.0.0.0:20000-20999', status: 'bound', updatedAt: '2026-03-12 14:30:11' }
+    ],
+    bindingFailures: [{ id: 'evt-001', occurredAt: '2026-03-12 07:14:03', service: 'RTP', reason: '端口 20032 被占用，已自动回收后重试成功。' }],
+    selfCheck: { status: 'pass', checkedAt: '2026-03-12 14:29:45', passed: 18, warning: 0, failed: 0, summary: '网络、存储、任务队列与路由模板均通过。' }
+  },
+  {
+    id: 'gateway-a-02',
+    status: 'degraded',
+    cpu: 84,
+    memory: 76,
+    backlog: 189,
+    concurrency: 96,
+    portBindings: [
+      { service: 'SIP', protocol: 'UDP', bindAddress: '0.0.0.0:5060', status: 'degraded', updatedAt: '2026-03-12 14:30:02' },
+      { service: 'RTP', protocol: 'UDP', bindAddress: '0.0.0.0:20000-20999', status: 'bound', updatedAt: '2026-03-12 14:30:02' }
+    ],
+    bindingFailures: [
+      { id: 'evt-002', occurredAt: '2026-03-12 13:47:12', service: 'SIP', reason: '监听端口瞬时抖动，重绑耗时 3.2s。' },
+      { id: 'evt-003', occurredAt: '2026-03-12 11:07:54', service: 'RTP', reason: '端口池耗尽触发限速，回收后恢复。' }
+    ],
+    selfCheck: { status: 'warn', checkedAt: '2026-03-12 14:29:45', passed: 15, warning: 2, failed: 1, summary: 'SIP 监听延迟偏高，建议检查同机端口竞争。' }
+  },
+  {
+    id: 'gateway-b-01',
+    status: 'online',
+    cpu: 41,
+    memory: 48,
+    backlog: 15,
+    concurrency: 112,
+    portBindings: [
+      { service: 'SIP', protocol: 'TCP', bindAddress: '0.0.0.0:5061', status: 'bound', updatedAt: '2026-03-12 14:30:35' },
+      { service: 'RTP', protocol: 'UDP', bindAddress: '0.0.0.0:21000-21999', status: 'bound', updatedAt: '2026-03-12 14:30:35' }
+    ],
+    bindingFailures: [{ id: 'evt-004', occurredAt: '2026-03-11 23:58:10', service: 'SIP', reason: '配置回滚后重新绑定一次，结果正常。' }],
+    selfCheck: { status: 'pass', checkedAt: '2026-03-12 14:29:45', passed: 18, warning: 0, failed: 0, summary: '全部检查项通过，节点运行稳定。' }
+  },
+  {
+    id: 'gateway-b-02',
+    status: 'offline',
+    cpu: 0,
+    memory: 0,
+    backlog: 0,
+    concurrency: 0,
+    portBindings: [
+      { service: 'SIP', protocol: 'UDP', bindAddress: '0.0.0.0:5060', status: 'unbound', updatedAt: '2026-03-12 14:20:06' },
+      { service: 'RTP', protocol: 'UDP', bindAddress: '0.0.0.0:20000-20999', status: 'unbound', updatedAt: '2026-03-12 14:20:06' }
+    ],
+    bindingFailures: [{ id: 'evt-005', occurredAt: '2026-03-12 14:20:06', service: 'SIP', reason: '节点离线，无法完成绑定。' }],
+    selfCheck: { status: 'fail', checkedAt: '2026-03-12 14:20:06', passed: 3, warning: 1, failed: 8, summary: '节点不可达，请优先恢复主机可用性。' }
+  }
 ])
 
 const selectedNodeId = ref(nodes.value[0]?.id ?? '')
@@ -108,6 +212,8 @@ const creating = ref(false)
 const job = ref<DiagnosticExportJob | null>(null)
 const polling = ref(false)
 const pollTimer = ref<number | null>(null)
+
+const selectedNode = computed(() => nodes.value.find((item) => item.id === selectedNodeId.value) ?? null)
 
 const fileNameRule = 'diag_{nodeId}_{YYYYMMDDTHHmmss}_{jobId}.zip'
 
@@ -117,6 +223,30 @@ const statusTextMap: Record<DiagnosticExportJob['status'], string> = {
   packaging: '正在打包',
   succeeded: '导出成功',
   failed: '导出失败'
+}
+
+const portStatusLabel = (status: 'bound' | 'unbound' | 'degraded') => {
+  if (status === 'bound') return '已绑定'
+  if (status === 'degraded') return '绑定抖动'
+  return '未绑定'
+}
+
+const portStatusColor = (status: 'bound' | 'unbound' | 'degraded') => {
+  if (status === 'bound') return 'success'
+  if (status === 'degraded') return 'warning'
+  return 'error'
+}
+
+const selfCheckLabel = (status: 'pass' | 'warn' | 'fail') => {
+  if (status === 'pass') return '自检通过'
+  if (status === 'warn') return '自检告警'
+  return '自检失败'
+}
+
+const selfCheckColor = (status: 'pass' | 'warn' | 'fail') => {
+  if (status === 'pass') return 'success'
+  if (status === 'warn') return 'warning'
+  return 'error'
 }
 
 const refresh = () => {
@@ -208,6 +338,11 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
+}
+
+.node-selected {
+  border: 1px solid #91caff;
 }
 
 .diagnostic-toolbar {

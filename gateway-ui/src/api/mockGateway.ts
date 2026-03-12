@@ -86,7 +86,15 @@ export async function fetchDashboardMock(): Promise<DashboardPayload> {
       failureRate: 0.8,
       concurrency: 186,
       rtpLossRate: 0.17,
-      rateLimitHits: 31
+      rateLimitHits: 31,
+      sipProtocol: 'UDP',
+      sipListenPort: 5060,
+      rtpProtocol: 'UDP',
+      rtpPortRange: '20000-20999',
+      activeSessions: 128,
+      activeTransfers: 42,
+      failedTasks24h: 19,
+      rateLimitHits24h: 31
     },
     recentTrends: [
       { time: '09:00', total: 120, success: 118, failed: 2 },
