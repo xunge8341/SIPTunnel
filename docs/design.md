@@ -9,11 +9,12 @@
 
 ## 2. 文件面（RTP）
 
-`gateway-server/internal/rtp/header.go`
+`gateway-server/internal/protocol/rtpfile`
 
-- 固定 32 字节主头：Magic、版本、分片序号、总分片数、payload 长度、TLV 长度。
-- 扩展字段通过 TLV 表达，便于未来增加签名、压缩、业务标签。
-- `Reassembler` 按 `message_id` 聚合分片，支持重复片去重（补片/重传）。
+- 固定主头 + TLV 扩展段，主头包含 `magic/protocol_version/header_length/flags/transfer_id/request_id/trace_id/chunk_no/chunk_total/chunk_offset/chunk_length/file_size/chunk_digest/file_digest/send_timestamp`。
+- TLV 使用 `type/length/value`，解码时跳过未知 type，保证向前兼容。
+- 提供 `MarshalBinary()` 与 `UnmarshalBinary()`，并执行 `header_length` 校验。
+- `SplitFileToChunks` 与 `Reassembler` 提供分片、摘要、乱序重组与重复片处理能力。
 
 ## 3. 安全与算法升级
 

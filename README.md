@@ -59,3 +59,12 @@ npm run dev
 - SIP Header 镜像字段生成（`X-Request-ID`、`X-Trace-ID`、`X-Session-ID`、`X-Api-Code`、`X-Message-Type`、`X-Source-System`）
 
 该包仅负责协议模型、JSON 编解码和校验，不包含 SIP 网络收发逻辑。
+
+## RTP 文件面应用层协议
+
+`gateway-server/internal/protocol/rtpfile` 提供 RTP 文件传输应用层协议库：
+
+- 二进制定长主头（magic/version/header_length/flags/transfer_id/request_id/trace_id/chunk 元数据/摘要/时间戳）
+- 可选 TLV 扩展段（type/length/value），解码时可跳过未知 type
+- `MarshalBinary()` / `UnmarshalBinary()` 编解码及头长校验
+- 分片与重组工具（按 chunk size 切片、生成每片头、计算 chunk/file digest、支持乱序与重复片）
