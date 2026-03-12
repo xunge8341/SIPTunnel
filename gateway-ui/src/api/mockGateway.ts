@@ -11,7 +11,7 @@ import type {
 
 const wait = (ms = 200) => new Promise((resolve) => setTimeout(resolve, ms))
 
-const statuses: TaskStatus[] = ['pending', 'running', 'success', 'failed', 'partial_success']
+const statuses: TaskStatus[] = ['pending', 'running', 'succeeded', 'failed', 'retry_wait']
 
 const makeCommandTasks = (): CommandTask[] =>
   Array.from({ length: 24 }).map((_, index) => ({

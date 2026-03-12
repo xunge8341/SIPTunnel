@@ -70,6 +70,7 @@ func (realClock) Now() time.Time {
 type Dispatcher struct {
 	handlers map[string]Handler
 	verifier SignatureVerifier
+	replay   ReplayGuard
 	metrics  Metrics
 	logger   *slog.Logger
 	clock    Clock
@@ -87,6 +88,7 @@ func NewDispatcher(verifier SignatureVerifier, logger *slog.Logger, metrics Metr
 	return &Dispatcher{
 		handlers: make(map[string]Handler),
 		verifier: verifier,
+		replay:   NewInMemoryReplayGuard(15 * time.Minute),
 		metrics:  metrics,
 		logger:   logger,
 		clock:    realClock{},
@@ -162,6 +164,12 @@ func (d *Dispatcher) parseAndValidate(body []byte) (sip.Header, RequestContext, 
 		}
 		if !d.verifier.Verify(signedPayload, header.Signature) {
 			return sip.Header{}, RequestContext{}, fmt.Errorf("signature verification failed")
+		}
+	}
+
+	if d.replay != nil {
+		if err := d.replay.Accept(header.RequestID, header.Nonce, header.ExpireAt, now); err != nil {
+			return sip.Header{}, RequestContext{}, err
 		}
 	}
 
