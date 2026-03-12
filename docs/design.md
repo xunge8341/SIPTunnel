@@ -52,3 +52,13 @@
 - 返回体统一为 `{code,message,data}`，任务与审计列表统一携带分页结构。
 - 运维写操作（重试、取消、更新限流、更新路由）会写入审计日志，支持 `request_id/trace_id` 检索。
 - OpenAPI 描述见 `gateway-server/docs/openapi-ops.yaml`。
+
+## 8. gateway-ui 页面与数据适配
+
+`gateway-ui/src/views` + `gateway-ui/src/api`
+
+- Dashboard 增加成功率、失败率、并发、RTP 丢片率、限流命中次数与最近任务趋势图。
+- 命令任务/文件任务页面提供筛选区、`request_id/trace_id` 查询、状态标签、详情跳转。
+- 任务详情页整合基础信息、状态流转时间线、SIP 事件、RTP 分片统计、HTTP 执行结果、审计记录片段。
+- API 采用双模式适配：`VITE_API_MODE=real` 走真实接口，默认走 mock 数据，便于联调与独立开发。
+- 类型集中在 `src/types/gateway.ts`，避免页面层与接口字段耦合。
