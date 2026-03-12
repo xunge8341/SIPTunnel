@@ -112,6 +112,10 @@ paths:
                           rtp_port_pool_total: { type: integer }
                           rtp_port_pool_used: { type: integer }
                           rtp_port_alloc_fail_total: { type: integer }
+                          rtp_tcp_sessions_current: { type: integer, format: int64 }
+                          rtp_tcp_sessions_total: { type: integer, format: uint64 }
+                          rtp_tcp_read_errors_total: { type: integer, format: uint64 }
+                          rtp_tcp_write_errors_total: { type: integer, format: uint64 }
                       recent_bind_errors:
                         type: array
                         items: { type: string }

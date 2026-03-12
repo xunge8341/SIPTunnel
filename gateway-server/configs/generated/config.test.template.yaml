@@ -29,6 +29,10 @@ network:
     port_end: 21020
     transport: UDP
     max_packet_bytes: 1400
+    tcp_read_timeout_ms: 5000
+    tcp_write_timeout_ms: 5000
+    tcp_keepalive_enabled: true
+    max_tcp_sessions: 128
     max_inflight_transfers: 16
     receive_buffer_bytes: 4194304
     transfer_timeout_ms: 30000

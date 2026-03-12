@@ -89,6 +89,7 @@ func main() {
 		NetworkStatusFunc: func(context.Context) server.NodeNetworkStatus {
 			poolStats := portPool.Stats()
 			sipSnapshot := sipMetrics.Snapshot()
+			rtpSnapshot := rtpTransport.Snapshot()
 			return server.NodeNetworkStatus{
 				SIP: server.SIPNetworkStatus{
 					ListenIP:                 selfCheckInput.NetworkConfig.SIP.ListenIP,
@@ -108,16 +109,20 @@ func main() {
 					MaxConnections:           selfCheckInput.NetworkConfig.SIP.MaxConnections,
 				},
 				RTP: server.RTPNetworkStatus{
-					ListenIP:           selfCheckInput.NetworkConfig.RTP.ListenIP,
-					PortStart:          selfCheckInput.NetworkConfig.RTP.PortStart,
-					PortEnd:            selfCheckInput.NetworkConfig.RTP.PortEnd,
-					Transport:          rtpTransport.Mode(),
-					ActiveTransfers:    poolStats.Used,
-					UsedPorts:          poolStats.Used,
-					AvailablePorts:     poolStats.Available,
-					PortPoolTotal:      poolStats.Total,
-					PortPoolUsed:       poolStats.Used,
-					PortAllocFailTotal: poolStats.AllocFailTotal,
+					ListenIP:            selfCheckInput.NetworkConfig.RTP.ListenIP,
+					PortStart:           selfCheckInput.NetworkConfig.RTP.PortStart,
+					PortEnd:             selfCheckInput.NetworkConfig.RTP.PortEnd,
+					Transport:           rtpTransport.Mode(),
+					ActiveTransfers:     poolStats.Used,
+					UsedPorts:           poolStats.Used,
+					AvailablePorts:      poolStats.Available,
+					PortPoolTotal:       poolStats.Total,
+					PortPoolUsed:        poolStats.Used,
+					PortAllocFailTotal:  poolStats.AllocFailTotal,
+					TCPSessionsCurrent:  rtpSnapshot.TCPSessionsCurrent,
+					TCPSessionsTotal:    rtpSnapshot.TCPSessionsTotal,
+					TCPReadErrorsTotal:  rtpSnapshot.TCPReadErrorsTotal,
+					TCPWriteErrorsTotal: rtpSnapshot.TCPWriteErrorsTotal,
 				},
 				RecentBindErrors:    []string{},
 				RecentNetworkErrors: []string{},

@@ -27,9 +27,13 @@ network:
     advertise_ip: 192.168.10.10
     port_start: 20000
     port_end: 20100
-    # 生产默认 UDP；TCP 仅作后续扩展预留（当前版本未正式上线）
+    # 生产默认 UDP；TCP 已可联调验证（受控发布）
     transport: UDP
     max_packet_bytes: 1400
+    tcp_read_timeout_ms: 5000
+    tcp_write_timeout_ms: 5000
+    tcp_keepalive_enabled: true
+    max_tcp_sessions: 128
     max_inflight_transfers: 64
     receive_buffer_bytes: 4194304
     transfer_timeout_ms: 30000
