@@ -25,6 +25,11 @@ network:
     read_timeout_ms: 5000
     write_timeout_ms: 5000
     idle_timeout_ms: 60000
+    tcp_keepalive_enabled: true
+    tcp_keepalive_interval_ms: 30000
+    tcp_read_buffer_bytes: 65536
+    tcp_write_buffer_bytes: 65536
+    max_connections: 2048
 
   rtp:
     enabled: true

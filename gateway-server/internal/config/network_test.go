@@ -16,6 +16,12 @@ func TestDefaultNetworkConfig(t *testing.T) {
 	if cfg.RTP.Transport != "UDP" {
 		t.Fatalf("RTP transport default = %s, want UDP", cfg.RTP.Transport)
 	}
+	if !cfg.SIP.TCPKeepAliveEnabled {
+		t.Fatal("SIP tcp_keepalive_enabled default should be true")
+	}
+	if cfg.SIP.TCPKeepAliveIntervalMS <= 0 || cfg.SIP.TCPReadBufferBytes <= 0 || cfg.SIP.TCPWriteBufferBytes <= 0 || cfg.SIP.MaxConnections <= 0 {
+		t.Fatal("SIP TCP lifecycle defaults should be positive")
+	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("default config should be valid: %v", err)
 	}

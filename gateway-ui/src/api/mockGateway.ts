@@ -190,7 +190,12 @@ let networkConfigState: NetworkConfigPayload = {
     listenPort: 5060,
     protocol: 'UDP',
     advertisedAddress: 'sip.siptunnel.local:5060',
-    domain: 'siptunnel.local'
+    domain: 'siptunnel.local',
+    tcpKeepaliveEnabled: true,
+    tcpKeepaliveIntervalMs: 30000,
+    tcpReadBufferBytes: 65536,
+    tcpWriteBufferBytes: 65536,
+    maxConnections: 2048
   },
   rtp: {
     listenIp: '0.0.0.0',

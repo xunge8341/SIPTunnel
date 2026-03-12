@@ -8,7 +8,12 @@ const baseConfig: NetworkConfigPayload = {
     listenPort: 5060,
     protocol: 'UDP',
     advertisedAddress: 'sip.example.com:5060',
-    domain: 'gateway.local'
+    domain: 'gateway.local',
+    tcpKeepaliveEnabled: true,
+    tcpKeepaliveIntervalMs: 30000,
+    tcpReadBufferBytes: 65536,
+    tcpWriteBufferBytes: 65536,
+    maxConnections: 2048
   },
   rtp: {
     listenIp: '0.0.0.0',

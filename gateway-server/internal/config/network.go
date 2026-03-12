@@ -15,16 +15,21 @@ type NetworkConfig struct {
 }
 
 type SIPConfig struct {
-	Enabled         bool   `yaml:"enabled"`
-	ListenIP        string `yaml:"listen_ip"`
-	ListenPort      int    `yaml:"listen_port"`
-	Transport       string `yaml:"transport"`
-	AdvertiseIP     string `yaml:"advertise_ip"`
-	Domain          string `yaml:"domain"`
-	MaxMessageBytes int    `yaml:"max_message_bytes"`
-	ReadTimeoutMS   int    `yaml:"read_timeout_ms"`
-	WriteTimeoutMS  int    `yaml:"write_timeout_ms"`
-	IdleTimeoutMS   int    `yaml:"idle_timeout_ms"`
+	Enabled                bool   `yaml:"enabled"`
+	ListenIP               string `yaml:"listen_ip"`
+	ListenPort             int    `yaml:"listen_port"`
+	Transport              string `yaml:"transport"`
+	AdvertiseIP            string `yaml:"advertise_ip"`
+	Domain                 string `yaml:"domain"`
+	MaxMessageBytes        int    `yaml:"max_message_bytes"`
+	ReadTimeoutMS          int    `yaml:"read_timeout_ms"`
+	WriteTimeoutMS         int    `yaml:"write_timeout_ms"`
+	IdleTimeoutMS          int    `yaml:"idle_timeout_ms"`
+	TCPKeepAliveEnabled    bool   `yaml:"tcp_keepalive_enabled"`
+	TCPKeepAliveIntervalMS int    `yaml:"tcp_keepalive_interval_ms"`
+	TCPReadBufferBytes     int    `yaml:"tcp_read_buffer_bytes"`
+	TCPWriteBufferBytes    int    `yaml:"tcp_write_buffer_bytes"`
+	MaxConnections         int    `yaml:"max_connections"`
 }
 
 const SIPUDPRecommendedMaxMessageBytes = 1300
@@ -46,16 +51,21 @@ type RTPConfig struct {
 func DefaultNetworkConfig() NetworkConfig {
 	return NetworkConfig{
 		SIP: SIPConfig{
-			Enabled:         true,
-			ListenIP:        "0.0.0.0",
-			ListenPort:      5060,
-			Transport:       "TCP",
-			AdvertiseIP:     "",
-			Domain:          "",
-			MaxMessageBytes: 65535,
-			ReadTimeoutMS:   5000,
-			WriteTimeoutMS:  5000,
-			IdleTimeoutMS:   60000,
+			Enabled:                true,
+			ListenIP:               "0.0.0.0",
+			ListenPort:             5060,
+			Transport:              "TCP",
+			AdvertiseIP:            "",
+			Domain:                 "",
+			MaxMessageBytes:        65535,
+			ReadTimeoutMS:          5000,
+			WriteTimeoutMS:         5000,
+			IdleTimeoutMS:          60000,
+			TCPKeepAliveEnabled:    true,
+			TCPKeepAliveIntervalMS: 30000,
+			TCPReadBufferBytes:     64 * 1024,
+			TCPWriteBufferBytes:    64 * 1024,
+			MaxConnections:         2048,
 		},
 		RTP: RTPConfig{
 			Enabled:              true,
@@ -136,6 +146,18 @@ func (c SIPConfig) Validate() error {
 	}
 	if c.IdleTimeoutMS <= 0 {
 		errs = append(errs, fmt.Errorf("sip.idle_timeout_ms %d must be > 0", c.IdleTimeoutMS))
+	}
+	if c.TCPKeepAliveIntervalMS <= 0 {
+		errs = append(errs, fmt.Errorf("sip.tcp_keepalive_interval_ms %d must be > 0", c.TCPKeepAliveIntervalMS))
+	}
+	if c.TCPReadBufferBytes <= 0 {
+		errs = append(errs, fmt.Errorf("sip.tcp_read_buffer_bytes %d must be > 0", c.TCPReadBufferBytes))
+	}
+	if c.TCPWriteBufferBytes <= 0 {
+		errs = append(errs, fmt.Errorf("sip.tcp_write_buffer_bytes %d must be > 0", c.TCPWriteBufferBytes))
+	}
+	if c.MaxConnections <= 0 {
+		errs = append(errs, fmt.Errorf("sip.max_connections %d must be > 0", c.MaxConnections))
 	}
 	return errors.Join(errs...)
 }
@@ -239,6 +261,18 @@ func (c *SIPConfig) applyDefaults(d SIPConfig) {
 	}
 	if c.IdleTimeoutMS == 0 {
 		c.IdleTimeoutMS = d.IdleTimeoutMS
+	}
+	if c.TCPKeepAliveIntervalMS == 0 {
+		c.TCPKeepAliveIntervalMS = d.TCPKeepAliveIntervalMS
+	}
+	if c.TCPReadBufferBytes == 0 {
+		c.TCPReadBufferBytes = d.TCPReadBufferBytes
+	}
+	if c.TCPWriteBufferBytes == 0 {
+		c.TCPWriteBufferBytes = d.TCPWriteBufferBytes
+	}
+	if c.MaxConnections == 0 {
+		c.MaxConnections = d.MaxConnections
 	}
 }
 

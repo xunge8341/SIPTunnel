@@ -89,6 +89,16 @@ paths:
                           transport: { type: string }
                           current_sessions: { type: integer }
                           current_connections: { type: integer }
+                          accepted_connections_total: { type: integer, format: uint64 }
+                          closed_connections_total: { type: integer, format: uint64 }
+                          read_timeout_total: { type: integer, format: uint64 }
+                          write_timeout_total: { type: integer, format: uint64 }
+                          connection_error_total: { type: integer, format: uint64 }
+                          tcp_keepalive_enabled: { type: boolean }
+                          tcp_keepalive_interval_ms: { type: integer }
+                          tcp_read_buffer_bytes: { type: integer }
+                          tcp_write_buffer_bytes: { type: integer }
+                          max_connections: { type: integer }
                       rtp:
                         type: object
                         properties:

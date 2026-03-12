@@ -60,6 +60,36 @@
               </template>
               <a-input v-model:value="draft.sip.domain" :disabled="!isEditable" />
             </a-form-item>
+            <a-form-item>
+              <template #label>
+                <field-label-tooltip label="TCP Keepalive" tooltip="启用后可加速识别僵死连接。" />
+              </template>
+              <a-switch v-model:checked="draft.sip.tcpKeepaliveEnabled" :disabled="!isEditable" />
+            </a-form-item>
+            <a-form-item>
+              <template #label>
+                <field-label-tooltip label="Keepalive 间隔(ms)" tooltip="TCP keepalive 探测间隔。" />
+              </template>
+              <a-input-number v-model:value="draft.sip.tcpKeepaliveIntervalMs" :min="1000" :disabled="!isEditable" style="width: 100%" />
+            </a-form-item>
+            <a-form-item>
+              <template #label>
+                <field-label-tooltip label="读缓冲区(bytes)" tooltip="单连接读取缓冲区大小。" />
+              </template>
+              <a-input-number v-model:value="draft.sip.tcpReadBufferBytes" :min="1024" :disabled="!isEditable" style="width: 100%" />
+            </a-form-item>
+            <a-form-item>
+              <template #label>
+                <field-label-tooltip label="写缓冲区(bytes)" tooltip="单连接写入缓冲区大小。" />
+              </template>
+              <a-input-number v-model:value="draft.sip.tcpWriteBufferBytes" :min="1024" :disabled="!isEditable" style="width: 100%" />
+            </a-form-item>
+            <a-form-item>
+              <template #label>
+                <field-label-tooltip label="最大连接数" tooltip="SIP TCP 服务端最大并发连接。" />
+              </template>
+              <a-input-number v-model:value="draft.sip.maxConnections" :min="1" :disabled="!isEditable" style="width: 100%" />
+            </a-form-item>
           </a-form>
         </a-card>
       </a-col>
@@ -188,7 +218,12 @@ const config = reactive<NetworkConfigPayload>({
     listenPort: 5060,
     protocol: 'UDP',
     advertisedAddress: '',
-    domain: ''
+    domain: '',
+    tcpKeepaliveEnabled: true,
+    tcpKeepaliveIntervalMs: 30000,
+    tcpReadBufferBytes: 65536,
+    tcpWriteBufferBytes: 65536,
+    maxConnections: 2048
   },
   rtp: {
     listenIp: '',
@@ -211,7 +246,12 @@ const draft = reactive<UpdateNetworkConfigPayload>({
     listenPort: 5060,
     protocol: 'UDP',
     advertisedAddress: '',
-    domain: ''
+    domain: '',
+    tcpKeepaliveEnabled: true,
+    tcpKeepaliveIntervalMs: 30000,
+    tcpReadBufferBytes: 65536,
+    tcpWriteBufferBytes: 65536,
+    maxConnections: 2048
   },
   rtp: {
     listenIp: '',

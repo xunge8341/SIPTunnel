@@ -106,7 +106,7 @@ GATEWAY_DATA_DIR=./runtime-data go run ./cmd/gateway
 
 `gateway-server/configs/config.yaml` 提供了 `network.sip` 与 `network.rtp` 两套完全独立的配置段：
 
-- SIP：`enabled/listen_ip/listen_port/transport/advertise_ip/domain/max_message_bytes/read_timeout_ms/write_timeout_ms/idle_timeout_ms`
+- SIP：`enabled/listen_ip/listen_port/transport/advertise_ip/domain/max_message_bytes/read_timeout_ms/write_timeout_ms/idle_timeout_ms/tcp_keepalive_enabled/tcp_keepalive_interval_ms/tcp_read_buffer_bytes/tcp_write_buffer_bytes/max_connections`
 - RTP：`enabled/listen_ip/advertise_ip/port_start/port_end/transport/max_packet_bytes/max_inflight_transfers/receive_buffer_bytes/transfer_timeout_ms/retransmit_max_rounds`
 
 默认值策略：首期默认 `SIP=TCP`、`RTP=UDP`；缺省字段由默认值注入器补齐，再执行分模块校验（含范围校验与端口冲突校验）。
@@ -124,7 +124,7 @@ SIP `transport` 使用建议：
 观测暴露：
 
 - **metrics**：`sip_control_route_total/sip_control_route_duration` 增加 `transport` 标签（`TCP|UDP`）。
-- **节点状态 API**：`GET /api/node/network-status` 的 `data.sip.transport` 持续回传当前协议。
+- **节点状态 API**：`GET /api/node/network-status` 的 `data.sip` 增加连接级指标（`current_connections/accepted_connections_total/closed_connections_total/read_timeout_total/write_timeout_total/connection_error_total`）以及 TCP 生命周期配置回显字段。
 - **RTP 端口池指标**：`rtp_port_pool_total/rtp_port_pool_used/rtp_port_alloc_fail_total` 用于观测文件传输端口池容量、占用和分配失败次数。
 - **日志字段**：SIP 控制面处理日志追加 `transport` 字段，启动日志打印 `sip_transport/rtp_transport`。
 

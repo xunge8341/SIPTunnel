@@ -203,3 +203,31 @@ curl -fsS http://127.0.0.1:18080/api/selfcheck
 ```
 
 若启动阶段自检存在 `error` 级结果，进程会直接退出，避免带病上线。
+
+## 10. SIP over TCP 生产运维补充
+
+### 10.1 连接生命周期与参数建议
+
+- 建连上限：通过 `network.sip.max_connections` 限制并发 TCP 会话，防止突发连接耗尽 FD。
+- 空闲超时：`network.sip.idle_timeout_ms`，建议大于业务心跳周期。
+- 读/写超时：`network.sip.read_timeout_ms` / `network.sip.write_timeout_ms`，超时会进入连接级计数器。
+- Keepalive：`network.sip.tcp_keepalive_enabled=true`，并使用 `network.sip.tcp_keepalive_interval_ms` 加速僵尸连接回收。
+- 套接字缓冲：`network.sip.tcp_read_buffer_bytes` / `network.sip.tcp_write_buffer_bytes`，大报文场景建议 >= 64KiB。
+
+### 10.2 观测点与巡检
+
+调用 `GET /api/node/network-status`，重点关注：
+
+- `sip.current_connections`
+- `sip.accepted_connections_total`
+- `sip.closed_connections_total`
+- `sip.read_timeout_total`
+- `sip.write_timeout_total`
+- `sip.connection_error_total`
+
+排障建议：
+
+1. `accepted_connections_total` 上升但 `current_connections` 长期为 0：检查对端短连策略或握手失败。
+2. `read_timeout_total` 快速增长：检查链路抖动、上游发送节奏或空闲超时过短。
+3. `write_timeout_total` 快速增长：检查下游接收阻塞和发送窗口。
+4. `connection_error_total` 与日志中的 `connection_id/remote_addr/local_addr/transport=tcp` 关联定位异常连接。

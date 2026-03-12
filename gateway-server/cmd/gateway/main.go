@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"time"
 
+	"log/slog"
+
 	"gopkg.in/yaml.v3"
 
 	"siptunnel/internal/config"
@@ -18,6 +20,7 @@ import (
 	"siptunnel/internal/server"
 	"siptunnel/internal/service/filetransfer"
 	"siptunnel/internal/service/httpinvoke"
+	"siptunnel/internal/service/siptcp"
 )
 
 var (
@@ -44,6 +47,35 @@ func main() {
 	if err != nil {
 		log.Fatalf("init rtp port pool failed: %v", err)
 	}
+	sipMetrics := &siptcp.ConnectionMetrics{}
+	var sipServer *siptcp.Server
+	if selfCheckInput.NetworkConfig.SIP.Enabled && selfCheckInput.NetworkConfig.SIP.Transport == "TCP" {
+		sipServer = siptcp.NewServer(siptcp.Config{
+			ListenAddress:        selfCheckInput.NetworkConfig.SIP.ListenIP + ":" + strconv.Itoa(selfCheckInput.NetworkConfig.SIP.ListenPort),
+			ReadTimeout:          time.Duration(selfCheckInput.NetworkConfig.SIP.ReadTimeoutMS) * time.Millisecond,
+			WriteTimeout:         time.Duration(selfCheckInput.NetworkConfig.SIP.WriteTimeoutMS) * time.Millisecond,
+			IdleTimeout:          time.Duration(selfCheckInput.NetworkConfig.SIP.IdleTimeoutMS) * time.Millisecond,
+			MaxMessageBytes:      selfCheckInput.NetworkConfig.SIP.MaxMessageBytes,
+			TCPKeepAliveEnabled:  selfCheckInput.NetworkConfig.SIP.TCPKeepAliveEnabled,
+			TCPKeepAliveInterval: time.Duration(selfCheckInput.NetworkConfig.SIP.TCPKeepAliveIntervalMS) * time.Millisecond,
+			TCPReadBufferBytes:   selfCheckInput.NetworkConfig.SIP.TCPReadBufferBytes,
+			TCPWriteBufferBytes:  selfCheckInput.NetworkConfig.SIP.TCPWriteBufferBytes,
+			MaxConnections:       selfCheckInput.NetworkConfig.SIP.MaxConnections,
+		}, siptcp.MessageHandlerFunc(func(_ context.Context, meta siptcp.ConnectionMeta, payload []byte) ([]byte, error) {
+			log.Printf("sip tcp message received transport=tcp connection_id=%s remote_addr=%s local_addr=%s bytes=%d", meta.ConnectionID, meta.RemoteAddr, meta.LocalAddr, len(payload))
+			return payload, nil
+		}), slog.Default(), sipMetrics)
+		if err := sipServer.Start(context.Background()); err != nil {
+			log.Fatalf("start sip tcp server failed: %v", err)
+		}
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := sipServer.Shutdown(shutdownCtx); err != nil {
+				log.Printf("shutdown sip tcp server failed: %v", err)
+			}
+		}()
+	}
 	log.Printf("network config loaded sip_transport=%s sip_listen=%s:%d rtp_transport=%s rtp_port_range=[%d,%d]", selfCheckInput.NetworkConfig.SIP.Transport, selfCheckInput.NetworkConfig.SIP.ListenIP, selfCheckInput.NetworkConfig.SIP.ListenPort, rtpTransport.Mode(), selfCheckInput.NetworkConfig.RTP.PortStart, selfCheckInput.NetworkConfig.RTP.PortEnd)
 	if selfCheckInput.NetworkConfig.SIP.UDPMessageSizeRisk() {
 		log.Printf("sip udp message size risk detected transport=%s max_message_bytes=%d recommended_max=%d", selfCheckInput.NetworkConfig.SIP.Transport, selfCheckInput.NetworkConfig.SIP.MaxMessageBytes, config.SIPUDPRecommendedMaxMessageBytes)
@@ -56,13 +88,24 @@ func main() {
 		},
 		NetworkStatusFunc: func(context.Context) server.NodeNetworkStatus {
 			poolStats := portPool.Stats()
+			sipSnapshot := sipMetrics.Snapshot()
 			return server.NodeNetworkStatus{
 				SIP: server.SIPNetworkStatus{
-					ListenIP:           selfCheckInput.NetworkConfig.SIP.ListenIP,
-					ListenPort:         selfCheckInput.NetworkConfig.SIP.ListenPort,
-					Transport:          selfCheckInput.NetworkConfig.SIP.Transport,
-					CurrentSessions:    0,
-					CurrentConnections: 0,
+					ListenIP:                 selfCheckInput.NetworkConfig.SIP.ListenIP,
+					ListenPort:               selfCheckInput.NetworkConfig.SIP.ListenPort,
+					Transport:                selfCheckInput.NetworkConfig.SIP.Transport,
+					CurrentSessions:          0,
+					CurrentConnections:       int(sipSnapshot.CurrentConnections),
+					AcceptedConnectionsTotal: sipSnapshot.AcceptedConnectionsTotal,
+					ClosedConnectionsTotal:   sipSnapshot.ClosedConnectionsTotal,
+					ReadTimeoutTotal:         sipSnapshot.ReadTimeoutTotal,
+					WriteTimeoutTotal:        sipSnapshot.WriteTimeoutTotal,
+					ConnectionErrorTotal:     sipSnapshot.ConnectionErrorTotal,
+					TCPKeepAliveEnabled:      selfCheckInput.NetworkConfig.SIP.TCPKeepAliveEnabled,
+					TCPKeepAliveIntervalMS:   selfCheckInput.NetworkConfig.SIP.TCPKeepAliveIntervalMS,
+					TCPReadBufferBytes:       selfCheckInput.NetworkConfig.SIP.TCPReadBufferBytes,
+					TCPWriteBufferBytes:      selfCheckInput.NetworkConfig.SIP.TCPWriteBufferBytes,
+					MaxConnections:           selfCheckInput.NetworkConfig.SIP.MaxConnections,
 				},
 				RTP: server.RTPNetworkStatus{
 					ListenIP:           selfCheckInput.NetworkConfig.RTP.ListenIP,
