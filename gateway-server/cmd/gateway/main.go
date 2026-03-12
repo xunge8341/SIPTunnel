@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"siptunnel/internal/config"
 	"siptunnel/internal/server"
 )
 
@@ -21,14 +22,31 @@ var (
 
 func main() {
 	port := readPort()
+	paths := config.LoadStoragePathsFromEnv()
+	if err := paths.EnsureWritable(); err != nil {
+		log.Fatalf("startup directory validation failed: %v", err)
+	}
+	handler, closer, err := server.NewHandlerWithOptions(server.HandlerOptions{LogDir: paths.LogDir, AuditDir: paths.AuditDir})
+	if err != nil {
+		log.Fatalf("initialize handler failed: %v", err)
+	}
+	if closer != nil {
+		defer func() {
+			if err := closer.Close(); err != nil {
+				log.Printf("close resources failed: %v", err)
+			}
+		}()
+	}
+
 	httpServer := &http.Server{
 		Addr:              ":" + port,
-		Handler:           server.NewHandler(),
+		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
 	go func() {
 		log.Printf("gateway server listening on %s (version=%s commit=%s build_time=%s)", httpServer.Addr, version, commit, buildTime)
+		log.Printf("storage paths temp_dir=%q final_dir=%q audit_dir=%q log_dir=%q", paths.TempDir, paths.FinalDir, paths.AuditDir, paths.LogDir)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server failed: %v", err)
 		}

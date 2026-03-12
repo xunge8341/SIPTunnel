@@ -63,6 +63,40 @@ VITE_API_MODE=real VITE_API_BASE_URL=http://127.0.0.1:18080/api npm run dev
 - `GET /api/tasks/{id}`
 - `GET /api/audits`
 
+
+## gateway-server 路径与文件系统配置（跨平台）
+
+gateway-server 启动时会自动检查并创建以下目录，且验证可写：
+
+- `temp_dir`：文件分片临时落盘目录
+- `final_dir`：文件组装完成后成品目录
+- `audit_dir`：审计日志 JSONL 落盘目录
+- `log_dir`：结构化日志文件目录
+
+默认目录（相对 `gateway-server` 运行目录）：
+
+- `./data/temp`
+- `./data/final`
+- `./data/audit`
+- `./data/logs`
+
+可通过环境变量覆盖：
+
+- `GATEWAY_DATA_DIR`（统一根目录，自动派生 temp/final/audit/logs 子目录）
+- `GATEWAY_TEMP_DIR`
+- `GATEWAY_FINAL_DIR`
+- `GATEWAY_AUDIT_DIR`
+- `GATEWAY_LOG_DIR`
+
+示例：
+
+```bash
+cd gateway-server
+GATEWAY_DATA_DIR=./runtime-data go run ./cmd/gateway
+```
+
+若目录不可创建或不可写，服务会在启动阶段直接失败并输出可读错误信息，便于运维快速定位。
+
 ## 跨平台构建与部署检查
 
 ### 默认单文件编译

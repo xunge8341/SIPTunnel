@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,23 +43,34 @@ type ChunkRecord struct {
 }
 
 type ReceiveResult struct {
-	TransferID   [16]byte
-	Status       TransferStatus
-	Completed    bool
-	Missing      []uint32
-	Retransmit   *RetransmitRequest
-	Duplicate    bool
-	TempFilePath string
+	TransferID    [16]byte
+	Status        TransferStatus
+	Completed     bool
+	Missing       []uint32
+	Retransmit    *RetransmitRequest
+	Duplicate     bool
+	TempFilePath  string
+	FinalFilePath string
+}
+
+type StorageConfig struct {
+	TempDir  string
+	FinalDir string
 }
 
 type Receiver struct {
-	mu    sync.Mutex
-	tasks map[[16]byte]*TransferTask
-	dir   string
+	mu       sync.Mutex
+	tasks    map[[16]byte]*TransferTask
+	tempDir  string
+	finalDir string
 }
 
 func NewReceiver(dir string) *Receiver {
-	return &Receiver{tasks: make(map[[16]byte]*TransferTask), dir: dir}
+	return NewReceiverWithConfig(StorageConfig{TempDir: dir, FinalDir: dir})
+}
+
+func NewReceiverWithConfig(cfg StorageConfig) *Receiver {
+	return &Receiver{tasks: make(map[[16]byte]*TransferTask), tempDir: cfg.TempDir, finalDir: cfg.FinalDir}
 }
 
 func (r *Receiver) AddChunk(packet rtpfile.ChunkPacket) (*ReceiveResult, error) {
@@ -68,7 +80,7 @@ func (r *Receiver) AddChunk(packet rtpfile.ChunkPacket) (*ReceiveResult, error) 
 	transferID := packet.Header.TransferID
 	task, ok := r.tasks[transferID]
 	if !ok {
-		created, err := newTransferTask(r.dir, packet)
+		created, err := newTransferTask(r.tempDir, r.finalDir, packet)
 		if err != nil {
 			return nil, err
 		}
@@ -116,9 +128,10 @@ type TransferTask struct {
 	totalChunk uint32
 	tracker    *chunkTracker
 	store      *tempFileStore
+	finalDir   string
 }
 
-func newTransferTask(dir string, packet rtpfile.ChunkPacket) (*TransferTask, error) {
+func newTransferTask(tempDir string, finalDir string, packet rtpfile.ChunkPacket) (*TransferTask, error) {
 	h := packet.Header
 	if h.ChunkTotal == 0 {
 		return nil, errors.New("chunk_total must be positive")
@@ -126,7 +139,7 @@ func newTransferTask(dir string, packet rtpfile.ChunkPacket) (*TransferTask, err
 	if h.FileSize == 0 {
 		return nil, errors.New("file_size must be positive")
 	}
-	store, err := newTempFileStore(dir, h.TransferID, h.FileSize)
+	store, err := newTempFileStore(tempDir, h.TransferID, h.FileSize)
 	if err != nil {
 		return nil, err
 	}
@@ -138,6 +151,7 @@ func newTransferTask(dir string, packet rtpfile.ChunkPacket) (*TransferTask, err
 		totalChunk: h.ChunkTotal,
 		tracker:    newChunkTracker(h.ChunkTotal),
 		store:      store,
+		finalDir:   finalDir,
 	}, nil
 }
 
@@ -180,8 +194,13 @@ func (t *TransferTask) AddChunk(packet rtpfile.ChunkPacket) (*ReceiveResult, err
 		t.status = StatusFAILED
 		return &ReceiveResult{TransferID: t.id, Status: t.status, Completed: true, TempFilePath: t.store.Path()}, fmt.Errorf("file digest verification failed: %w", err)
 	}
+	finalPath, err := t.store.Finalize(t.finalDir, t.id)
+	if err != nil {
+		t.status = StatusFAILED
+		return &ReceiveResult{TransferID: t.id, Status: t.status, Completed: true, TempFilePath: t.store.Path()}, fmt.Errorf("persist final file failed: %w", err)
+	}
 	t.status = StatusSUCCESS
-	return &ReceiveResult{TransferID: t.id, Status: t.status, Completed: true, TempFilePath: t.store.Path()}, nil
+	return &ReceiveResult{TransferID: t.id, Status: t.status, Completed: true, TempFilePath: t.store.Path(), FinalFilePath: finalPath}, nil
 }
 
 func (t *TransferTask) DetectMissing() *ReceiveResult {
@@ -293,6 +312,7 @@ func (c *chunkTracker) ChunkMap() map[uint32]ChunkRecord {
 type tempFileStore struct {
 	file *os.File
 	size uint64
+	path string
 }
 
 func newTempFileStore(dir string, transferID [16]byte, size uint64) (*tempFileStore, error) {
@@ -312,7 +332,7 @@ func newTempFileStore(dir string, transferID [16]byte, size uint64) (*tempFileSt
 		_ = os.Remove(f.Name())
 		return nil, err
 	}
-	return &tempFileStore{file: f, size: size}, nil
+	return &tempFileStore{file: f, size: size, path: f.Name()}, nil
 }
 
 func (s *tempFileStore) WriteChunk(offset uint64, payload []byte) error {
@@ -344,11 +364,55 @@ func (s *tempFileStore) VerifyDigest(expected [digestSize]byte, expectedSize uin
 	return nil
 }
 
+func (s *tempFileStore) Finalize(finalDir string, transferID [16]byte) (string, error) {
+	if strings.TrimSpace(finalDir) == "" {
+		return s.Path(), nil
+	}
+	if err := s.file.Sync(); err != nil {
+		return "", err
+	}
+	if err := s.file.Close(); err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(filepath.Clean(finalDir), 0o755); err != nil {
+		return "", err
+	}
+	finalPath := filepath.Join(finalDir, fmt.Sprintf("rtp-transfer-%x.bin", transferID))
+	if err := moveFile(s.path, finalPath); err != nil {
+		return "", err
+	}
+	s.path = finalPath
+	return s.Path(), nil
+}
+
+func moveFile(src string, dst string) error {
+	if err := os.Rename(src, dst); err == nil {
+		return nil
+	}
+	in, err := os.Open(filepath.Clean(src))
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.Create(filepath.Clean(dst))
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
+		return err
+	}
+	if err := out.Close(); err != nil {
+		return err
+	}
+	return os.Remove(src)
+}
+
 func (s *tempFileStore) Path() string {
 	if s == nil || s.file == nil {
 		return ""
 	}
-	path, err := filepath.Abs(s.file.Name())
+	path, err := filepath.Abs(s.path)
 	if err != nil {
 		return s.file.Name()
 	}

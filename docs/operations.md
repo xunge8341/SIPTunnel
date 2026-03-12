@@ -68,8 +68,13 @@ $env:NODE_ROLE = 'receiver'
 | `MEDIA_PORT_START` | `20000` | RTP 接收/发送使用端口范围起始（部署规划参数） |
 | `MEDIA_PORT_END` | `20100` | RTP 接收/发送使用端口范围结束（部署规划参数） |
 | `NODE_ROLE` | `receiver` | 节点职责，`receiver`（接收端）/`sender`（发送端） |
+| `GATEWAY_DATA_DIR` | `./data` | 存储根目录，自动派生 temp/final/audit/logs 子目录 |
+| `GATEWAY_TEMP_DIR` | `./data/temp` | RTP 分片临时目录（优先级高于 `GATEWAY_DATA_DIR`） |
+| `GATEWAY_FINAL_DIR` | `./data/final` | RTP 组装完成目录（优先级高于 `GATEWAY_DATA_DIR`） |
+| `GATEWAY_AUDIT_DIR` | `./data/audit` | 审计事件 JSONL 落盘目录（优先级高于 `GATEWAY_DATA_DIR`） |
+| `GATEWAY_LOG_DIR` | `./data/logs` | 结构化日志文件目录（优先级高于 `GATEWAY_DATA_DIR`） |
 
-> 说明：当前服务主进程已使用 `GATEWAY_PORT`，媒体端口范围与角色参数用于部署前检查与运行规划，便于跨环境统一运维口径。
+> 说明：服务启动会自动创建并校验上述目录可写性；若校验失败会直接退出并输出目录级错误。
 
 ## 5. 运维操作建议
 

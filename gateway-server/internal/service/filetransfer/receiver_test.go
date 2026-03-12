@@ -30,7 +30,7 @@ func TestReceiverCollectComplete(t *testing.T) {
 	if result.Status != StatusSUCCESS {
 		t.Fatalf("expect SUCCESS got=%s", result.Status)
 	}
-	assertTempFileContent(t, result.TempFilePath, payload)
+	assertTempFileContent(t, result.FinalFilePath, payload)
 }
 
 func TestReceiverOutOfOrderComplete(t *testing.T) {
@@ -52,7 +52,7 @@ func TestReceiverOutOfOrderComplete(t *testing.T) {
 	if !result.Completed || result.Status != StatusSUCCESS {
 		t.Fatalf("expect out-of-order success status=%s completed=%v", result.Status, result.Completed)
 	}
-	assertTempFileContent(t, result.TempFilePath, payload)
+	assertTempFileContent(t, result.FinalFilePath, payload)
 }
 
 func TestReceiverDuplicateChunkDeduplicate(t *testing.T) {
@@ -127,6 +127,30 @@ func TestReceiverDigestMismatch(t *testing.T) {
 	if !errors.Is(err, os.ErrInvalid) && !strings.Contains(err.Error(), "file_digest mismatch") {
 		t.Fatalf("unexpected error: %v", err)
 	}
+}
+
+func TestReceiverWithConfiguredPaths(t *testing.T) {
+	base := t.TempDir()
+	tempDir := filepath.Join(base, "temp")
+	finalDir := filepath.Join(base, "final")
+	receiver := NewReceiverWithConfig(StorageConfig{TempDir: tempDir, FinalDir: finalDir})
+	packets, payload := buildPackets(t, 12)
+
+	var result *ReceiveResult
+	for _, packet := range packets {
+		var err error
+		result, err = receiver.AddChunk(packet)
+		if err != nil {
+			t.Fatalf("AddChunk error: %v", err)
+		}
+	}
+	if result.FinalFilePath == "" {
+		t.Fatalf("final file path should not be empty")
+	}
+	if !strings.HasPrefix(result.FinalFilePath, filepath.Clean(finalDir)) {
+		t.Fatalf("final path should be in configured final dir, got %s", result.FinalFilePath)
+	}
+	assertTempFileContent(t, result.FinalFilePath, payload)
 }
 
 func buildPackets(t *testing.T, chunkSize int) ([]rtpfile.ChunkPacket, []byte) {

@@ -1,6 +1,16 @@
 server:
   port: 18080
 
+# 存储目录（支持跨平台路径）：
+# - 可通过环境变量覆盖：
+#   GATEWAY_DATA_DIR / GATEWAY_TEMP_DIR / GATEWAY_FINAL_DIR / GATEWAY_AUDIT_DIR / GATEWAY_LOG_DIR
+# - 若只配置 GATEWAY_DATA_DIR，会自动使用其子目录 temp/final/audit/logs。
+storage:
+  temp_dir: ./data/temp
+  final_dir: ./data/final
+  audit_dir: ./data/audit
+  log_dir: ./data/logs
+
 # 以下字段用于部署规划与 preflight 校验：
 # - 当前服务进程实际读取 GATEWAY_PORT 作为监听端口。
 # - MEDIA_PORT_* 与 node.role 用于统一跨环境部署参数口径。
