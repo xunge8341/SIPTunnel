@@ -192,6 +192,30 @@ make gen-config-docs
 
 若需接入现有探针，请通过 `NETEM_PROBE_COMMAND` 传入测试命令（输出 JSONL），框架会自动汇总成功率、平均时延、重传率与恢复时间并生成报告。
 
+
+## 长稳测试（1h / 6h / 24h）
+
+仓库新增长稳（soak）测试能力，用于持续验证控制面/文件面链路在长时间运行下的稳定性，重点关注 goroutine、FD、连接回收、内存与缓冲区增长、错误率。
+
+- 测试代码：`gateway-server/tests/longrun/soak_test.go`
+- 执行脚本：`scripts/longrun/run.sh`
+- CI smoke 脚本：`scripts/longrun/smoke.sh`
+- 详细说明与阈值建议：`docs/longrun-testing.md`
+
+快速运行（本地短时）：
+
+```bash
+./scripts/longrun/smoke.sh
+```
+
+标准模式：
+
+```bash
+./scripts/longrun/run.sh 1h
+./scripts/longrun/run.sh 6h
+./scripts/longrun/run.sh 24h
+```
+
 ## gateway-server 运维环境自检
 
 gateway-server 启动前会执行环境自检，并提供统一报告对象（可复用于 API/CLI/日志）：

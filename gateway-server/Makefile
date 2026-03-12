@@ -1,4 +1,4 @@
-.PHONY: run test build build-gatewayctl run-gatewayctl build-linux-amd64 build-linux-arm64 docker-buildx release-local gen-config-docs
+.PHONY: run test build build-gatewayctl run-gatewayctl build-linux-amd64 build-linux-arm64 docker-buildx release-local gen-config-docs longrun-smoke longrun-1h longrun-6h longrun-24h
 
 BINARY_NAME ?= gateway
 DIST_DIR ?= ../dist/bin
@@ -40,3 +40,15 @@ release-local: build-linux-amd64 build-linux-arm64
 
 gen-config-docs:
 	go run ./cmd/configdocgen
+
+longrun-smoke:
+	../scripts/longrun/smoke.sh
+
+longrun-1h:
+	../scripts/longrun/run.sh 1h
+
+longrun-6h:
+	../scripts/longrun/run.sh 6h
+
+longrun-24h:
+	../scripts/longrun/run.sh 24h
