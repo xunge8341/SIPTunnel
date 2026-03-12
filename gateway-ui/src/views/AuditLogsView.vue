@@ -57,7 +57,7 @@ interface AuditLogItem {
 }
 
 const filters = reactive({ requestId: '', traceId: '', action: undefined as string | undefined })
-const timeRange = ref<any[]>([])
+const timeRange = ref<(string | Date)[]>([])
 const drawerVisible = ref(false)
 const selectedLog = reactive<AuditLogItem>({
   id: '',

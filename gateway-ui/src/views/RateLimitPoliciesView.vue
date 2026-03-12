@@ -78,7 +78,13 @@ const targetPolicies = ref<PolicyItem[]>([
   { id: 'target-policy', name: 'policy-service', qps: 260, burst: 390, enabled: false }
 ])
 
-const columnsByTab: Record<PolicyType, any[]> = {
+interface TableColumn {
+  title: string
+  dataIndex?: string
+  key: string
+}
+
+const columnsByTab: Record<PolicyType, TableColumn[]> = {
   global: [
     { title: '策略名', dataIndex: 'name', key: 'name' },
     { title: 'QPS', dataIndex: 'qps', key: 'qps' },
