@@ -226,6 +226,45 @@ API 示例：
 }
 ```
 
+
+## gatewayctl 轻量 CLI 运维工具
+
+`gateway-server` 新增了 `gatewayctl`，用于复用现有运维 API 与配置校验能力，支持文本与 JSON 双输出。
+
+编译与运行：
+
+```bash
+cd gateway-server
+make build-gatewayctl
+# 或直接运行
+go run ./cmd/gatewayctl --help
+```
+
+常用命令示例：
+
+```bash
+# 1) 校验网络配置（复用 network 配置默认值注入 + Validate 逻辑）
+go run ./cmd/gatewayctl config validate -f ./configs/config.yaml
+
+# 2) 查询节点网络状态（复用 /api/node/network-status）
+go run ./cmd/gatewayctl node inspect
+
+# 3) 按 request_id 查询任务（复用 /api/tasks 过滤）
+go run ./cmd/gatewayctl task query --request-id req-20260312-001
+
+# 4) 导出诊断快照（聚合 healthz/selfcheck/node/limits/routes）
+go run ./cmd/gatewayctl diag export --out ./diagnostics.json
+
+# 5) JSON 输出（机器可解析）
+go run ./cmd/gatewayctl --output json node inspect
+```
+
+可选全局参数：
+
+- `--server`：指定网关地址（默认 `http://127.0.0.1:18080`）
+- `--output, -o`：输出格式 `text|json`（默认 `text`）
+- `--timeout`：API 请求超时（默认 `5s`）
+
 ## 跨平台构建与部署检查
 
 ### 默认单文件编译
