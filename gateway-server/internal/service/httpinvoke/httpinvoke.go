@@ -16,6 +16,9 @@ import (
 )
 
 const (
+	// ResultCode* 用于任务状态落库与运维排障。
+	// 约定：优先表达“问题归因面”（超时/限流/下游5xx/请求4xx），
+	// 便于一线值班快速分流到网络、网关映射或下游服务团队。
 	ResultCodeOK                 = "OK"
 	ResultCodeUpstreamTimeout    = "UPSTREAM_TIMEOUT"
 	ResultCodeUpstreamRateLimit  = "UPSTREAM_RATE_LIMIT"
