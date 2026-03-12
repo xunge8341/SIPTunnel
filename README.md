@@ -174,6 +174,24 @@ make gen-config-docs
 | `network.rtp.transport` | `string` | `UDP` | 否 | ⚠️ HIGH-NET | RTP 传输协议（UDP 生产默认，TCP 可联调验证）。 |
 ```
 
+
+## 网络劣化测试框架（netem）
+
+仓库新增了可复用的网络劣化测试框架，用于对 `SIP TCP / RTP UDP / RTP TCP` 在延迟、抖动、丢包、乱序、断连、带宽收缩场景下做一致化验证。
+
+- 场景矩阵：`gateway-server/tests/netem/matrix.json`
+- 执行脚本：`scripts/netem/run.sh`
+- 报告模板：`gateway-server/tests/netem/report_template.md`
+- 详细复现步骤：`docs/network-degradation-testing.md`
+
+快速执行：
+
+```bash
+./scripts/netem/run.sh
+```
+
+若需接入现有探针，请通过 `NETEM_PROBE_COMMAND` 传入测试命令（输出 JSONL），框架会自动汇总成功率、平均时延、重传率与恢复时间并生成报告。
+
 ## gateway-server 运维环境自检
 
 gateway-server 启动前会执行环境自检，并提供统一报告对象（可复用于 API/CLI/日志）：
