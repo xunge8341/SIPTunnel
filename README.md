@@ -63,6 +63,27 @@ VITE_API_MODE=real VITE_API_BASE_URL=http://127.0.0.1:18080/api npm run dev
 - `GET /api/tasks/{id}`
 - `GET /api/audits`
 
+## 跨平台构建与部署检查
+
+### 默认单文件编译
+
+- Linux/macOS：`./scripts/build.sh`
+- Windows（PowerShell）：`./scripts/build.ps1`
+
+默认在 `dist/` 输出当前平台单可执行文件；如需一次构建多平台可使用 `matrix` 模式。
+
+### 部署前配置检查（监听端口/媒体端口范围/接收发送角色）
+
+- Linux/macOS：`LISTEN_PORT=18080 MEDIA_PORT_START=20000 MEDIA_PORT_END=20100 NODE_ROLE=receiver ./scripts/preflight.sh`
+- Windows（PowerShell）：
+  - `$env:LISTEN_PORT='18080'`
+  - `$env:MEDIA_PORT_START='20000'`
+  - `$env:MEDIA_PORT_END='20100'`
+  - `$env:NODE_ROLE='receiver'`
+  - `./scripts/preflight.ps1`
+
+完整部署与操作步骤请参考 `docs/operations.md` 与 `deploy/README.md`。
+
 ## 如何测试
 
 ```bash

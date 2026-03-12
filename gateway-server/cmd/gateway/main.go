@@ -13,6 +13,12 @@ import (
 	"siptunnel/internal/server"
 )
 
+var (
+	version   = "dev"
+	commit    = "unknown"
+	buildTime = "unknown"
+)
+
 func main() {
 	port := readPort()
 	httpServer := &http.Server{
@@ -22,7 +28,7 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("gateway server listening on %s", httpServer.Addr)
+		log.Printf("gateway server listening on %s (version=%s commit=%s build_time=%s)", httpServer.Addr, version, commit, buildTime)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server failed: %v", err)
 		}
