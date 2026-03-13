@@ -108,6 +108,7 @@ VITE_API_MODE=real VITE_API_BASE_URL=http://127.0.0.1:18080/api npm run dev
   - `sip_listen(ip/port/transport)`
   - `rtp_listen(ip/port_range/transport)`
   - `storage_dirs`
+  - `business_execution`（业务执行层状态）
   - `self_check_summary`
 - 可通过 `GET /api/startup-summary` 获取同一份摘要 JSON。
 
@@ -122,7 +123,8 @@ startup summary:
 - sip_listen: ip=0.0.0.0 port=5060 transport=TCP
 - rtp_listen: ip=0.0.0.0 port_range=20000-20100 transport=UDP
 - storage_dirs: temp=./data/temp final=./data/final audit=./data/audit log=./data/logs
-- self_check_summary: generated_at=2026-01-02T03:04:05Z overall=info info=7 warn=0 error=0
+- business_execution: state=protocol_only route_count=0 message=协议层可启动，业务执行层未激活（未加载下游 HTTP 路由） impact=仅完成 SIP/RTP 协议交互，不会执行 A 网 HTTP 落地
+- self_check_summary: generated_at=2026-01-02T03:04:05Z overall=warn info=7 warn=1 error=0
 ```
 
 ### embedded 模式（单进程打包交付）
@@ -460,8 +462,28 @@ self-check generated_at=2026-01-02T03:04:05Z overall=warn info=6 warn=1 error=0
 - [WARN] sip.listen_ip: listen_ip=0.0.0.0 为通配地址，无法精确校验网卡存在性 | suggestion: 若需严格约束到指定网卡，请改为明确的本机 IP
 - [INFO] sip.listen_port_occupancy: SIP 监听地址 0.0.0.0:5060 可成功绑定 | suggestion: 无需处理
 - [ERROR] sip.listen_port_occupancy: SIP 端口检查失败（TCP 127.0.0.1:5060）：bind: address already in use；疑似占用进程=nginx(pid=234) | suggestion: Linux 排查可执行：ss -ltnp；lsof -i :5060；开发模式建议先切换 sip.listen_port=25060 进行快速联调（变更后请重启并复核 /api/selfcheck）；生产模式默认不自动改端口，请先释放冲突端口或人工修改 sip.listen_port
-- [INFO] downstream.http_base_reachability: 下游地址 127.0.0.1:19001 TCP 可达 | suggestion: 无需处理
+- [WARN] downstream.http_base_reachability: 未配置下游 HTTP 路由：当前处于协议层可启动、业务执行层未激活状态（仅跳过可达性检查） | suggestion: 请加载最小 httpinvoke 路由配置以激活业务执行层
 ```
+
+
+最小业务路由配置示例（用于激活业务执行层）：
+
+```yaml
+routes:
+  - api_code: api.health.ping
+    target_service: local-service
+    target_host: 127.0.0.1
+    target_port: 19001
+    http_method: POST
+    http_path: /v1/ping
+    content_type: application/json
+    timeout_ms: 1000
+    retry_times: 0
+    body_mapping:
+      request_id: body.request_id
+```
+
+将该文件路径写入 `GATEWAY_HTTPINVOKE_CONFIG` 后重启，可将系统状态从“协议层可启动、业务执行层未激活”切换为“业务执行层已激活”。
 
 API 示例：
 

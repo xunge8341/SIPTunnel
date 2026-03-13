@@ -414,7 +414,7 @@ func (r *Runner) checkWritableDirs(paths config.StoragePaths) []Item {
 func (r *Runner) checkDownstreamReachability(ctx context.Context, routes []httpinvoke.RouteConfig, timeout time.Duration) []Item {
 	const name = "downstream.http_base_reachability"
 	if len(routes) == 0 {
-		return []Item{item(name, LevelWarn, "未配置下游 HTTP 路由，跳过可达性检查", "请加载 httpinvoke 路由配置后重试", "确认业务所需 api_code 已完成模板映射并发布", "docs/troubleshooting.md#310-下游-http-未配置")}
+		return []Item{item(name, LevelWarn, "未配置下游 HTTP 路由：当前处于协议层可启动、业务执行层未激活状态（仅跳过可达性检查）", "请加载最小 httpinvoke 路由配置以激活业务执行层", "确认业务所需 api_code 已完成模板映射并发布；完成后重启并复核 /api/selfcheck", "docs/troubleshooting.md#310-下游-http-未配置")}
 	}
 	set := map[string]struct{}{}
 	for _, route := range routes {

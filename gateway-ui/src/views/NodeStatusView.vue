@@ -72,6 +72,13 @@
                 <a-descriptions-item label="告警">{{ selectedNode.selfCheck.warning }}</a-descriptions-item>
                 <a-descriptions-item label="失败">{{ selectedNode.selfCheck.failed }}</a-descriptions-item>
               </a-descriptions>
+              <a-alert
+                v-if="selectedNode.selfCheck.summary.includes('业务执行层未激活')"
+                type="warning"
+                show-icon
+                message="业务执行层未激活"
+                description="当前未加载业务路由，因此不会执行 A 网 HTTP 落地。"
+              />
               <a-typography-text type="secondary">{{ selectedNode.selfCheck.summary }}</a-typography-text>
               <a-typography-text type="secondary">检查时间：{{ selectedNode.selfCheck.checkedAt }}</a-typography-text>
             </a-space>
@@ -177,7 +184,7 @@ const nodes = ref<NodeOpsSnapshot[]>([
       { id: 'evt-002', occurredAt: '2026-03-12 13:47:12', service: 'SIP', reason: '监听端口瞬时抖动，重绑耗时 3.2s。' },
       { id: 'evt-003', occurredAt: '2026-03-12 11:07:54', service: 'RTP', reason: '端口池耗尽触发限速，回收后恢复。' }
     ],
-    selfCheck: { status: 'warn', checkedAt: '2026-03-12 14:29:45', passed: 15, warning: 2, failed: 1, summary: 'SIP 监听延迟偏高，建议检查同机端口竞争。' }
+    selfCheck: { status: 'warn', checkedAt: '2026-03-12 14:29:45', passed: 15, warning: 2, failed: 1, summary: '协议层可启动、业务执行层未激活：当前未加载业务路由，A 网 HTTP 落地不会执行。' }
   },
   {
     id: 'gateway-b-01',
