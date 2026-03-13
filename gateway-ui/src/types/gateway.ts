@@ -214,6 +214,25 @@ export interface OpsAuditEvent {
   }
 }
 
+export interface OpsLinkTestItem {
+  name: string
+  passed: boolean
+  status: 'passed' | 'failed'
+  detail: string
+  duration_ms: number
+}
+
+export interface OpsLinkTestReport {
+  passed: boolean
+  status: 'passed' | 'failed'
+  request_id: string
+  trace_id: string
+  duration_ms: number
+  checked_at: string
+  mock_target: string
+  items: OpsLinkTestItem[]
+}
+
 export type TransportProtocol = 'TCP' | 'UDP'
 
 export interface SipNetworkConfig {

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -32,11 +33,14 @@ type handlerDeps struct {
 	audit             observability.AuditStore
 	repo              repository.TaskRepository
 	engine            *taskengine.Engine
+	httpClient        *http.Client
 
 	mu     sync.RWMutex
 	limits OpsLimits
 	routes map[string]OpsRoute
 	nodes  []OpsNode
+
+	lastLinkTest LinkTestReport
 }
 
 type responseEnvelope struct {
@@ -150,6 +154,25 @@ type updateRoutesRequest struct {
 	Routes []OpsRoute `json:"routes"`
 }
 
+type LinkTestReport struct {
+	Passed     bool           `json:"passed"`
+	Status     string         `json:"status"`
+	RequestID  string         `json:"request_id"`
+	TraceID    string         `json:"trace_id"`
+	DurationMS int64          `json:"duration_ms"`
+	CheckedAt  time.Time      `json:"checked_at"`
+	Items      []LinkTestItem `json:"items"`
+	MockTarget string         `json:"mock_target"`
+}
+
+type LinkTestItem struct {
+	Name       string `json:"name"`
+	Passed     bool   `json:"passed"`
+	Status     string `json:"status"`
+	Detail     string `json:"detail"`
+	DurationMS int64  `json:"duration_ms"`
+}
+
 type capacityAssessmentRequest struct {
 	SummaryFile string `json:"summary_file"`
 	Current     struct {
@@ -208,6 +231,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, io.Closer, error)
 		audit:  audit,
 		repo:   repo,
 		engine: engine,
+		httpClient: &http.Client{
+			Timeout: 1500 * time.Millisecond,
+		},
 		limits: OpsLimits{RPS: 200, Burst: 400, MaxConcurrent: 100},
 		routes: map[string]OpsRoute{
 			"asset.sync":   {APICode: "asset.sync", HTTPMethod: "POST", HTTPPath: "/v1/assets/sync", Enabled: true},
@@ -306,9 +332,127 @@ func newMux(deps handlerDeps) http.Handler {
 	mux.HandleFunc("/api/selfcheck", deps.handleSelfCheck)
 	mux.HandleFunc("/api/startup-summary", deps.handleStartupSummary)
 	mux.HandleFunc("/api/node/network-status", deps.handleNodeNetworkStatus)
+	mux.HandleFunc("/api/ops/link-test", deps.handleLinkTest)
 	mux.HandleFunc("/api/diagnostics/export", deps.handleDiagnosticsExport)
 	mux.HandleFunc("/api/capacity/recommendation", deps.handleCapacityRecommendation)
 	return deps.withObservability(mux)
+}
+
+func (d *handlerDeps) handleLinkTest(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPost:
+		report := d.runLinkTest(r.Context())
+		d.mu.Lock()
+		d.lastLinkTest = report
+		d.mu.Unlock()
+		d.recordOpsAudit(r, readOperator(r), "RUN_LINK_TEST", map[string]any{"status": report.Status, "passed": report.Passed})
+		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: report})
+	case http.MethodGet:
+		d.mu.RLock()
+		report := d.lastLinkTest
+		d.mu.RUnlock()
+		if report.CheckedAt.IsZero() {
+			writeError(w, http.StatusNotFound, "LINK_TEST_NOT_FOUND", "no link test report yet")
+			return
+		}
+		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: report})
+	default:
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
+	}
+}
+
+func (d handlerDeps) runLinkTest(ctx context.Context) LinkTestReport {
+	started := time.Now()
+	core := observability.CoreFieldsFromContext(ctx)
+	status := d.networkStatusFunc(ctx)
+
+	items := []LinkTestItem{d.checkSIPControlPath(ctx, status), d.checkRTPPortPool(status), d.checkHTTPMockReachability(ctx)}
+	passed := true
+	for _, item := range items {
+		if !item.Passed {
+			passed = false
+			break
+		}
+	}
+
+	report := LinkTestReport{
+		Passed:     passed,
+		Status:     map[bool]string{true: "passed", false: "failed"}[passed],
+		RequestID:  core.RequestID,
+		TraceID:    core.TraceID,
+		DurationMS: time.Since(started).Milliseconds(),
+		CheckedAt:  time.Now().UTC(),
+		Items:      items,
+		MockTarget: linkTestHTTPTarget(),
+	}
+	return report
+}
+
+func (d handlerDeps) checkSIPControlPath(ctx context.Context, status NodeNetworkStatus) LinkTestItem {
+	start := time.Now()
+	transport := strings.ToUpper(strings.TrimSpace(status.SIP.Transport))
+	if transport == "" || status.SIP.ListenPort <= 0 {
+		return LinkTestItem{Name: "sip_control", Passed: false, Status: "failed", Detail: "SIP 监听参数无效", DurationMS: time.Since(start).Milliseconds()}
+	}
+	if transport == "TCP" {
+		host := strings.TrimSpace(status.SIP.ListenIP)
+		if host == "" || host == "0.0.0.0" {
+			host = "127.0.0.1"
+		}
+		addr := net.JoinHostPort(host, strconv.Itoa(status.SIP.ListenPort))
+		dialer := &net.Dialer{Timeout: 600 * time.Millisecond}
+		conn, err := dialer.DialContext(ctx, "tcp", addr)
+		if err != nil {
+			return LinkTestItem{Name: "sip_control", Passed: false, Status: "failed", Detail: fmt.Sprintf("TCP 握手失败: %v", err), DurationMS: time.Since(start).Milliseconds()}
+		}
+		_ = conn.Close()
+		return LinkTestItem{Name: "sip_control", Passed: true, Status: "passed", Detail: "SIP TCP 控制面握手成功（无业务载荷）", DurationMS: time.Since(start).Milliseconds()}
+	}
+	if len(status.RecentBindErrors) > 0 {
+		return LinkTestItem{Name: "sip_control", Passed: false, Status: "failed", Detail: "发现 SIP 最近绑定错误，判定控制链路不可用", DurationMS: time.Since(start).Milliseconds()}
+	}
+	return LinkTestItem{Name: "sip_control", Passed: true, Status: "passed", Detail: "SIP UDP 采用监听状态与错误计数进行最小通路验证（无业务载荷）", DurationMS: time.Since(start).Milliseconds()}
+}
+
+func (d handlerDeps) checkRTPPortPool(status NodeNetworkStatus) LinkTestItem {
+	start := time.Now()
+	available := status.RTP.AvailablePorts
+	if available <= 0 || status.RTP.PortPoolTotal <= 0 {
+		return LinkTestItem{Name: "rtp_port_pool", Passed: false, Status: "failed", Detail: "RTP 端口池不可用或已耗尽", DurationMS: time.Since(start).Milliseconds()}
+	}
+	return LinkTestItem{Name: "rtp_port_pool", Passed: true, Status: "passed", Detail: fmt.Sprintf("RTP 端口池可用: %d/%d", available, status.RTP.PortPoolTotal), DurationMS: time.Since(start).Milliseconds()}
+}
+
+func (d handlerDeps) checkHTTPMockReachability(ctx context.Context) LinkTestItem {
+	start := time.Now()
+	target := linkTestHTTPTarget()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	if err != nil {
+		return LinkTestItem{Name: "http_downstream", Passed: false, Status: "failed", Detail: fmt.Sprintf("构建 HTTP mock 探测请求失败: %v", err), DurationMS: time.Since(start).Milliseconds()}
+	}
+	req.Header.Set("X-Link-Test", "true")
+	req.Header.Set("X-Api-Code", "ops.link_test")
+	client := d.httpClient
+	if client == nil {
+		client = http.DefaultClient
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return LinkTestItem{Name: "http_downstream", Passed: false, Status: "failed", Detail: fmt.Sprintf("HTTP mock/downstream 不可达: %v", err), DurationMS: time.Since(start).Milliseconds()}
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= http.StatusBadRequest {
+		return LinkTestItem{Name: "http_downstream", Passed: false, Status: "failed", Detail: fmt.Sprintf("HTTP mock/downstream 返回状态异常: %d", resp.StatusCode), DurationMS: time.Since(start).Milliseconds()}
+	}
+	return LinkTestItem{Name: "http_downstream", Passed: true, Status: "passed", Detail: fmt.Sprintf("HTTP mock/downstream 探测成功: %s", target), DurationMS: time.Since(start).Milliseconds()}
+}
+
+func linkTestHTTPTarget() string {
+	target := strings.TrimSpace(os.Getenv("GATEWAY_LINK_TEST_HTTP_TARGET"))
+	if target == "" {
+		return "http://127.0.0.1:18080/healthz"
+	}
+	return target
 }
 
 func (d handlerDeps) withObservability(next http.Handler) http.Handler {

@@ -57,6 +57,25 @@ type diagBundle struct {
 	Export         server.DiagnosticExportData `json:"diagnostic_export"`
 }
 
+type linkTestReport struct {
+	Passed     bool           `json:"passed"`
+	Status     string         `json:"status"`
+	RequestID  string         `json:"request_id"`
+	TraceID    string         `json:"trace_id"`
+	DurationMS int64          `json:"duration_ms"`
+	CheckedAt  time.Time      `json:"checked_at"`
+	Items      []linkTestItem `json:"items"`
+	MockTarget string         `json:"mock_target"`
+}
+
+type linkTestItem struct {
+	Name       string `json:"name"`
+	Passed     bool   `json:"passed"`
+	Status     string `json:"status"`
+	Detail     string `json:"detail"`
+	DurationMS int64  `json:"duration_ms"`
+}
+
 func main() {
 	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
@@ -83,6 +102,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return runTaskCommand(rest[1:], opts, stdout, stderr)
 	case "diag":
 		return runDiagCommand(rest[1:], opts, stdout, stderr)
+	case "link":
+		return runLinkCommand(rest[1:], opts, stdout, stderr)
 	case "help", "-h", "--help":
 		printRootUsage(stdout)
 		return nil
@@ -295,6 +316,32 @@ func runDiagCommand(args []string, opts cliOptions, stdout, stderr io.Writer) er
 	return nil
 }
 
+func runLinkCommand(args []string, opts cliOptions, stdout, stderr io.Writer) error {
+	if len(args) == 0 || args[0] != "test" {
+		printLinkUsage(stderr)
+		if len(args) == 0 {
+			return errors.New("missing link subcommand")
+		}
+		return fmt.Errorf("unknown link subcommand %q", args[0])
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), opts.timeout)
+	defer cancel()
+	var report linkTestReport
+	if err := postAPI(ctx, opts.baseURL, "/api/ops/link-test", nil, &report); err != nil {
+		return err
+	}
+	if opts.output == "json" {
+		return writeJSON(stdout, report)
+	}
+	fmt.Fprintf(stdout, "链路测试结果: %s (passed=%t) 耗时=%dms\n", report.Status, report.Passed, report.DurationMS)
+	fmt.Fprintf(stdout, "request_id=%s trace_id=%s checked_at=%s\n", report.RequestID, report.TraceID, report.CheckedAt.Format(time.RFC3339))
+	for _, item := range report.Items {
+		fmt.Fprintf(stdout, "- %s: %s (%s, %dms)\n", item.Name, item.Status, item.Detail, item.DurationMS)
+	}
+	fmt.Fprintf(stdout, "mock_target=%s\n", report.MockTarget)
+	return nil
+}
+
 func collectDiagnostics(ctx context.Context, baseURL, requestID, traceID string) (diagBundle, error) {
 	bundle := diagBundle{GeneratedAt: time.Now().UTC(), GatewayBaseURL: baseURL}
 	if err := getAPI(ctx, baseURL, "/healthz", nil, &bundle.Health); err != nil {
@@ -374,6 +421,50 @@ func getAPI(ctx context.Context, baseURL, path string, query map[string]string, 
 	return nil
 }
 
+func postAPI(ctx context.Context, baseURL, path string, payload any, out any) error {
+	u, err := url.Parse(baseURL + path)
+	if err != nil {
+		return fmt.Errorf("构建请求地址失败: %w", err)
+	}
+	body := bytes.NewBuffer(nil)
+	if payload != nil {
+		if err := json.NewEncoder(body).Encode(payload); err != nil {
+			return fmt.Errorf("编码请求体失败: %w", err)
+		}
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), body)
+	if err != nil {
+		return fmt.Errorf("构建请求失败: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("请求失败: %w", err)
+	}
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("读取响应失败: %w", err)
+	}
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	}
+	var env apiEnvelope
+	if err := json.Unmarshal(respBody, &env); err != nil {
+		return fmt.Errorf("解析响应失败: %w", err)
+	}
+	if strings.ToUpper(env.Code) != "OK" {
+		return fmt.Errorf("API 返回错误 code=%s message=%s", env.Code, env.Message)
+	}
+	if out == nil || bytes.Equal(env.Data, []byte("null")) || len(env.Data) == 0 {
+		return nil
+	}
+	if err := json.Unmarshal(env.Data, out); err != nil {
+		return fmt.Errorf("解析 data 字段失败: %w", err)
+	}
+	return nil
+}
+
 func writeJSON(w io.Writer, payload any) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
@@ -399,6 +490,7 @@ func printRootUsage(w io.Writer) {
 	fmt.Fprintln(w, "  node inspect")
 	fmt.Fprintln(w, "  task query --request-id <id>")
 	fmt.Fprintln(w, "  diag export [--request-id <id>] [--trace-id <id>] [--out diagnostics.json]")
+	fmt.Fprintln(w, "  link test")
 	fmt.Fprintf(w, "Docs: %s (Runbook), %s (On-call)\n", runbookDocPath, oncallDocPath)
 }
 
@@ -416,4 +508,8 @@ func printTaskUsage(w io.Writer) {
 
 func printDiagUsage(w io.Writer) {
 	fmt.Fprintln(w, "Usage: gatewayctl diag export [--request-id <id>] [--trace-id <id>] [--out diagnostics.json]")
+}
+
+func printLinkUsage(w io.Writer) {
+	fmt.Fprintln(w, "Usage: gatewayctl link test")
 }
