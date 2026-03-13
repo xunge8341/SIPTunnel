@@ -330,3 +330,20 @@ func TestRunnerRun_PortConflictProdNoSuggestedPort(t *testing.T) {
 	}
 	t.Fatalf("sip.listen_port_occupancy not found: %+v", report.Items)
 }
+
+func TestBuildPortDiagnosticSuggestionForOSWindows(t *testing.T) {
+	suggestion := buildPortDiagnosticSuggestionForOS("windows", 5060)
+	if !strings.Contains(suggestion, "Get-NetTCPConnection -LocalPort 5060") {
+		t.Fatalf("windows suggestion missing powershell command: %s", suggestion)
+	}
+	if !strings.Contains(suggestion, "netstat -ano | findstr :5060") {
+		t.Fatalf("windows suggestion missing netstat command: %s", suggestion)
+	}
+}
+
+func TestBuildPortDiagnosticSuggestionForOSLinux(t *testing.T) {
+	suggestion := buildPortDiagnosticSuggestionForOS("linux", 5060)
+	if !strings.Contains(suggestion, "ss -ltnp") || !strings.Contains(suggestion, "lsof -i :5060") {
+		t.Fatalf("linux suggestion mismatch: %s", suggestion)
+	}
+}
