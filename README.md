@@ -543,7 +543,22 @@ go run ./cmd/gatewayctl diag export --out ./diagnostics.json
 
 # 5) JSON 输出（机器可解析）
 go run ./cmd/gatewayctl --output json node inspect
+
+# 6) 一键链路测试（SIP 控制 / RTP 端口池 / HTTP mock/downstream）
+go run ./cmd/gatewayctl link test
 ```
+
+链路测试说明（不影响真实业务）：
+
+- SIP 控制链路：仅做 TCP 握手或 UDP 监听状态校验，不发送业务 SIP Body。
+- RTP 端口池：只读取当前端口池统计，不分配业务传输任务。
+- HTTP 下游：默认探测 `http://127.0.0.1:18080/healthz`；可通过 `GATEWAY_LINK_TEST_HTTP_TARGET` 指向专用 mock/downstream 健康探针。
+- 统一输出：`passed/failed`、子项结果、`request_id/trace_id`、总耗时，适合运维快速判断。
+
+对应 API：
+
+- `POST /api/ops/link-test`：执行一次链路测试并返回报告。
+- `GET /api/ops/link-test`：查询最近一次链路测试结果（供 UI 展示）。
 
 可选全局参数：
 

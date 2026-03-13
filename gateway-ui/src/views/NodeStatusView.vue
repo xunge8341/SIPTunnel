@@ -86,6 +86,42 @@
         </a-col>
 
         <a-col :xs="24" :lg="12">
+          <a-card size="small" title="一键链路测试">
+            <a-space direction="vertical" size="middle" style="width: 100%">
+              <a-alert type="info" show-icon message="链路测试仅做最小探测，不写入真实业务数据；HTTP 使用 mock/downstream 健康探针。" />
+              <a-space>
+                <a-button type="primary" :loading="runningLinkTest" @click="runLinkTest">执行链路测试</a-button>
+                <a-tag :color="linkTestTagColor">{{ latestLinkTest?.status ?? '未执行' }}</a-tag>
+              </a-space>
+              <a-empty v-if="!latestLinkTest" description="暂无链路测试记录" />
+              <template v-else>
+                <a-descriptions bordered size="small" :column="2">
+                  <a-descriptions-item label="结论">{{ latestLinkTest.status }}</a-descriptions-item>
+                  <a-descriptions-item label="总耗时">{{ latestLinkTest.duration_ms }} ms</a-descriptions-item>
+                  <a-descriptions-item label="request_id">{{ latestLinkTest.request_id }}</a-descriptions-item>
+                  <a-descriptions-item label="trace_id">{{ latestLinkTest.trace_id }}</a-descriptions-item>
+                  <a-descriptions-item label="mock 目标" :span="2">{{ latestLinkTest.mock_target }}</a-descriptions-item>
+                </a-descriptions>
+                <a-list size="small" bordered :data-source="latestLinkTest.items">
+                  <template #renderItem="{ item }">
+                    <a-list-item>
+                      <a-space direction="vertical" size="small" style="width: 100%">
+                        <a-space>
+                          <a-tag :color="item.passed ? 'success' : 'error'">{{ item.status }}</a-tag>
+                          <span>{{ item.name }}</span>
+                          <a-typography-text type="secondary">{{ item.duration_ms }} ms</a-typography-text>
+                        </a-space>
+                        <a-typography-text type="secondary">{{ item.detail }}</a-typography-text>
+                      </a-space>
+                    </a-list-item>
+                  </template>
+                </a-list>
+              </template>
+            </a-space>
+          </a-card>
+        </a-col>
+
+        <a-col :xs="24" :lg="12">
           <a-card size="small" title="导出诊断入口">
             <a-alert
               type="info"
@@ -152,7 +188,7 @@ import { message } from 'ant-design-vue'
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { gatewayApi } from '../api/gateway'
 import StatusPill from '../components/StatusPill.vue'
-import type { DiagnosticExportJob, NodeOpsSnapshot } from '../types/gateway'
+import type { DiagnosticExportJob, NodeOpsSnapshot, OpsLinkTestReport } from '../types/gateway'
 
 const nodes = ref<NodeOpsSnapshot[]>([
   {
@@ -221,10 +257,16 @@ const creating = ref(false)
 const diagRequestId = ref('')
 const diagTraceId = ref('')
 const job = ref<DiagnosticExportJob | null>(null)
+const runningLinkTest = ref(false)
+const latestLinkTest = ref<OpsLinkTestReport | null>(null)
 const polling = ref(false)
 const pollTimer = ref<number | null>(null)
 
 const selectedNode = computed(() => nodes.value.find((item) => item.id === selectedNodeId.value) ?? null)
+const linkTestTagColor = computed(() => {
+  if (!latestLinkTest.value) return 'default'
+  return latestLinkTest.value.passed ? 'success' : 'error'
+})
 
 const fileNameRule = 'diag_{nodeId}_{YYYYMMDDTHHmmssZ}[_req_{request_id}][_trace_{trace_id}]_{jobId}(.zip)，其中 ID 仅保留字母数字/下划线'
 
@@ -268,6 +310,26 @@ const refresh = () => {
     backlog: Math.max(0, node.backlog + (Math.random() > 0.5 ? 8 : -6)),
     concurrency: Math.max(0, node.concurrency + (Math.random() > 0.5 ? 5 : -4))
   }))
+}
+
+const runLinkTest = async () => {
+  runningLinkTest.value = true
+  try {
+    latestLinkTest.value = await gatewayApi.runLinkTest()
+    message.success(`链路测试完成：${latestLinkTest.value.status}`)
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '链路测试失败')
+  } finally {
+    runningLinkTest.value = false
+  }
+}
+
+const loadLatestLinkTest = async () => {
+  try {
+    latestLinkTest.value = await gatewayApi.fetchLatestLinkTest()
+  } catch {
+    latestLinkTest.value = null
+  }
 }
 
 const stopPolling = () => {
@@ -346,6 +408,8 @@ const downloadResult = () => {
 onBeforeUnmount(() => {
   stopPolling()
 })
+
+void loadLatestLinkTest()
 </script>
 
 <style scoped>

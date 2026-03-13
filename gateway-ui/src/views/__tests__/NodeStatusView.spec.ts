@@ -6,7 +6,9 @@ vi.mock('../../api/gateway', () => ({
   gatewayApi: {
     createDiagnosticExport: vi.fn(),
     fetchDiagnosticExport: vi.fn(),
-    retryDiagnosticExport: vi.fn()
+    retryDiagnosticExport: vi.fn(),
+    runLinkTest: vi.fn(),
+    fetchLatestLinkTest: vi.fn()
   }
 }))
 
@@ -36,6 +38,7 @@ const stubs = {
 
 describe('NodeStatusView', () => {
   it('can create and render a diagnostic export job', async () => {
+    vi.mocked(gatewayApi.fetchLatestLinkTest).mockRejectedValue(new Error('no report'))
     vi.mocked(gatewayApi.createDiagnosticExport).mockResolvedValue({
       jobId: 'diag-001',
       nodeId: 'gateway-a-01',
@@ -74,7 +77,9 @@ describe('NodeStatusView', () => {
     })
 
     const wrapper = mount(NodeStatusView, { global: { stubs } })
-    await wrapper.findAll('button')[1].trigger('click')
+    const exportButton = wrapper.findAll('button').find((btn) => btn.text().includes('导出诊断包'))
+    expect(exportButton).toBeTruthy()
+    await exportButton!.trigger('click')
     await flushPromises()
 
     expect(gatewayApi.createDiagnosticExport).toHaveBeenCalledWith({ nodeId: "gateway-a-01", requestId: undefined, traceId: undefined })

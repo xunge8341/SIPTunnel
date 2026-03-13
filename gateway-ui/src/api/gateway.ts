@@ -34,7 +34,8 @@ import type {
   DiagnosticExportCreatePayload,
   DiagnosticExportJob,
   DeploymentModePayload,
-  StartupSummaryPayload
+  StartupSummaryPayload,
+  OpsLinkTestReport
 } from '../types/gateway'
 
 const useMock = import.meta.env.VITE_API_MODE !== 'real'
@@ -302,5 +303,27 @@ export const gatewayApi = {
       page: result.pagination.page,
       pageSize: result.pagination.page_size
     }
+  },
+  async runLinkTest() {
+    if (useMock) {
+      return {
+        passed: true,
+        status: 'passed',
+        request_id: 'req-link-mock-001',
+        trace_id: 'trace-link-mock-001',
+        duration_ms: 42,
+        checked_at: new Date().toISOString(),
+        mock_target: 'http://127.0.0.1:18080/healthz',
+        items: [
+          { name: 'sip_control', passed: true, status: 'passed', detail: 'SIP TCP 控制面握手成功（无业务载荷）', duration_ms: 11 },
+          { name: 'rtp_port_pool', passed: true, status: 'passed', detail: 'RTP 端口池可用: 874/1000', duration_ms: 8 },
+          { name: 'http_downstream', passed: true, status: 'passed', detail: 'HTTP mock/downstream 探测成功', duration_ms: 23 }
+        ]
+      } as OpsLinkTestReport
+    }
+    return unwrap(request<OpsLinkTestReport>('/ops/link-test', { method: 'POST' }))
+  },
+  async fetchLatestLinkTest() {
+    return unwrap(request<OpsLinkTestReport>('/ops/link-test', { method: 'GET' }))
   }
 }

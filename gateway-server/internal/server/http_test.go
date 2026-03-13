@@ -246,6 +246,39 @@ func TestSelfCheckEndpointFilterByLevel(t *testing.T) {
 	}
 }
 
+func TestLinkTestEndpoint(t *testing.T) {
+	h, _, audit := buildTestHandler(t)
+
+	runReq := httptest.NewRequest(http.MethodPost, "/api/ops/link-test", nil)
+	runReq.Header.Set("X-Initiator", "ops-link")
+	runRR := httptest.NewRecorder()
+	h.ServeHTTP(runRR, runReq)
+	if runRR.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", runRR.Code, runRR.Body.String())
+	}
+	if !strings.Contains(runRR.Body.String(), "request_id") || !strings.Contains(runRR.Body.String(), "trace_id") {
+		t.Fatalf("missing ids in response: %s", runRR.Body.String())
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/ops/link-test", nil)
+	getRR := httptest.NewRecorder()
+	h.ServeHTTP(getRR, getReq)
+	if getRR.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", getRR.Code, getRR.Body.String())
+	}
+	if !strings.Contains(getRR.Body.String(), "http_downstream") {
+		t.Fatalf("unexpected response: %s", getRR.Body.String())
+	}
+
+	events, err := audit.List(t.Context(), observability.AuditQuery{Who: "ops-link", Limit: 10})
+	if err != nil {
+		t.Fatalf("query audit failed: %v", err)
+	}
+	if len(events) == 0 || events[0].OpsAction != "RUN_LINK_TEST" {
+		t.Fatalf("unexpected audit events: %+v", events)
+	}
+}
+
 func TestDiagnosticsExportEndpointWithFilters(t *testing.T) {
 	h, repo, audit := buildTestHandler(t)
 	now := time.Now().UTC()

@@ -118,6 +118,28 @@ func TestRunConfigValidateMissingFlag(t *testing.T) {
 	}
 }
 
+func TestRunLinkTestJSON(t *testing.T) {
+	t.Parallel()
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/ops/link-test" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"code":"OK","message":"success","data":{"passed":true,"status":"passed","request_id":"req-1","trace_id":"trace-1","duration_ms":12,"checked_at":"2026-03-12T00:00:00Z","mock_target":"http://127.0.0.1:18080/healthz","items":[{"name":"sip_control","passed":true,"status":"passed","detail":"ok","duration_ms":3}]}}`))
+	}))
+	defer ts.Close()
+
+	var out bytes.Buffer
+	var errOut bytes.Buffer
+	err := run([]string{"--server", ts.URL, "--output", "json", "link", "test"}, &out, &errOut)
+	if err != nil {
+		t.Fatalf("run err = %v", err)
+	}
+	if !strings.Contains(out.String(), `"request_id": "req-1"`) {
+		t.Fatalf("unexpected output: %s", out.String())
+	}
+}
+
 func TestGetAPITimeout(t *testing.T) {
 	t.Parallel()
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
