@@ -476,6 +476,12 @@ cd gateway-server && go test ./...
 cd gateway-ui && npm run test -- --run
 ```
 
+## CI/CD 质量门禁
+
+- 主线 CI（单元测试/协议编解码/e2e smoke/网络配置校验/benchmark smoke）：`.github/workflows/ci.yml`
+- 发布前门禁（回归套件/自检/诊断采样）与夜间重压任务：`.github/workflows/pre-release.yml`
+- 详细说明：`docs/ci.md`
+
 ## 运维页面覆盖
 
 - Dashboard：成功率/失败率/并发等指标总览（值班动作见 `docs/oncall-handbook.md`）

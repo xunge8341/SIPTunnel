@@ -1,0 +1,52 @@
+name: Pre-Release Gates
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * *'
+
+jobs:
+  prerelease-gates:
+    name: Pre-release Regression + Selfcheck + Diagnostics
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: gateway-server/go.mod
+      - name: Run pre-release gates
+        run: ./scripts/ci/run_prerelease_checks.sh
+      - name: Upload pre-release artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prerelease-gates-artifacts
+          path: artifacts/ci
+          if-no-files-found: warn
+
+  nightly-heavy:
+    name: Nightly heavy suite (manual/schedule only)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: gateway-server/go.mod
+      - name: Longrun smoke
+        run: ./scripts/longrun/smoke.sh
+      - name: Full repository test
+        run: |
+          cd gateway-server
+          go test ./... -count=1
+      - name: Upload heavy-suite artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-heavy-artifacts
+          path: |
+            artifacts
+            gateway-server/tests/longrun/output
+          if-no-files-found: warn
