@@ -22,6 +22,11 @@ type prometheusRuleFile struct {
 
 type grafanaDashboard struct {
 	Title  string `json:"title"`
+	Templating struct {
+		List []struct {
+			Name string `json:"name"`
+		} `json:"list"`
+	} `json:"templating"`
 	Panels []struct {
 		Title string `json:"title"`
 	} `json:"panels"`
@@ -61,7 +66,7 @@ func TestPrometheusAlertRulesCoverage(t *testing.T) {
 	for _, group := range rules.Groups {
 		for _, rule := range group.Rules {
 			delete(requiredAlerts, rule.Alert)
-			for _, label := range []string{"severity", "team", "service", "category"} {
+			for _, label := range []string{"severity", "team", "service", "component", "category"} {
 				if rule.Labels[label] == "" {
 					t.Fatalf("alert %s missing label %s", rule.Alert, label)
 				}
@@ -105,6 +110,17 @@ func TestGrafanaDashboardCoverage(t *testing.T) {
 
 	for _, panel := range dashboard.Panels {
 		delete(requiredPanels, panel.Title)
+	}
+
+	hasInstanceVariable := false
+	for _, variable := range dashboard.Templating.List {
+		if variable.Name == "instance" {
+			hasInstanceVariable = true
+			break
+		}
+	}
+	if !hasInstanceVariable {
+		t.Fatal("dashboard missing instance variable")
 	}
 
 	if len(requiredPanels) > 0 {
