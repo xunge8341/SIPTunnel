@@ -12,7 +12,8 @@ import {
   createDiagnosticExportMock,
   getDiagnosticExportMock,
   retryDiagnosticExportMock,
-  fetchDeploymentModeMock
+  fetchDeploymentModeMock,
+  fetchStartupSummaryMock
 } from './mockGateway'
 import type {
   CommandTask,
@@ -32,7 +33,8 @@ import type {
   ConfigSnapshotFilters,
   DiagnosticExportCreatePayload,
   DiagnosticExportJob,
-  DeploymentModePayload
+  DeploymentModePayload,
+  StartupSummaryPayload
 } from '../types/gateway'
 
 const useMock = import.meta.env.VITE_API_MODE !== 'real'
@@ -259,6 +261,14 @@ export const gatewayApi = {
       return fetchDeploymentModeMock()
     }
     return unwrap(request<DeploymentModePayload>('/system/deployment-mode', { method: 'GET' }))
+  },
+
+
+  async fetchStartupSummary() {
+    if (useMock) {
+      return fetchStartupSummaryMock()
+    }
+    return unwrap(request<StartupSummaryPayload>('/startup-summary', { method: 'GET' }))
   },
 
   fetchLimits() {

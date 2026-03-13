@@ -171,7 +171,7 @@ func main() {
 	if report.Overall == selfcheck.LevelError {
 		log.Fatal("environment self-check failed, please fix errors before startup")
 	}
-	unifiedSummary = buildStartupSummary(nodeID, cfgLoad, uiCfg, selfCheckInput.NetworkConfig, paths, defaultPort, rtpTransport.Mode(), report)
+	unifiedSummary = buildStartupSummary(nodeID, cfgLoad, uiCfg, selfCheckInput.NetworkConfig, paths, defaultPort, rtpTransport.Mode(), report, len(selfCheckInput.DownstreamRoutes))
 
 	if closer != nil {
 		defer func() {
@@ -247,7 +247,7 @@ func buildSelfCheckInput(paths config.StoragePaths, cliConfigPath string, defaul
 	return in, runtimeCfg.UI, cfgLoad
 }
 
-func buildStartupSummary(nodeID string, cfgLoad configLoadResult, uiCfg config.UIConfig, networkCfg config.NetworkConfig, storagePaths config.StoragePaths, defaultPort string, currentTransport string, report selfcheck.Report) startupsummary.Summary {
+func buildStartupSummary(nodeID string, cfgLoad configLoadResult, uiCfg config.UIConfig, networkCfg config.NetworkConfig, storagePaths config.StoragePaths, defaultPort string, currentTransport string, report selfcheck.Report, routeCount int) startupsummary.Summary {
 	apiURL := fmt.Sprintf("http://127.0.0.1:%s/api", defaultPort)
 	uiURL := "disabled"
 	if uiCfg.Mode == "embedded" {
@@ -261,6 +261,15 @@ func buildStartupSummary(nodeID string, cfgLoad configLoadResult, uiCfg config.U
 		}
 	} else if uiCfg.Enabled {
 		uiURL = "external"
+	}
+
+	businessState := "active"
+	businessMessage := "业务执行层已激活，下游 HTTP 路由映射可用"
+	businessImpact := "A 网 HTTP 落地可执行"
+	if routeCount <= 0 {
+		businessState = "protocol_only"
+		businessMessage = "协议层可启动，业务执行层未激活（未加载下游 HTTP 路由）"
+		businessImpact = "仅完成 SIP/RTP 协议交互，不会执行 A 网 HTTP 落地"
 	}
 
 	return startupsummary.Summary{
@@ -285,6 +294,12 @@ func buildStartupSummary(nodeID string, cfgLoad configLoadResult, uiCfg config.U
 			FinalDir: storagePaths.FinalDir,
 			AuditDir: storagePaths.AuditDir,
 			LogDir:   storagePaths.LogDir,
+		},
+		BusinessExecution: startupsummary.BusinessExecutionStatus{
+			State:      businessState,
+			RouteCount: routeCount,
+			Message:    businessMessage,
+			Impact:     businessImpact,
 		},
 		SelfCheckSummary: startupsummary.SelfCheckSummary{
 			GeneratedAt: report.GeneratedAt.UTC().Format(time.RFC3339),

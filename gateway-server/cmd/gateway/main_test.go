@@ -50,6 +50,7 @@ func TestBuildStartupSummary(t *testing.T) {
 		"18080",
 		"udp",
 		selfCheckReportForTest(),
+		0,
 	)
 	if summary.NodeID != "gateway-a-01" {
 		t.Fatalf("node_id=%q", summary.NodeID)
@@ -74,6 +75,9 @@ func TestBuildStartupSummary(t *testing.T) {
 	}
 	if summary.SelfCheckSummary.Overall != "info" {
 		t.Fatalf("self_check_summary=%+v", summary.SelfCheckSummary)
+	}
+	if summary.BusinessExecution.State != "protocol_only" || summary.BusinessExecution.RouteCount != 0 {
+		t.Fatalf("business_execution=%+v", summary.BusinessExecution)
 	}
 }
 
