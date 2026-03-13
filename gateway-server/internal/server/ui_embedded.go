@@ -1,16 +1,18 @@
 package server
 
 import (
+	"bytes"
 	"embed"
 	"io"
 	"io/fs"
 	"mime"
 	"net/http"
 	"path"
+	"strconv"
 	"strings"
 )
 
-//go:embed embedded-ui/* embedded-ui/assets/*
+//go:embed embedded-ui/* embedded-ui/assets/* embedded-ui/errors/*
 var embeddedUIFS embed.FS
 
 type EmbeddedUIOptions struct {
@@ -63,7 +65,7 @@ func NewEmbeddedUIFallbackHandler(apiHandler http.Handler, opts EmbeddedUIOption
 			return
 		}
 		if strings.Contains(path.Base(target), ".") {
-			apiHandler.ServeHTTP(w, r)
+			serveFriendlyErrorPage(w, r, staticFS, http.StatusNotFound)
 			return
 		}
 		r2 := r.Clone(r.Context())
@@ -71,7 +73,7 @@ func NewEmbeddedUIFallbackHandler(apiHandler http.Handler, opts EmbeddedUIOption
 		if serveEmbeddedFile(w, r2, staticFS, "index.html") {
 			return
 		}
-		staticHandler.ServeHTTP(w, r2)
+		serveFriendlyErrorPage(w, r2, staticFS, http.StatusInternalServerError)
 	}), nil
 }
 
@@ -85,13 +87,58 @@ func serveEmbeddedFile(w http.ResponseWriter, r *http.Request, staticFS fs.FS, n
 	if err != nil {
 		return false
 	}
+	setEmbeddedUICacheHeader(w, name)
 	if ext := path.Ext(name); ext != "" {
 		if ct := mime.TypeByExtension(ext); ct != "" {
 			w.Header().Set("Content-Type", ct)
 		}
 	}
-	_, _ = w.Write(data)
+	if strings.HasSuffix(name, ".html") {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	}
+	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	if r.Method == http.MethodHead {
+		return true
+	}
+	_, _ = io.Copy(w, bytes.NewReader(data))
 	return true
+}
+
+func serveFriendlyErrorPage(w http.ResponseWriter, r *http.Request, staticFS fs.FS, status int) {
+	name := "errors/404.html"
+	if status == http.StatusInternalServerError {
+		name = "errors/500.html"
+	}
+	f, err := staticFS.Open(name)
+	if err != nil {
+		http.Error(w, http.StatusText(status), status)
+		return
+	}
+	defer func() { _ = f.Close() }()
+	data, err := io.ReadAll(f)
+	if err != nil {
+		http.Error(w, http.StatusText(status), status)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(status)
+	if r.Method == http.MethodHead {
+		return
+	}
+	_, _ = w.Write(data)
+}
+
+func setEmbeddedUICacheHeader(w http.ResponseWriter, name string) {
+	if name == "index.html" || strings.HasPrefix(name, "errors/") {
+		w.Header().Set("Cache-Control", "no-store")
+		return
+	}
+	if strings.HasPrefix(name, "assets/") || name == "favicon.ico" || name == "favicon.svg" {
+		w.Header().Set("Cache-Control", "public, max-age=604800, immutable")
+		return
+	}
+	w.Header().Set("Cache-Control", "public, max-age=3600")
 }
 
 func normalizeUIBasePath(raw string) string {
