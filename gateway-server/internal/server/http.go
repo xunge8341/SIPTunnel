@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -118,6 +119,22 @@ type RTPNetworkStatus struct {
 	TCPSessionsTotal    uint64 `json:"rtp_tcp_sessions_total"`
 	TCPReadErrorsTotal  uint64 `json:"rtp_tcp_read_errors_total"`
 	TCPWriteErrorsTotal uint64 `json:"rtp_tcp_write_errors_total"`
+}
+
+type DiagnosticExportData struct {
+	GeneratedAt time.Time  `json:"generated_at"`
+	NodeID      string     `json:"node_id"`
+	RequestID   string     `json:"request_id,omitempty"`
+	TraceID     string     `json:"trace_id,omitempty"`
+	FileName    string     `json:"file_name"`
+	OutputDir   string     `json:"output_dir"`
+	Files       []DiagFile `json:"files"`
+}
+
+type DiagFile struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Content     any    `json:"content"`
 }
 
 type updateLimitsRequest struct {
@@ -276,6 +293,7 @@ func newMux(deps handlerDeps) http.Handler {
 	mux.HandleFunc("/api/audits", deps.handleAudits)
 	mux.HandleFunc("/api/selfcheck", deps.handleSelfCheck)
 	mux.HandleFunc("/api/node/network-status", deps.handleNodeNetworkStatus)
+	mux.HandleFunc("/api/diagnostics/export", deps.handleDiagnosticsExport)
 	mux.HandleFunc("/api/capacity/recommendation", deps.handleCapacityRecommendation)
 	return deps.withObservability(mux)
 }
@@ -693,6 +711,82 @@ func (d handlerDeps) handleNodeNetworkStatus(w http.ResponseWriter, r *http.Requ
 	status := d.networkStatusFunc(r.Context())
 	d.recordOpsAudit(r, readOperator(r), "QUERY_NODE_NETWORK_STATUS", map[string]any{"path": r.URL.Path})
 	writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: status})
+}
+
+func (d handlerDeps) handleDiagnosticsExport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
+		return
+	}
+	requestID := strings.TrimSpace(r.URL.Query().Get("request_id"))
+	traceID := strings.TrimSpace(r.URL.Query().Get("trace_id"))
+	status := d.networkStatusFunc(r.Context())
+	nodeID := "gateway"
+	if len(d.nodes) > 0 && strings.TrimSpace(d.nodes[0].NodeID) != "" {
+		nodeID = d.nodes[0].NodeID
+	}
+	generatedAt := time.Now().UTC()
+	prefix := fmt.Sprintf("diag_%s_%s", strings.ReplaceAll(nodeID, "-", "_"), generatedAt.Format("20060102T150405Z"))
+	if requestID != "" {
+		prefix += "_req_" + requestID
+	}
+	if traceID != "" {
+		prefix += "_trace_" + traceID
+	}
+
+	tasks, _ := d.repo.ListTasks(r.Context(), repository.TaskFilter{Status: repository.TaskStatusFailed, RequestID: requestID, TraceID: traceID, Limit: 20})
+	taskSummary := make([]map[string]any, 0, len(tasks))
+	for _, task := range tasks {
+		taskSummary = append(taskSummary, map[string]any{
+			"id":          task.ID,
+			"request_id":  task.RequestID,
+			"trace_id":    task.TraceID,
+			"api_code":    task.APICode,
+			"status":      task.Status,
+			"result_code": task.ResultCode,
+			"updated_at":  task.UpdatedAt.UTC().Format(time.RFC3339),
+			"last_error":  maskText(task.LastError),
+		})
+	}
+
+	audits, _ := d.audit.List(r.Context(), observability.AuditQuery{RequestID: requestID, TraceID: traceID, Limit: 50})
+	rateLimitHits := make([]map[string]any, 0, 20)
+	for _, evt := range audits {
+		if !strings.Contains(strings.ToUpper(evt.FinalResult), "RATE_LIMIT") {
+			continue
+		}
+		rateLimitHits = append(rateLimitHits, map[string]any{
+			"when":       evt.When.UTC().Format(time.RFC3339),
+			"request_id": evt.Core.RequestID,
+			"trace_id":   evt.Core.TraceID,
+			"api_code":   evt.Core.APICode,
+			"result":     evt.FinalResult,
+		})
+	}
+
+	files := []DiagFile{
+		{Name: "README.md", Description: "诊断包文件说明", Content: map[string]any{"note": "按文件名前缀顺序阅读；字段已做脱敏处理，敏感值展示摘要。"}},
+		{Name: "01_transport_config.json", Description: "当前 transport 配置", Content: map[string]any{"sip": map[string]any{"listen_ip": status.SIP.ListenIP, "listen_port": status.SIP.ListenPort, "transport": status.SIP.Transport}, "rtp": map[string]any{"listen_ip": status.RTP.ListenIP, "port_start": status.RTP.PortStart, "port_end": status.RTP.PortEnd, "transport": status.RTP.Transport}}},
+		{Name: "02_connection_stats_snapshot.json", Description: "连接统计快照", Content: map[string]any{"sip": map[string]any{"current_sessions": status.SIP.CurrentSessions, "current_connections": status.SIP.CurrentConnections, "accepted_connections_total": status.SIP.AcceptedConnectionsTotal, "closed_connections_total": status.SIP.ClosedConnectionsTotal, "read_timeout_total": status.SIP.ReadTimeoutTotal, "write_timeout_total": status.SIP.WriteTimeoutTotal, "connection_error_total": status.SIP.ConnectionErrorTotal}, "rtp": map[string]any{"active_transfers": status.RTP.ActiveTransfers, "rtp_tcp_sessions_current": status.RTP.TCPSessionsCurrent, "rtp_tcp_sessions_total": status.RTP.TCPSessionsTotal, "rtp_tcp_read_errors_total": status.RTP.TCPReadErrorsTotal, "rtp_tcp_write_errors_total": status.RTP.TCPWriteErrorsTotal}}},
+		{Name: "03_port_pool_status.json", Description: "端口池状态", Content: map[string]any{"used_ports": status.RTP.UsedPorts, "available_ports": status.RTP.AvailablePorts, "rtp_port_pool_total": status.RTP.PortPoolTotal, "rtp_port_pool_used": status.RTP.PortPoolUsed, "rtp_port_alloc_fail_total": status.RTP.PortAllocFailTotal}},
+		{Name: "04_transport_error_summary.json", Description: "最近 transport 错误摘要", Content: map[string]any{"recent_bind_errors": status.RecentBindErrors, "recent_network_errors": status.RecentNetworkErrors}},
+		{Name: "05_task_failure_summary.json", Description: "最近 task failure 摘要", Content: taskSummary},
+		{Name: "06_rate_limit_hit_summary.json", Description: "最近 rate limit 命中摘要", Content: rateLimitHits},
+		{Name: "07_profile_entry.json", Description: "profile 采集入口信息（如果启用）", Content: map[string]any{"enabled": strings.EqualFold(strings.TrimSpace(os.Getenv("GATEWAY_PPROF_ENABLED")), "true") || strings.TrimSpace(os.Getenv("GATEWAY_PPROF_ENABLED")) == "1", "listen_address": strings.TrimSpace(os.Getenv("GATEWAY_PPROF_LISTEN_ADDR")), "profile_url": "/debug/pprof/profile"}},
+	}
+	d.recordOpsAudit(r, readOperator(r), "EXPORT_DIAGNOSTICS", map[string]any{"request_id": requestID, "trace_id": traceID})
+	writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: DiagnosticExportData{GeneratedAt: generatedAt, NodeID: nodeID, RequestID: requestID, TraceID: traceID, FileName: prefix + ".zip", OutputDir: prefix, Files: files}})
+}
+
+func maskText(v string) string {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return ""
+	}
+	if len(v) <= 12 {
+		return "***"
+	}
+	return v[:12] + "***"
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload responseEnvelope) {

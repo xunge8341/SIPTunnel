@@ -76,13 +76,21 @@ func TestCollectDiagnostics(t *testing.T) {
 			_, _ = w.Write([]byte(`{"code":"OK","message":"success","data":{"rps":200}}`))
 		case "/api/routes":
 			_, _ = w.Write([]byte(`{"code":"OK","message":"success","data":{"items":[]}}`))
+		case "/api/diagnostics/export":
+			if r.URL.Query().Get("request_id") != "req-1" {
+				t.Fatalf("request_id = %s", r.URL.Query().Get("request_id"))
+			}
+			if r.URL.Query().Get("trace_id") != "trace-1" {
+				t.Fatalf("trace_id = %s", r.URL.Query().Get("trace_id"))
+			}
+			_, _ = w.Write([]byte(`{"code":"OK","message":"success","data":{"generated_at":"2026-03-12T00:00:00Z","node_id":"gateway-a-01","request_id":"req-1","trace_id":"trace-1","file_name":"diag_gateway_a_01_20260312T000000Z_req_req-1_trace_trace-1.zip","output_dir":"diag_gateway_a_01_20260312T000000Z_req_req-1_trace_trace-1","files":[]}}`))
 		default:
 			t.Fatalf("unexpected endpoint: %s", r.URL.Path)
 		}
 	}))
 	defer ts.Close()
 
-	bundle, err := collectDiagnostics(context.Background(), ts.URL)
+	bundle, err := collectDiagnostics(context.Background(), ts.URL, "req-1", "trace-1")
 	if err != nil {
 		t.Fatalf("collectDiagnostics err = %v", err)
 	}
@@ -91,6 +99,9 @@ func TestCollectDiagnostics(t *testing.T) {
 	}
 	if bundle.Node.SIP.Transport != "TCP" {
 		t.Fatalf("sip transport = %s", bundle.Node.SIP.Transport)
+	}
+	if bundle.Export.RequestID != "req-1" || bundle.Export.TraceID != "trace-1" {
+		t.Fatalf("unexpected export filter: %+v", bundle.Export)
 	}
 }
 

@@ -83,7 +83,7 @@
             <a-alert
               type="info"
               show-icon
-              message="导出内容含配置快照、节点状态、失败任务、日志索引、告警摘要，适合排障时直接打包传递。"
+              message="导出内容含 transport 配置、连接统计、端口池、transport 错误、task failure、rate limit 与 profile 入口信息，适合排障打包。"
             />
             <a-space direction="vertical" size="middle" style="width: 100%; margin-top: 12px">
               <div class="diagnostic-toolbar">
@@ -92,6 +92,8 @@
                   <a-select v-model:value="selectedNodeId" style="min-width: 180px">
                     <a-select-option v-for="node in nodes" :key="node.id" :value="node.id">{{ node.id }}</a-select-option>
                   </a-select>
+                  <a-input v-model:value="diagRequestId" allow-clear placeholder="request_id（可选）" style="width: 180px" />
+                  <a-input v-model:value="diagTraceId" allow-clear placeholder="trace_id（可选）" style="width: 180px" />
                   <a-button type="primary" :loading="creating" @click="startExport">导出诊断包</a-button>
                 </a-space>
                 <a-typography-text type="secondary">文件命名：{{ fileNameRule }}</a-typography-text>
@@ -209,13 +211,15 @@ const nodes = ref<NodeOpsSnapshot[]>([
 
 const selectedNodeId = ref(nodes.value[0]?.id ?? '')
 const creating = ref(false)
+const diagRequestId = ref('')
+const diagTraceId = ref('')
 const job = ref<DiagnosticExportJob | null>(null)
 const polling = ref(false)
 const pollTimer = ref<number | null>(null)
 
 const selectedNode = computed(() => nodes.value.find((item) => item.id === selectedNodeId.value) ?? null)
 
-const fileNameRule = 'diag_{nodeId}_{YYYYMMDDTHHmmss}_{jobId}.zip'
+const fileNameRule = 'diag_{nodeId}_{YYYYMMDDTHHmmssZ}[_req_{request_id}][_trace_{trace_id}]_{jobId}.zip'
 
 const statusTextMap: Record<DiagnosticExportJob['status'], string> = {
   pending: '排队中',
@@ -296,7 +300,11 @@ const startExport = async () => {
   }
   creating.value = true
   try {
-    job.value = await gatewayApi.createDiagnosticExport({ nodeId: selectedNodeId.value })
+    job.value = await gatewayApi.createDiagnosticExport({
+      nodeId: selectedNodeId.value,
+      requestId: diagRequestId.value.trim() || undefined,
+      traceId: diagTraceId.value.trim() || undefined
+    })
     startPolling()
     void refreshJob()
   } catch (error) {

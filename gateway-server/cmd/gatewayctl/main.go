@@ -42,13 +42,14 @@ type taskListResponse struct {
 }
 
 type diagBundle struct {
-	GeneratedAt    time.Time                `json:"generated_at"`
-	GatewayBaseURL string                   `json:"gateway_base_url"`
-	Health         map[string]any           `json:"health"`
-	Node           server.NodeNetworkStatus `json:"node"`
-	SelfCheck      selfcheck.Report         `json:"self_check"`
-	Limits         map[string]any           `json:"limits"`
-	Routes         map[string]any           `json:"routes"`
+	GeneratedAt    time.Time                   `json:"generated_at"`
+	GatewayBaseURL string                      `json:"gateway_base_url"`
+	Health         map[string]any              `json:"health"`
+	Node           server.NodeNetworkStatus    `json:"node"`
+	SelfCheck      selfcheck.Report            `json:"self_check"`
+	Limits         map[string]any              `json:"limits"`
+	Routes         map[string]any              `json:"routes"`
+	Export         server.DiagnosticExportData `json:"diagnostic_export"`
 }
 
 func main() {
@@ -252,12 +253,14 @@ func runDiagCommand(args []string, opts cliOptions, stdout, stderr io.Writer) er
 	fs := flag.NewFlagSet("gatewayctl diag export", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	outFile := fs.String("out", "", "write diagnostic JSON to file")
+	requestID := fs.String("request-id", "", "filter diagnostics by request_id")
+	traceID := fs.String("trace-id", "", "filter diagnostics by trace_id")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), opts.timeout)
 	defer cancel()
-	bundle, err := collectDiagnostics(ctx, opts.baseURL)
+	bundle, err := collectDiagnostics(ctx, opts.baseURL, strings.TrimSpace(*requestID), strings.TrimSpace(*traceID))
 	if err != nil {
 		return err
 	}
@@ -287,7 +290,7 @@ func runDiagCommand(args []string, opts cliOptions, stdout, stderr io.Writer) er
 	return nil
 }
 
-func collectDiagnostics(ctx context.Context, baseURL string) (diagBundle, error) {
+func collectDiagnostics(ctx context.Context, baseURL, requestID, traceID string) (diagBundle, error) {
 	bundle := diagBundle{GeneratedAt: time.Now().UTC(), GatewayBaseURL: baseURL}
 	if err := getAPI(ctx, baseURL, "/healthz", nil, &bundle.Health); err != nil {
 		return diagBundle{}, fmt.Errorf("获取 healthz 失败: %w", err)
@@ -303,6 +306,16 @@ func collectDiagnostics(ctx context.Context, baseURL string) (diagBundle, error)
 	}
 	if err := getAPI(ctx, baseURL, "/api/routes", nil, &bundle.Routes); err != nil {
 		return diagBundle{}, fmt.Errorf("获取 routes 失败: %w", err)
+	}
+	query := map[string]string{}
+	if requestID != "" {
+		query["request_id"] = requestID
+	}
+	if traceID != "" {
+		query["trace_id"] = traceID
+	}
+	if err := getAPI(ctx, baseURL, "/api/diagnostics/export", query, &bundle.Export); err != nil {
+		return diagBundle{}, fmt.Errorf("获取 diagnostics export 失败: %w", err)
 	}
 	return bundle, nil
 }
@@ -380,7 +393,7 @@ func printRootUsage(w io.Writer) {
 	fmt.Fprintln(w, "  config validate -f <config.yaml>")
 	fmt.Fprintln(w, "  node inspect")
 	fmt.Fprintln(w, "  task query --request-id <id>")
-	fmt.Fprintln(w, "  diag export [--out diagnostics.json]")
+	fmt.Fprintln(w, "  diag export [--request-id <id>] [--trace-id <id>] [--out diagnostics.json]")
 }
 
 func printConfigUsage(w io.Writer) {
@@ -396,5 +409,5 @@ func printTaskUsage(w io.Writer) {
 }
 
 func printDiagUsage(w io.Writer) {
-	fmt.Fprintln(w, "Usage: gatewayctl diag export [--out diagnostics.json]")
+	fmt.Fprintln(w, "Usage: gatewayctl diag export [--request-id <id>] [--trace-id <id>] [--out diagnostics.json]")
 }

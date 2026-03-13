@@ -268,10 +268,19 @@ export type DiagnosticExportStatus = 'pending' | 'collecting' | 'packaging' | 's
 
 export interface DiagnosticExportCreatePayload {
   nodeId: string
+  requestId?: string
+  traceId?: string
 }
 
 export interface DiagnosticExportSection {
-  key: 'config_snapshot' | 'node_runtime' | 'failed_tasks' | 'log_index' | 'alerts_summary'
+  key:
+    | 'transport_config'
+    | 'connection_stats_snapshot'
+    | 'port_pool_status'
+    | 'transport_error_summary'
+    | 'task_failure_summary'
+    | 'rate_limit_hit_summary'
+    | 'profile_entry'
   label: string
   done: boolean
 }
