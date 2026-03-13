@@ -207,6 +207,30 @@ make gen-config-docs
 
 CI 同步加入 benchmark smoke（低强度），用于持续校验关键基准可执行性。
 
+
+## 发布前回归测试套件
+
+统一入口：
+
+```bash
+./scripts/regression.sh [local|smoke|full]
+```
+
+- `local`：本地可跑简版回归。
+- `smoke`：CI 可跑 smoke 版。
+- `full`：发布机可跑完整版（含 `go test ./...`）。
+
+详细说明见：`docs/release-regression.md`。
+
+## 上线前检查清单
+
+- [ ] 执行 `./scripts/regression.sh local`，本地回归通过。
+- [ ] 执行 `./scripts/regression.sh smoke`，CI smoke 回归通过。
+- [ ] 发布机执行 `./scripts/regression.sh full`，全量回归通过。
+- [ ] 在最新回归报告中确认 command/file/SIP TCP/RTP UDP/RTP TCP（若实现）/配置校验/自检/关键 API smoke 全部 PASS。
+- [ ] 确认 `go test ./...` 通过。
+- [ ] 检查 `artifacts/regression/` 中 Markdown 与 JSON 报告完整可追溯。
+
 ## 性能诊断（pprof）
 
 网关新增了可控 pprof 诊断能力，默认关闭，必须同时满足以下条件才可开启：
