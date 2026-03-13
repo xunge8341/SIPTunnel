@@ -26,6 +26,8 @@ func main() {
 		httpURL      = flag.String("http-url", "http://127.0.0.1:18080/demo/process", "A网HTTP invoke URL")
 		outputDir    = flag.String("output-dir", "./loadtest/results", "结果输出目录")
 		timeout      = flag.Duration("timeout", 3*time.Second, "单请求超时")
+		gatewayBase  = flag.String("gateway-base-url", "", "网关管理面地址，用于采集运维诊断快照；为空时按 http-url 自动推导")
+		diagInterval = flag.Duration("diag-interval", 15*time.Second, "压测期间诊断采样间隔，0 表示仅采集首尾快照")
 		analyzeFile  = flag.String("analyze-summary", "", "读取 summary.json 并输出容量评估建议")
 		currentCmd   = flag.Int("current-command-max-concurrent", 100, "当前命令并发上限")
 		currentFile  = flag.Int("current-file-max-concurrent", 60, "当前文件传输并发上限")
@@ -56,18 +58,20 @@ func main() {
 	}
 
 	cfg := loadtest.Config{
-		Targets:      normalizeTargets(strings.Split(*targets, ","), *transferMode),
-		Concurrency:  *concurrency,
-		QPS:          *qps,
-		Duration:     *duration,
-		FileSize:     *fileSize,
-		ChunkSize:    *chunkSize,
-		TransferMode: strings.ToLower(strings.TrimSpace(*transferMode)),
-		SIPAddress:   *sipAddress,
-		RTPAddress:   *rtpAddress,
-		HTTPURL:      *httpURL,
-		OutputDir:    *outputDir,
-		Timeout:      *timeout,
+		Targets:            normalizeTargets(strings.Split(*targets, ","), *transferMode),
+		Concurrency:        *concurrency,
+		QPS:                *qps,
+		Duration:           *duration,
+		FileSize:           *fileSize,
+		ChunkSize:          *chunkSize,
+		TransferMode:       strings.ToLower(strings.TrimSpace(*transferMode)),
+		SIPAddress:         *sipAddress,
+		RTPAddress:         *rtpAddress,
+		HTTPURL:            *httpURL,
+		OutputDir:          *outputDir,
+		Timeout:            *timeout,
+		GatewayBaseURL:     *gatewayBase,
+		DiagnosticInterval: *diagInterval,
 	}
 
 	report, err := loadtest.Run(context.Background(), cfg)
@@ -78,6 +82,8 @@ func main() {
 
 	fmt.Printf("Loadtest done. run_id=%s\n", report.RunID)
 	fmt.Printf("Result file: %s\n", report.ResultFile)
+	fmt.Printf("Report file: %s\n", report.ReportFile)
+	fmt.Printf("Diagnostics snapshots: %d\n", len(report.Diagnostics))
 	for _, t := range cfg.Targets {
 		s := report.Summaries[t]
 		fmt.Printf("[%s] total=%d success=%.2f%% throughput=%.2f/s p50=%.2fms p95=%.2fms p99=%.2fms errors=%v\n",

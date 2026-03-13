@@ -10,13 +10,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	mrand "math/rand"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -28,18 +31,20 @@ import (
 const sipHeaderTerminator = "\r\n\r\n"
 
 type Config struct {
-	Targets      []string
-	Concurrency  int
-	QPS          int
-	Duration     time.Duration
-	FileSize     int
-	ChunkSize    int
-	TransferMode string
-	SIPAddress   string
-	RTPAddress   string
-	HTTPURL      string
-	OutputDir    string
-	Timeout      time.Duration
+	Targets            []string
+	Concurrency        int
+	QPS                int
+	Duration           time.Duration
+	FileSize           int
+	ChunkSize          int
+	TransferMode       string
+	SIPAddress         string
+	RTPAddress         string
+	HTTPURL            string
+	OutputDir          string
+	Timeout            time.Duration
+	GatewayBaseURL     string
+	DiagnosticInterval time.Duration
 }
 
 type Result struct {
@@ -68,11 +73,21 @@ type Summary struct {
 }
 
 type Report struct {
-	RunID      string             `json:"run_id"`
-	Generated  time.Time          `json:"generated_at"`
-	Config     Config             `json:"config"`
-	Summaries  map[string]Summary `json:"summaries"`
-	ResultFile string             `json:"result_file"`
+	RunID       string               `json:"run_id"`
+	Generated   time.Time            `json:"generated_at"`
+	Config      Config               `json:"config"`
+	Summaries   map[string]Summary   `json:"summaries"`
+	ResultFile  string               `json:"result_file"`
+	Diagnostics []DiagnosticArtifact `json:"diagnostics,omitempty"`
+	ReportFile  string               `json:"report_file,omitempty"`
+}
+
+type DiagnosticArtifact struct {
+	Phase        string    `json:"phase"`
+	CollectedAt  time.Time `json:"collected_at"`
+	SnapshotFile string    `json:"snapshot_file"`
+	ExportFile   string    `json:"export_file"`
+	SummaryFile  string    `json:"summary_file"`
 }
 
 type opFunc func(context.Context) error
@@ -85,6 +100,22 @@ func Run(ctx context.Context, cfg Config) (Report, error) {
 	outDir := filepath.Join(cfg.OutputDir, runID)
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return Report{}, fmt.Errorf("create output dir: %w", err)
+	}
+	diagnosticsDir := filepath.Join(outDir, "diagnostics")
+	if err := os.MkdirAll(diagnosticsDir, 0o755); err != nil {
+		return Report{}, fmt.Errorf("create diagnostics dir: %w", err)
+	}
+
+	artifacts := make([]DiagnosticArtifact, 0, 8)
+	var artifactsMu sync.Mutex
+	appendArtifact := func(a DiagnosticArtifact) {
+		artifactsMu.Lock()
+		defer artifactsMu.Unlock()
+		artifacts = append(artifacts, a)
+	}
+	collector := newDiagnosticsCollector(cfg, diagnosticsDir)
+	if a, err := collector.collect(ctx, "preflight"); err == nil {
+		appendArtifact(a)
 	}
 	resultPath := filepath.Join(outDir, "results.jsonl")
 	resultFile, err := os.Create(resultPath)
@@ -132,6 +163,27 @@ func Run(ctx context.Context, cfg Config) (Report, error) {
 	defer cancel()
 	ops := buildOperations(cfg)
 
+	var diagWG sync.WaitGroup
+	if cfg.DiagnosticInterval > 0 {
+		diagWG.Add(1)
+		go func() {
+			defer diagWG.Done()
+			ticker := time.NewTicker(cfg.DiagnosticInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-deadlineCtx.Done():
+					return
+				case ts := <-ticker.C:
+					phase := "during_" + ts.UTC().Format("150405")
+					if a, err := collector.collect(deadlineCtx, phase); err == nil {
+						appendArtifact(a)
+					}
+				}
+			}
+		}()
+	}
+
 	var wg sync.WaitGroup
 	var limiter <-chan time.Time
 	if cfg.QPS > 0 {
@@ -175,6 +227,7 @@ func Run(ctx context.Context, cfg Config) (Report, error) {
 	}
 
 	wg.Wait()
+	diagWG.Wait()
 	close(results)
 	elapsed := time.Since(start)
 	if v := writeErr.Load(); v != nil {
@@ -201,12 +254,152 @@ func Run(ctx context.Context, cfg Config) (Report, error) {
 		}
 		summaries[target] = s
 	}
-	report := Report{RunID: runID, Generated: time.Now().UTC(), Config: cfg, Summaries: summaries, ResultFile: resultPath}
+	if a, err := collector.collect(ctx, "postrun"); err == nil {
+		appendArtifact(a)
+	}
+	report := Report{RunID: runID, Generated: time.Now().UTC(), Config: cfg, Summaries: summaries, ResultFile: resultPath, Diagnostics: artifacts}
+	report.ReportFile = filepath.Join(outDir, "report.md")
 	reportPath := filepath.Join(outDir, "summary.json")
 	if err := writeJSON(reportPath, report); err != nil {
 		return Report{}, err
 	}
+	if err := os.WriteFile(report.ReportFile, []byte(renderMarkdownReport(report)), 0o644); err != nil {
+		return Report{}, fmt.Errorf("write report: %w", err)
+	}
 	return report, nil
+}
+
+type diagnosticsCollector struct {
+	baseURL string
+	outDir  string
+	client  *http.Client
+}
+
+func newDiagnosticsCollector(cfg Config, outDir string) diagnosticsCollector {
+	return diagnosticsCollector{
+		baseURL: resolveGatewayBaseURL(cfg.GatewayBaseURL, cfg.HTTPURL),
+		outDir:  outDir,
+		client:  &http.Client{Timeout: cfg.Timeout},
+	}
+}
+
+func (c diagnosticsCollector) collect(ctx context.Context, phase string) (DiagnosticArtifact, error) {
+	if c.baseURL == "" {
+		return DiagnosticArtifact{}, errors.New("empty gateway base url")
+	}
+	phase = strings.ToLower(strings.TrimSpace(phase))
+	phase = strings.ReplaceAll(phase, " ", "_")
+	phase = strings.ReplaceAll(phase, ":", "")
+	stamp := time.Now().UTC()
+	artifact := DiagnosticArtifact{Phase: phase, CollectedAt: stamp}
+
+	snapshotPath := filepath.Join(c.outDir, phase+"_network_status.json")
+	if err := c.fetchJSON(ctx, c.baseURL+"/api/node/network/status", snapshotPath); err != nil {
+		return DiagnosticArtifact{}, err
+	}
+	exportPath := filepath.Join(c.outDir, phase+"_diagnostics_export.json")
+	if err := c.fetchJSON(ctx, c.baseURL+"/api/diagnostics/export", exportPath); err != nil {
+		return DiagnosticArtifact{}, err
+	}
+	summaryPath := filepath.Join(c.outDir, phase+"_ops_summary.txt")
+	summaryText, err := summarizeDiagnostics(exportPath)
+	if err != nil {
+		return DiagnosticArtifact{}, err
+	}
+	if err := os.WriteFile(summaryPath, []byte(summaryText), 0o644); err != nil {
+		return DiagnosticArtifact{}, err
+	}
+	artifact.SnapshotFile = snapshotPath
+	artifact.ExportFile = exportPath
+	artifact.SummaryFile = summaryPath
+	return artifact, nil
+}
+
+func (c diagnosticsCollector) fetchJSON(ctx context.Context, endpoint, outputPath string) error {
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("%s status %d", endpoint, resp.StatusCode)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(outputPath, body, 0o644)
+}
+
+func summarizeDiagnostics(exportPath string) (string, error) {
+	type diagFile struct {
+		Name    string `json:"name"`
+		Content any    `json:"content"`
+	}
+	type diagData struct {
+		GeneratedAt string     `json:"generated_at"`
+		Files       []diagFile `json:"files"`
+	}
+	type envelope struct {
+		Data diagData `json:"data"`
+	}
+	raw, err := os.ReadFile(exportPath)
+	if err != nil {
+		return "", err
+	}
+	var env envelope
+	if err := json.Unmarshal(raw, &env); err != nil {
+		return "", err
+	}
+	b := &strings.Builder{}
+	b.WriteString("### 运维诊断摘要\n")
+	b.WriteString("采集时间: " + env.Data.GeneratedAt + "\n")
+	for _, f := range env.Data.Files {
+		if f.Name != "02_connection_stats_snapshot.json" && f.Name != "03_port_pool_status.json" && f.Name != "04_transport_error_summary.json" {
+			continue
+		}
+		line, err := json.Marshal(f.Content)
+		if err != nil {
+			continue
+		}
+		b.WriteString("- " + f.Name + ": " + string(line) + "\n")
+	}
+	return b.String(), nil
+}
+
+func renderMarkdownReport(report Report) string {
+	b := &strings.Builder{}
+	b.WriteString("# SIPTunnel 压测报告\n\n")
+	b.WriteString("## 基本参数\n")
+	b.WriteString("- RunID: " + report.RunID + "\n")
+	b.WriteString("- 目标: " + strings.Join(report.Config.Targets, ", ") + "\n")
+	b.WriteString("- 并发: " + strconv.Itoa(report.Config.Concurrency) + "\n")
+	b.WriteString("- QPS: " + strconv.Itoa(report.Config.QPS) + "\n")
+	b.WriteString("- 时长: " + report.Config.Duration.String() + "\n")
+	b.WriteString("\n## 结果概览\n")
+	b.WriteString("| Target | 吞吐(qps) | 成功率 | P50(ms) | P95(ms) | P99(ms) | 关键错误 |\n")
+	b.WriteString("|---|---:|---:|---:|---:|---:|---|\n")
+	for _, target := range report.Config.Targets {
+		s := report.Summaries[target]
+		b.WriteString(fmt.Sprintf("| %s | %.2f | %.2f%% | %.2f | %.2f | %.2f | %v |\n", target, s.Throughput, s.SuccessRate*100, s.P50MS, s.P95MS, s.P99MS, s.ErrorTypes))
+	}
+	b.WriteString("\n## 诊断快照\n")
+	for _, d := range report.Diagnostics {
+		b.WriteString(fmt.Sprintf("- %s: network=`%s` diagnostics=`%s` summary=`%s`\n", d.Phase, d.SnapshotFile, d.ExportFile, d.SummaryFile))
+	}
+	return b.String()
+}
+
+func resolveGatewayBaseURL(explicit, httpURL string) string {
+	if strings.TrimSpace(explicit) != "" {
+		return strings.TrimRight(strings.TrimSpace(explicit), "/")
+	}
+	u, err := url.Parse(strings.TrimSpace(httpURL))
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return ""
+	}
+	return strings.TrimRight(u.Scheme+"://"+u.Host, "/")
 }
 
 func buildOperations(cfg Config) map[string]opFunc {
