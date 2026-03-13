@@ -16,6 +16,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"siptunnel/internal/config"
+	"siptunnel/internal/diagnostics"
 	"siptunnel/internal/selfcheck"
 	"siptunnel/internal/server"
 	"siptunnel/internal/service/filetransfer"
@@ -155,6 +156,11 @@ func main() {
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
+	pprofCfg := diagnostics.LoadPprofConfigFromEnv()
+	pprofServer, err := diagnostics.StartPprofServer(pprofCfg, slog.Default())
+	if err != nil {
+		log.Fatalf("start pprof server failed: %v", err)
+	}
 
 	go func() {
 		log.Printf("gateway server listening on %s (version=%s commit=%s build_time=%s)", httpServer.Addr, version, commit, buildTime)
@@ -170,6 +176,9 @@ func main() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	if err := diagnostics.ShutdownServer(ctx, pprofServer); err != nil {
+		log.Printf("shutdown pprof server failed: %v", err)
+	}
 	if err := httpServer.Shutdown(ctx); err != nil {
 		log.Printf("graceful shutdown failed: %v", err)
 	}
