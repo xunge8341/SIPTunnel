@@ -235,6 +235,34 @@ go run ./cmd/gateway --config ./configs/config.yaml
 curl -fsS http://127.0.0.1:18080/api/selfcheck
 ```
 
+按级别筛选（支持逗号分隔多级别）：
+
+```bash
+curl -fsS 'http://127.0.0.1:18080/api/selfcheck?level=warn,error'
+```
+
+返回项字段统一为：`name`、`level`、`message`、`suggestion`、`action_hint`、`doc_link`（可选）。
+
+### 9.4 看到某个自检项时怎么办（值班动作版）
+
+> 原则：先执行 `action_hint`，再根据 `suggestion` 做配置修复，最后打开 `doc_link` 对照完整手册复盘。
+
+1. **`sip.listen_port_occupancy`（端口冲突，error）**
+   - 立即动作：在目标主机执行 `ss -ltnp` / `lsof -i :<port>` 找占用进程。
+   - 建议动作：停止冲突进程或调整 `sip.listen_port`，重启后复核 `/api/selfcheck`。
+2. **`sip.listen_ip` / `rtp.listen_ip`（0.0.0.0 通配地址，warn）**
+   - 立即动作：确认这是临时联调还是生产配置。
+   - 建议动作：生产建议替换为明确网卡 IP，避免错误网段接入。
+3. **`downstream.http_base_reachability`（下游 HTTP 未配置或不可达，warn/error）**
+   - 立即动作：核对 `httpinvoke` 路由配置是否有 `target_host/target_port`。
+   - 建议动作：补齐 `api_code -> 下游地址` 映射并在网关主机发起连通性验证（`curl`/`telnet`）。
+4. **`storage.*_dir_writable`（目录不可写，error）**
+   - 立即动作：以服务用户执行 `touch` 验证写权限。
+   - 建议动作：修复目录属主/权限并检查磁盘容量、inode 后重启服务。
+5. **`rtp.transport_plan` / `sip_rtp_port_conflict`（transport 不匹配或冲突，warn/error）**
+   - 立即动作：核对 SIP/RTP transport 是否符合当前环境（生产通常 RTP=UDP）。
+   - 建议动作：按发布策略回归默认 transport，避免“临时排障配置”长期残留。
+
 若启动阶段自检存在 `error` 级结果，进程会直接退出，避免带病上线。
 
 ## 10. SIP over TCP 生产运维补充

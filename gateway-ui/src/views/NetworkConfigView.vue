@@ -174,7 +174,11 @@
       </a-col>
       <a-col :xs="24" :xl="10">
         <a-card title="自检结果面板">
-          <a-list :data-source="config.selfCheckItems" size="small" bordered>
+          <a-space direction="vertical" size="small" style="width: 100%; margin-bottom: 12px">
+            <a-typography-text type="secondary">按级别筛选（支持多选）</a-typography-text>
+            <a-checkbox-group v-model:value="selectedSelfCheckLevels" :options="selfCheckLevelOptions" />
+          </a-space>
+          <a-list :data-source="filteredSelfCheckItems" size="small" bordered>
             <template #renderItem="{ item }">
               <a-list-item>
                 <a-space direction="vertical" size="small" style="width: 100%">
@@ -182,7 +186,10 @@
                     <a-typography-text strong>{{ item.name }}</a-typography-text>
                     <a-tag :color="selfCheckTagColor(item.level)">{{ selfCheckTagText(item.level) }}</a-tag>
                   </a-space>
-                  <a-typography-text type="secondary">{{ item.detail }}</a-typography-text>
+                  <a-typography-text type="secondary">{{ item.message }}</a-typography-text>
+                  <a-typography-text>建议：{{ item.suggestion }}</a-typography-text>
+                  <a-typography-text>动作：{{ item.action_hint }}</a-typography-text>
+                  <a :href="item.doc_link" target="_blank" rel="noopener noreferrer" v-if="item.doc_link">查看文档</a>
                 </a-space>
               </a-list-item>
             </template>
@@ -197,7 +204,7 @@
         <a-table-column title="场景" data-index="scene" key="scene" />
         <a-table-column title="状态" key="status" width="120">
           <template #default="{ record }">
-            <a-tag :color="selfCheckTagColor(record.status)">{{ selfCheckTagText(record.status) }}</a-tag>
+            <a-tag :color="linkTestTagColor(record.status)">{{ linkTestTagText(record.status) }}</a-tag>
           </template>
         </a-table-column>
         <a-table-column title="平均时延(ms)" data-index="avgLatencyMs" key="avgLatencyMs" width="140" />
@@ -249,6 +256,12 @@ const isEditable = ref(false)
 const saving = ref(false)
 const riskVisible = ref(false)
 const highRiskChanges = ref<HighRiskChange[]>([])
+const selectedSelfCheckLevels = ref<Array<'info' | 'warn' | 'error'>>(['info', 'warn', 'error'])
+const selfCheckLevelOptions = [
+  { label: '信息', value: 'info' },
+  { label: '告警', value: 'warn' },
+  { label: '错误', value: 'error' }
+] as const
 
 const config = reactive<NetworkConfigPayload>({
   sip: {
@@ -311,15 +324,32 @@ const portPoolStatus = computed(() => {
   return 'normal'
 })
 
-const selfCheckTagColor = (level: 'pass' | 'warn' | 'fail') => {
-  if (level === 'pass') return 'success'
+const selfCheckTagColor = (level: 'info' | 'warn' | 'error') => {
+  if (level === 'info') return 'success'
   if (level === 'warn') return 'warning'
   return 'error'
 }
 
-const selfCheckTagText = (level: 'pass' | 'warn' | 'fail') => {
-  if (level === 'pass') return '通过'
+const selfCheckTagText = (level: 'info' | 'warn' | 'error') => {
+  if (level === 'info') return '通过'
   if (level === 'warn') return '告警'
+  return '失败'
+}
+
+const filteredSelfCheckItems = computed(() => {
+  const selected = new Set(selectedSelfCheckLevels.value)
+  return config.selfCheckItems.filter((item) => selected.has(item.level))
+})
+
+const linkTestTagColor = (status: 'pass' | 'warn' | 'fail') => {
+  if (status === 'pass') return 'success'
+  if (status === 'warn') return 'warning'
+  return 'error'
+}
+
+const linkTestTagText = (status: 'pass' | 'warn' | 'fail') => {
+  if (status === 'pass') return '通过'
+  if (status === 'warn') return '告警'
   return '失败'
 }
 

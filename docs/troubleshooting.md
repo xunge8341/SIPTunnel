@@ -254,6 +254,82 @@
 
 ---
 
+### 3.8 通配地址 0.0.0.0 风险
+
+#### 现象
+
+- 自检出现 `sip.listen_ip` 或 `rtp.listen_ip` 的 `warn`，提示 `listen_ip=0.0.0.0`。
+
+#### 可能原因
+
+- 联调阶段使用通配地址，后续未回收。
+- 希望“自动适配网卡”，但生产需要固定绑定业务网卡。
+
+#### 排查步骤
+
+1. 查看当前配置是否显式写为 `0.0.0.0`。
+2. 在主机执行 `ip addr`（Linux）确认业务网卡 IP。
+3. 核对安全边界策略，确认允许监听的网段。
+
+#### 修复建议
+
+- 生产环境建议绑定明确网卡 IP，减少误接入与排障复杂度。
+- 若暂时保留 `0.0.0.0`，至少配套 ACL 与防火墙收敛暴露面。
+- 调整后执行 `/api/selfcheck`，确认告警消失。
+
+---
+
+### 3.9 transport 不匹配
+
+#### 现象
+
+- 自检中 `rtp.transport_plan` 为 `warn`（例如 RTP=TCP）。
+- 现场配置中 SIP/RTP transport 组合与发布基线不一致。
+
+#### 可能原因
+
+- 排障时临时切换 transport，变更后未恢复。
+- 复制配置时将测试环境参数带入生产。
+
+#### 排查步骤
+
+1. 对照变更单确认目标 transport 组合。
+2. 检查 `network.sip.transport` 与 `network.rtp.transport` 当前值。
+3. 结合链路质量数据确认是否仍需要非默认 transport。
+
+#### 修复建议
+
+- 非排障窗口建议恢复发布基线（生产一般 RTP=UDP）。
+- 将 transport 变更纳入变更审核，避免“长期临时配置”。
+
+---
+
+### 3.10 下游 HTTP 未配置
+
+#### 现象
+
+- 自检 `downstream.http_base_reachability` 为 `warn`，提示未配置路由。
+- 业务请求到达网关后无法匹配下游执行目标。
+
+#### 可能原因
+
+- `httpinvoke` 配置文件未加载。
+- 路由缺失 `target_host/target_port`。
+- 新增 `api_code` 未同步下游模板映射。
+
+#### 排查步骤
+
+1. 检查 `GATEWAY_HTTPINVOKE_CONFIG` 指向文件是否存在。
+2. 逐条检查路由是否包含 `api_code/target_host/target_port/http_path/http_method`。
+3. 用 `curl -fsS http://127.0.0.1:18080/api/selfcheck` 复核告警是否消失。
+
+#### 修复建议
+
+- 补齐路由模板并重启服务。
+- 变更后执行最小业务回归，确认关键 `api_code` 可正常下发。
+
+---
+
 ## 4. FAQ（常见问题）
 
 ### Q1：看到 `warn` 级别是否必须立刻处理？
@@ -300,4 +376,3 @@ ss -lntup | rg '5060|18080|20[0-9]{3}'
 # 5) 预检（部署脚本）
 ./deploy/scripts/precheck.sh all
 ```
-

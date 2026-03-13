@@ -247,10 +247,32 @@ let networkConfigState: NetworkConfigPayload = {
     }
   ],
   selfCheckItems: [
-    { key: "sip-listener", name: "SIP 监听", level: "pass", detail: "SIP 套接字响应正常，时延 < 10ms。" },
-    { key: "rtp-portpool", name: "RTP 端口池", level: "warn", detail: "端口占用率接近阈值 80%，建议扩容。" },
-    { key: "route-template", name: "路由模板", level: "pass", detail: "api_code 模板加载完整，无异常。" },
-    { key: "audit-pipeline", name: "审计链路", level: "pass", detail: "审计写入成功率 100%。" }
+    {
+      key: "sip-listener",
+      name: "sip.listen_port_occupancy",
+      level: "info",
+      message: "SIP 套接字响应正常，时延 < 10ms。",
+      suggestion: "无需处理。",
+      action_hint: "保持当前配置并纳入巡检基线。"
+    },
+    {
+      key: "sip-listen-ip",
+      name: "sip.listen_ip",
+      level: "warn",
+      message: "listen_ip=0.0.0.0 为通配地址，无法精确校验网卡存在性。",
+      suggestion: "若需严格约束到指定网卡，请改为明确的本机 IP。",
+      action_hint: "生产建议绑定业务网卡 IP，灰度发布后复核 /api/selfcheck。",
+      doc_link: "docs/troubleshooting.md#38-通配地址-0000-风险"
+    },
+    {
+      key: "downstream-http",
+      name: "downstream.http_base_reachability",
+      level: "error",
+      message: "未配置下游 HTTP 路由，跳过可达性检查。",
+      suggestion: "请加载 httpinvoke 路由配置后重试。",
+      action_hint: "先补齐 api_code 到下游地址映射，再重启并验证连通性。",
+      doc_link: "docs/troubleshooting.md#310-下游-http-未配置"
+    }
   ],
   linkTests: [
     {

@@ -234,8 +234,11 @@ export interface ConnectionErrorEvent {
 export interface SelfCheckItem {
   key: string
   name: string
-  level: 'pass' | 'warn' | 'fail'
-  detail: string
+  level: 'info' | 'warn' | 'error'
+  message: string
+  suggestion: string
+  action_hint: string
+  doc_link?: string
 }
 
 export interface LinkTestResult {

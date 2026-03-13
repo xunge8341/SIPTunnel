@@ -33,7 +33,7 @@ func buildTestHandler(t *testing.T) (http.Handler, repository.TaskRepository, ob
 		routes: map[string]OpsRoute{"asset.sync": {APICode: "asset.sync", HTTPMethod: "POST", HTTPPath: "/sync", Enabled: true}},
 		nodes:  []OpsNode{{NodeID: "n1", Role: "gateway", Status: "ready", Endpoint: "127.0.0.1:18080"}},
 		selfCheckProvider: func(_ context.Context) selfcheck.Report {
-			return selfcheck.Report{Overall: selfcheck.LevelInfo, Summary: selfcheck.Summary{Info: 1}, Items: []selfcheck.Item{{Name: "sample", Level: selfcheck.LevelInfo, Message: "ok", Suggestion: "none"}}}
+			return selfcheck.Report{Overall: selfcheck.LevelInfo, Summary: selfcheck.Summary{Info: 1, Warn: 1, Error: 1}, Items: []selfcheck.Item{{Name: "sample-info", Level: selfcheck.LevelInfo, Message: "ok", Suggestion: "none", ActionHint: "keep"}, {Name: "sample-warn", Level: selfcheck.LevelWarn, Message: "warn", Suggestion: "check", ActionHint: "verify"}, {Name: "sample-error", Level: selfcheck.LevelError, Message: "err", Suggestion: "fix", ActionHint: "recover"}}}
 		},
 		startupSummaryFn: func(_ context.Context) startupsummary.Summary {
 			return startupsummary.Summary{NodeID: "n1", ConfigPath: "./configs/config.yaml", ConfigSource: "cli", UIMode: "embedded", UIURL: "http://127.0.0.1:18080/", APIURL: "http://127.0.0.1:18080/api"}
@@ -223,6 +223,26 @@ func TestSelfCheckEndpoint(t *testing.T) {
 	}
 	if !strings.Contains(rr.Body.String(), "sample") {
 		t.Fatalf("unexpected body: %s", rr.Body.String())
+	}
+}
+
+func TestSelfCheckEndpointFilterByLevel(t *testing.T) {
+	h, _, _ := buildTestHandler(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/selfcheck?level=warn,error", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	body := rr.Body.String()
+	if strings.Contains(body, "sample-info") {
+		t.Fatalf("info item should be filtered out: %s", body)
+	}
+	if !strings.Contains(body, "sample-warn") || !strings.Contains(body, "sample-error") {
+		t.Fatalf("expected warn/error items: %s", body)
+	}
+	if !strings.Contains(body, `"warn":1`) || !strings.Contains(body, `"error":1`) {
+		t.Fatalf("expected filtered summary counts: %s", body)
 	}
 }
 

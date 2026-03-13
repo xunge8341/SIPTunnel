@@ -88,6 +88,11 @@ func TestRunnerRun_AllPass(t *testing.T) {
 	if !strings.Contains(report.ToCLI(), "overall=info") {
 		t.Fatalf("unexpected cli output: %s", report.ToCLI())
 	}
+	for _, item := range report.Items {
+		if strings.TrimSpace(item.ActionHint) == "" {
+			t.Fatalf("action_hint should not be empty: %+v", item)
+		}
+	}
 }
 
 func TestRunnerRun_ErrorsAndWarns(t *testing.T) {
@@ -133,6 +138,11 @@ func TestRunnerRun_ErrorsAndWarns(t *testing.T) {
 	if report.Summary.Warn == 0 {
 		t.Fatalf("expected warns in summary: %+v", report.Summary)
 	}
+	for _, item := range report.Items {
+		if strings.TrimSpace(item.ActionHint) == "" {
+			t.Fatalf("action_hint should not be empty: %+v", item)
+		}
+	}
 }
 
 func TestDownstreamReachability_NoRoutesWarn(t *testing.T) {
@@ -146,6 +156,11 @@ func TestDownstreamReachability_NoRoutesWarn(t *testing.T) {
 	}
 	if !foundWarn {
 		t.Fatalf("expected downstream warn, items=%+v", report.Items)
+	}
+	for _, item := range report.Items {
+		if item.Name == "downstream.http_base_reachability" && strings.TrimSpace(item.DocLink) == "" {
+			t.Fatalf("expected doc_link for downstream item: %+v", item)
+		}
 	}
 }
 
