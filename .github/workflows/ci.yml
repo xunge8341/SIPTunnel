@@ -6,42 +6,29 @@ on:
   pull_request:
 
 jobs:
-  backend:
-    name: Backend Test + Lint
+  backend-quality-gates:
+    name: Backend Quality Gates
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: gateway-server
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: gateway-server/go.mod
-      - name: Go test
-        run: go test ./...
-      - name: Benchmark smoke (critical path)
-        run: |
-          GOMAXPROCS=1 go test \
-            ./internal/protocol/sip \
-            ./internal/security \
-            ./internal/rtp \
-            ./internal/protocol/rtpfile \
-            ./internal/service/httpinvoke \
-            -run '^$' \
-            -bench 'Benchmark(SIPJSONDecodeValidate|Signer(Sign|Verify)|RTPHeader(Encode|Decode)|File(Split|Assemble)|HTTP(MapByTemplate|InvokeWrapper))$' \
-            -benchmem \
-            -benchtime=100ms \
-            -count=1
-      - name: gofmt check
-        run: |
-          test -z "$(gofmt -l $(find . -name '*.go' -not -path './vendor/*'))"
-      - name: Multi-arch backend build example
-        working-directory: .
-        run: ./scripts/build.sh matrix
+      - name: Run CI quality gates
+        run: ./scripts/ci/run_quality_gates.sh
+      - name: Upload CI artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-quality-gates-artifacts
+          path: artifacts/ci
+          if-no-files-found: warn
 
   frontend:
     name: Frontend Build + Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: gateway-ui
@@ -62,6 +49,7 @@ jobs:
   docker-buildx-example:
     name: Docker Buildx Multi-arch Example
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - name: Set up QEMU
