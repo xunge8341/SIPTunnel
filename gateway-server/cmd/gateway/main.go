@@ -48,12 +48,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("parse flags failed: %v", err)
 	}
-	port := readPort()
+	defaultPort := readPort()
 	paths := config.LoadStoragePathsFromEnv()
 	if err := paths.EnsureWritable(); err != nil {
 		log.Fatalf("startup directory validation failed: %v", err)
 	}
-	selfCheckInput := buildSelfCheckInput(paths, cliConfigPath)
+	selfCheckInput, uiCfg := buildSelfCheckInput(paths, cliConfigPath, defaultPort)
 	rtpTransport, err := filetransfer.NewTransport(selfCheckInput.NetworkConfig.RTP.Transport)
 	if err != nil {
 		log.Fatalf("init rtp transport failed: %v", err)
@@ -150,6 +150,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("initialize handler failed: %v", err)
 	}
+	if uiCfg.Enabled && uiCfg.Mode == "embedded" {
+		handler, err = server.NewEmbeddedUIFallbackHandler(handler, server.EmbeddedUIOptions{BasePath: uiCfg.BasePath})
+		if err != nil {
+			log.Fatalf("initialize embedded ui handler failed: %v", err)
+		}
+	}
 
 	report := selfcheck.NewRunner().Run(context.Background(), selfCheckInput)
 	if raw, err := json.Marshal(report); err == nil {
@@ -169,7 +175,7 @@ func main() {
 	}
 
 	httpServer := &http.Server{
-		Addr:              ":" + port,
+		Addr:              resolveHTTPListenAddr(defaultPort, uiCfg),
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
@@ -181,6 +187,11 @@ func main() {
 
 	go func() {
 		log.Printf("gateway server listening on %s (version=%s commit=%s build_time=%s)", httpServer.Addr, version, commit, buildTime)
+		uiURL := fmt.Sprintf("http://%s:%d%s", uiCfg.ListenIP, uiCfg.ListenPort, uiCfg.BasePath)
+		if uiCfg.ListenIP == "0.0.0.0" {
+			uiURL = fmt.Sprintf("http://%s:%d%s", "127.0.0.1", uiCfg.ListenPort, uiCfg.BasePath)
+		}
+		log.Printf("ui service mode=%s enabled=%t ui_url=%s", uiCfg.Mode, uiCfg.Enabled, uiURL)
 		log.Printf("storage paths temp_dir=%q final_dir=%q audit_dir=%q log_dir=%q", paths.TempDir, paths.FinalDir, paths.AuditDir, paths.LogDir)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server failed: %v", err)
@@ -201,8 +212,11 @@ func main() {
 	}
 }
 
-func buildSelfCheckInput(paths config.StoragePaths, cliConfigPath string) selfcheck.Input {
-	networkCfg, cfgLoad, err := loadNetworkConfig(cliConfigPath)
+func buildSelfCheckInput(paths config.StoragePaths, cliConfigPath string, defaultPort string) (selfcheck.Input, config.UIConfig) {
+	runtimeCfg, cfgLoad, err := loadRuntimeConfig(cliConfigPath)
+	if parsedPort, parseErr := strconv.Atoi(defaultPort); parseErr == nil {
+		runtimeCfg.UI.ApplyDefaults(parsedPort)
+	}
 	if err != nil {
 		log.Fatalf("load network config failed: %v", err)
 	}
@@ -212,7 +226,7 @@ func buildSelfCheckInput(paths config.StoragePaths, cliConfigPath string) selfch
 	}
 
 	in := selfcheck.Input{
-		NetworkConfig:   networkCfg,
+		NetworkConfig:   runtimeCfg.Network,
 		StoragePaths:    paths,
 		RunMode:         resolveRunMode(),
 		SuggestFreePort: parseBoolEnv("GATEWAY_SELFCHECK_SUGGEST_FREE_PORT"),
@@ -221,11 +235,11 @@ func buildSelfCheckInput(paths config.StoragePaths, cliConfigPath string) selfch
 		routeCfg, err := httpinvoke.LoadConfig(routePath)
 		if err != nil {
 			log.Printf("load GATEWAY_HTTPINVOKE_CONFIG=%q failed: %v", routePath, err)
-			return in
+			return in, runtimeCfg.UI
 		}
 		in.DownstreamRoutes = routeCfg.Routes
 	}
-	return in
+	return in, runtimeCfg.UI
 }
 
 type configSource string
@@ -305,11 +319,14 @@ func handleConfigCommands(args []string) (bool, error) {
 		if err != nil {
 			return true, err
 		}
-		networkCfg, err := parseNetworkConfigFromTopLevelYAML(data)
+		runtimeCfg, err := parseRuntimeConfigFromTopLevelYAML(data)
 		if err != nil {
 			return true, err
 		}
-		if err := networkCfg.Validate(); err != nil {
+		if err := runtimeCfg.Network.Validate(); err != nil {
+			return true, err
+		}
+		if err := runtimeCfg.UI.Validate(); err != nil {
 			return true, err
 		}
 		if err := config.LoadStoragePathsFromEnv().EnsureWritable(); err != nil {
@@ -322,36 +339,50 @@ func handleConfigCommands(args []string) (bool, error) {
 	}
 }
 
-func loadNetworkConfig(cliConfigPath string) (config.NetworkConfig, configLoadResult, error) {
+type runtimeConfig struct {
+	Network config.NetworkConfig
+	UI      config.UIConfig
+}
+
+func loadRuntimeConfig(cliConfigPath string) (runtimeConfig, configLoadResult, error) {
 	candidate, ok := pickExistingConfigCandidate(cliConfigPath, os.Getenv("GATEWAY_CONFIG"), os.Executable, os.Getwd, fileExists)
 	if !ok {
 		generatedPath, generatedMode, err := handleMissingConfigFile(cliConfigPath, os.Getenv("GATEWAY_CONFIG"), os.Getwd)
 		if err != nil {
-			return config.NetworkConfig{}, configLoadResult{}, err
+			return runtimeConfig{}, configLoadResult{}, err
 		}
 		data, err := os.ReadFile(generatedPath)
 		if err != nil {
-			return config.NetworkConfig{}, configLoadResult{}, fmt.Errorf("read generated config path=%q: %w", generatedPath, err)
+			return runtimeConfig{}, configLoadResult{}, fmt.Errorf("read generated config path=%q: %w", generatedPath, err)
 		}
-		cfg, err := parseNetworkConfigFromTopLevelYAML(data)
+		cfg, err := parseRuntimeConfigFromTopLevelYAML(data)
 		if err != nil {
-			return config.NetworkConfig{}, configLoadResult{}, fmt.Errorf("parse generated config path=%q: %w", generatedPath, err)
+			return runtimeConfig{}, configLoadResult{}, fmt.Errorf("parse generated config path=%q: %w", generatedPath, err)
+		}
+		if err := cfg.Network.Validate(); err != nil {
+			return runtimeConfig{}, configLoadResult{}, fmt.Errorf("validate generated network config path=%q: %w", generatedPath, err)
+		}
+		if err := cfg.UI.Validate(); err != nil {
+			return runtimeConfig{}, configLoadResult{}, fmt.Errorf("validate generated ui config path=%q: %w", generatedPath, err)
 		}
 		return cfg, configLoadResult{Path: generatedPath, Source: configSourceDefaultGenerated, AutoGenerated: true, GeneratedAsMode: generatedMode}, nil
 	}
 
 	data, err := os.ReadFile(candidate.path)
 	if err != nil {
-		return config.NetworkConfig{}, configLoadResult{}, fmt.Errorf("load network config path=%q source=%s: %w", candidate.path, candidate.source, err)
+		return runtimeConfig{}, configLoadResult{}, fmt.Errorf("load network config path=%q source=%s: %w", candidate.path, candidate.source, err)
 	}
-	networkCfg, err := parseNetworkConfigFromTopLevelYAML(data)
+	runtimeCfg, err := parseRuntimeConfigFromTopLevelYAML(data)
 	if err != nil {
-		return config.NetworkConfig{}, configLoadResult{}, fmt.Errorf("parse network config path=%q source=%s: %w", candidate.path, candidate.source, err)
+		return runtimeConfig{}, configLoadResult{}, fmt.Errorf("parse network config path=%q source=%s: %w", candidate.path, candidate.source, err)
 	}
-	if err := networkCfg.Validate(); err != nil {
-		return config.NetworkConfig{}, configLoadResult{}, fmt.Errorf("validate network config path=%q source=%s: %w", candidate.path, candidate.source, err)
+	if err := runtimeCfg.Network.Validate(); err != nil {
+		return runtimeConfig{}, configLoadResult{}, fmt.Errorf("validate network config path=%q source=%s: %w", candidate.path, candidate.source, err)
 	}
-	return networkCfg, configLoadResult{Path: candidate.path, Source: candidate.source}, nil
+	if err := runtimeCfg.UI.Validate(); err != nil {
+		return runtimeConfig{}, configLoadResult{}, fmt.Errorf("validate ui config path=%q source=%s: %w", candidate.path, candidate.source, err)
+	}
+	return runtimeCfg, configLoadResult{Path: candidate.path, Source: candidate.source}, nil
 }
 
 type fullConfigFile struct {
@@ -360,17 +391,18 @@ type fullConfigFile struct {
 	RTP           config.RTPConfig     `yaml:"rtp,omitempty"`
 	Storage       map[string]any       `yaml:"storage,omitempty"`
 	Observability map[string]any       `yaml:"observability,omitempty"`
-	UI            map[string]any       `yaml:"ui,omitempty"`
+	UI            config.UIConfig      `yaml:"ui,omitempty"`
 	Ops           map[string]any       `yaml:"ops,omitempty"`
 	Network       config.NetworkConfig `yaml:"network,omitempty"`
 }
 
-func parseNetworkConfigFromTopLevelYAML(data []byte) (config.NetworkConfig, error) {
+func parseRuntimeConfigFromTopLevelYAML(data []byte) (runtimeConfig, error) {
 	var fileCfg fullConfigFile
 	if err := yaml.Unmarshal(data, &fileCfg); err != nil {
-		return config.NetworkConfig{}, err
+		return runtimeConfig{}, err
 	}
 	networkCfg := config.DefaultNetworkConfig()
+	uiCfg := config.DefaultUIConfig()
 	if fileCfg.Network != (config.NetworkConfig{}) {
 		networkCfg = fileCfg.Network
 	}
@@ -381,7 +413,11 @@ func parseNetworkConfigFromTopLevelYAML(data []byte) (config.NetworkConfig, erro
 		networkCfg.RTP = fileCfg.RTP
 	}
 	networkCfg.ApplyDefaults()
-	return networkCfg, nil
+	if fileCfg.UI != (config.UIConfig{}) {
+		uiCfg = fileCfg.UI
+	}
+	uiCfg.ApplyDefaults(networkCfg.SIP.ListenPort)
+	return runtimeConfig{Network: networkCfg, UI: uiCfg}, nil
 }
 
 func defaultConfigYAML() ([]byte, error) {
@@ -401,10 +437,7 @@ func defaultConfigYAML() ([]byte, error) {
 			"pprof_enabled":   false,
 			"metrics_enabled": true,
 		},
-		UI: map[string]any{
-			"enabled":  true,
-			"base_url": "http://127.0.0.1:5173",
-		},
+		UI: config.UIConfig{Enabled: true, Mode: "external", ListenIP: "127.0.0.1", ListenPort: 18080, BasePath: "/"},
 		Ops: map[string]any{
 			"run_mode":               "dev",
 			"allow_auto_init_config": true,
@@ -545,6 +578,13 @@ func parseBoolEnv(name string) bool {
 		return false
 	}
 	return v
+}
+
+func resolveHTTPListenAddr(defaultPort string, uiCfg config.UIConfig) string {
+	if uiCfg.Enabled && uiCfg.Mode == "embedded" {
+		return fmt.Sprintf("%s:%d", uiCfg.ListenIP, uiCfg.ListenPort)
+	}
+	return ":" + defaultPort
 }
 
 func readPort() string {

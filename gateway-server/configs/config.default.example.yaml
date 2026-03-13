@@ -26,6 +26,10 @@ observability:
 
 ui:
   enabled: true
+  mode: external
+  listen_ip: 127.0.0.1
+  listen_port: 18080
+  base_path: /
 
 ops:
   run_mode: dev

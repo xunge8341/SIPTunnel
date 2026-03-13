@@ -54,3 +54,19 @@ RELEASE_FILE=./dist/gateway-linux-amd64 ./deploy/scripts/upgrade.sh
 ```bash
 ./deploy/scripts/rollback.sh
 ```
+
+
+## UI 部署模式
+
+网关支持：
+
+- `ui.mode=external`：前后端分离部署（默认）。
+- `ui.mode=embedded`：将 `gateway-ui` 构建产物嵌入 `gateway-server`，单进程对外提供 `/api/*` 与 SPA 静态资源。
+
+发布 embedded 包前建议执行：
+
+```bash
+./scripts/embed-ui.sh
+./scripts/verify-embedded-ui.sh
+```
+
