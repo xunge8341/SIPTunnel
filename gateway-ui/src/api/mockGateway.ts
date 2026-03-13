@@ -357,10 +357,11 @@ const diagnosticJobs = new Map<string, {
 
 const makeDiagnosticFileName = (nodeId: string, jobId: string, requestId?: string, traceId?: string) => {
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '')
-  const normalizedNodeId = nodeId.replace(/-/g, '_')
+  const normalizeToken = (value: string) => value.trim().replace(/[^a-zA-Z0-9_-]/g, '_').replace(/[-_]+/g, '_').replace(/^_+|_+$/g, '')
+  const normalizedNodeId = normalizeToken(nodeId)
   const parts = [`diag_${normalizedNodeId}_${stamp}`]
-  if (requestId) parts.push(`req_${requestId}`)
-  if (traceId) parts.push(`trace_${traceId}`)
+  if (requestId) parts.push(`req_${normalizeToken(requestId)}`)
+  if (traceId) parts.push(`trace_${normalizeToken(traceId)}`)
   parts.push(jobId)
   return `${parts.join('_')}.zip`
 }

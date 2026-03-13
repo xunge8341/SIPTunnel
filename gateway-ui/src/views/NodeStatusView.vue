@@ -219,7 +219,7 @@ const pollTimer = ref<number | null>(null)
 
 const selectedNode = computed(() => nodes.value.find((item) => item.id === selectedNodeId.value) ?? null)
 
-const fileNameRule = 'diag_{nodeId}_{YYYYMMDDTHHmmssZ}[_req_{request_id}][_trace_{trace_id}]_{jobId}.zip'
+const fileNameRule = 'diag_{nodeId}_{YYYYMMDDTHHmmssZ}[_req_{request_id}][_trace_{trace_id}]_{jobId}(.zip)，其中 ID 仅保留字母数字/下划线'
 
 const statusTextMap: Record<DiagnosticExportJob['status'], string> = {
   pending: '排队中',

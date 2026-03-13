@@ -116,10 +116,10 @@ go tool pprof ./artifacts/pprof/<run>/cpu.pb.gz
 
 诊断包统一命名规范：
 
-- 输出目录：`diag_{nodeId}_{YYYYMMDDTHHmmssZ}[_req_{request_id}][_trace_{trace_id}]`
+- 输出目录：`diag_{nodeId}_{YYYYMMDDTHHmmssZ}[_req_{request_id}][_trace_{trace_id}]_{jobId}`
 - 文件名：`diag_{nodeId}_{YYYYMMDDTHHmmssZ}[_req_{request_id}][_trace_{trace_id}]_{jobId}.zip`
 
-> 说明：`request_id` / `trace_id` 为可选，未指定时不拼接该段。
+> 说明：`request_id` / `trace_id` 为可选，未指定时不拼接该段；命名中的标识符会归一化为 `[a-zA-Z0-9_]` 以避免路径注入。
 
 ### 6.1 定向导出
 
@@ -129,7 +129,7 @@ go tool pprof ./artifacts/pprof/<run>/cpu.pb.gz
 
 ### 6.2 诊断包文件说明
 
-- `README.md`：目录导航、采样时间、脱敏提示。
+- `README.md`：目录导航、导出过滤条件（request_id/trace_id）与脱敏提示。
 - `01_transport_config.json`：当前 SIP/RTP transport 配置快照。
 - `02_connection_stats_snapshot.json`：SIP/RTP 连接计数与错误计数快照。
 - `03_port_pool_status.json`：RTP 端口池容量、占用、分配失败计数。
