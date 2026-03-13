@@ -220,3 +220,49 @@ func TestSelfCheckEndpoint(t *testing.T) {
 		t.Fatalf("unexpected body: %s", rr.Body.String())
 	}
 }
+
+func TestDiagnosticsExportEndpointWithFilters(t *testing.T) {
+	h, repo, audit := buildTestHandler(t)
+	now := time.Now().UTC()
+	_, _ = repo.CreateTask(t.Context(), repository.Task{ID: "tf-1", TaskType: repository.TaskTypeCommand, Status: repository.TaskStatusFailed, RequestID: "req-d", TraceID: "trace-d", APICode: "asset.sync", ResultCode: "UPSTREAM_RATE_LIMIT", LastError: "token=secret-value", UpdatedAt: now, CreatedAt: now})
+	_ = audit.Record(t.Context(), observability.AuditEvent{Who: "ops", When: now, FinalResult: "UPSTREAM_RATE_LIMIT", Core: observability.CoreFields{RequestID: "req-d", TraceID: "trace-d", APICode: "asset.sync"}})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/diagnostics/export?request_id=req-d&trace_id=trace-d", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var payload struct {
+		Code string               `json:"code"`
+		Data DiagnosticExportData `json:"data"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	if payload.Data.RequestID != "req-d" || payload.Data.TraceID != "trace-d" {
+		t.Fatalf("unexpected filters: %+v", payload.Data)
+	}
+	if !strings.Contains(payload.Data.FileName, "req_req-d") || !strings.Contains(payload.Data.OutputDir, "trace_trace-d") {
+		t.Fatalf("unexpected naming: file=%s dir=%s", payload.Data.FileName, payload.Data.OutputDir)
+	}
+	if len(payload.Data.Files) < 7 {
+		t.Fatalf("expected diagnostic files, got %d", len(payload.Data.Files))
+	}
+	var taskFile DiagFile
+	for _, f := range payload.Data.Files {
+		if f.Name == "05_task_failure_summary.json" {
+			taskFile = f
+			break
+		}
+	}
+	items, ok := taskFile.Content.([]any)
+	if !ok || len(items) == 0 {
+		t.Fatalf("task summary missing: %#v", taskFile.Content)
+	}
+	first, _ := items[0].(map[string]any)
+	if got, _ := first["last_error"].(string); got == "token=secret-value" || got == "" {
+		t.Fatalf("last_error should be masked, got=%q", got)
+	}
+}

@@ -340,11 +340,13 @@ export async function exportConfigYamlMock(target: 'current' | 'pending'): Promi
 
 
 const diagnosticSectionsTemplate = [
-  { key: 'config_snapshot' as const, label: '当前配置快照' },
-  { key: 'node_runtime' as const, label: '节点运行状态' },
-  { key: 'failed_tasks' as const, label: '最近失败任务摘要' },
-  { key: 'log_index' as const, label: '关键日志索引' },
-  { key: 'alerts_summary' as const, label: '最近告警摘要' }
+  { key: 'transport_config' as const, label: '当前 transport 配置' },
+  { key: 'connection_stats_snapshot' as const, label: '连接统计快照' },
+  { key: 'port_pool_status' as const, label: '端口池状态' },
+  { key: 'transport_error_summary' as const, label: '最近 transport 错误摘要' },
+  { key: 'task_failure_summary' as const, label: '最近 task failure 摘要' },
+  { key: 'rate_limit_hit_summary' as const, label: '最近 rate limit 命中摘要' },
+  { key: 'profile_entry' as const, label: 'profile 采集入口信息（如果启用）' }
 ]
 
 const diagnosticJobs = new Map<string, {
@@ -353,9 +355,14 @@ const diagnosticJobs = new Map<string, {
   failOnce: boolean
 }>()
 
-const makeDiagnosticFileName = (nodeId: string, jobId: string) => {
+const makeDiagnosticFileName = (nodeId: string, jobId: string, requestId?: string, traceId?: string) => {
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '')
-  return `diag_${nodeId}_${stamp}_${jobId}.zip`
+  const normalizedNodeId = nodeId.replace(/-/g, '_')
+  const parts = [`diag_${normalizedNodeId}_${stamp}`]
+  if (requestId) parts.push(`req_${requestId}`)
+  if (traceId) parts.push(`trace_${traceId}`)
+  parts.push(jobId)
+  return `${parts.join('_')}.zip`
 }
 
 const cloneJob = (job: DiagnosticExportJob): DiagnosticExportJob => JSON.parse(JSON.stringify(job))
@@ -371,7 +378,7 @@ export async function createDiagnosticExportMock(payload: DiagnosticExportCreate
     progress: 0,
     startedAt: now,
     updatedAt: now,
-    fileName: makeDiagnosticFileName(payload.nodeId, jobId),
+    fileName: makeDiagnosticFileName(payload.nodeId, jobId, payload.requestId, payload.traceId),
     sections: diagnosticSectionsTemplate.map((item) => ({ ...item, done: false }))
   }
   diagnosticJobs.set(jobId, {

@@ -111,3 +111,34 @@ go tool pprof ./artifacts/pprof/<run>/cpu.pb.gz
   - 任何生产采样必须带工单编号与时间窗。
   - 采样结束后立即关闭开关并轮换 token。
   - 报告中至少包含：压测参数、采样时间点、TopN 热点、优化建议与回归验证计划。
+
+## 6. 诊断包导出（CLI / API / UI 一致）
+
+诊断包统一命名规范：
+
+- 输出目录：`diag_{nodeId}_{YYYYMMDDTHHmmssZ}[_req_{request_id}][_trace_{trace_id}]`
+- 文件名：`diag_{nodeId}_{YYYYMMDDTHHmmssZ}[_req_{request_id}][_trace_{trace_id}]_{jobId}.zip`
+
+> 说明：`request_id` / `trace_id` 为可选，未指定时不拼接该段。
+
+### 6.1 定向导出
+
+- CLI：`gatewayctl diag export --request-id <id> --trace-id <id> --out diagnostics.json`
+- API：`GET /api/diagnostics/export?request_id=<id>&trace_id=<id>`
+- UI：节点状态页「导出诊断入口」支持填写 `request_id` / `trace_id` 进行定向导出。
+
+### 6.2 诊断包文件说明
+
+- `README.md`：目录导航、采样时间、脱敏提示。
+- `01_transport_config.json`：当前 SIP/RTP transport 配置快照。
+- `02_connection_stats_snapshot.json`：SIP/RTP 连接计数与错误计数快照。
+- `03_port_pool_status.json`：RTP 端口池容量、占用、分配失败计数。
+- `04_transport_error_summary.json`：最近 transport 绑定/网络错误摘要。
+- `05_task_failure_summary.json`：最近失败任务摘要（包含 request/trace 过滤结果，错误字段脱敏）。
+- `06_rate_limit_hit_summary.json`：最近 rate limit 命中摘要（支持按 request/trace 定位）。
+- `07_profile_entry.json`：pprof 采集入口信息（仅给入口与启用状态，不暴露 token）。
+
+### 6.3 脱敏约定
+
+- 不写出完整敏感值（如错误中的 token、密钥、鉴权串）；只保留可定位前缀。
+- profile 仅输出 `enabled/listen_address/profile_url`，不输出认证凭据。

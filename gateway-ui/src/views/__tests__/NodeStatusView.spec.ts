@@ -30,6 +30,7 @@ const stubs = {
   'a-table-column': { template: '<div />' },
   'a-tag': { template: '<span><slot /></span>' },
   'a-button': { template: '<button @click="$emit(`click`)"><slot /></button>' },
+  'a-input': { template: '<input />' },
   StatusPill: { template: '<span />' }
 }
 
@@ -42,13 +43,15 @@ describe('NodeStatusView', () => {
       progress: 0,
       startedAt: '2026-03-12T08:00:00Z',
       updatedAt: '2026-03-12T08:00:00Z',
-      fileName: 'diag_gateway-a-01_20260312T080000_diag-001.zip',
+      fileName: 'diag_gateway_a_01_20260312T080000Z_req_req-1_trace_trace-1_diag-001.zip',
       sections: [
-        { key: 'config_snapshot', label: '当前配置快照', done: false },
-        { key: 'node_runtime', label: '节点运行状态', done: false },
-        { key: 'failed_tasks', label: '最近失败任务摘要', done: false },
-        { key: 'log_index', label: '关键日志索引', done: false },
-        { key: 'alerts_summary', label: '最近告警摘要', done: false }
+        { key: 'transport_config', label: '当前 transport 配置', done: false },
+        { key: 'connection_stats_snapshot', label: '连接统计快照', done: false },
+        { key: 'port_pool_status', label: '端口池状态', done: false },
+        { key: 'transport_error_summary', label: '最近 transport 错误摘要', done: false },
+        { key: 'task_failure_summary', label: '最近 task failure 摘要', done: false },
+        { key: 'rate_limit_hit_summary', label: '最近 rate limit 命中摘要', done: false },
+        { key: 'profile_entry', label: 'profile 采集入口信息（如果启用）', done: false }
       ]
     })
     vi.mocked(gatewayApi.fetchDiagnosticExport).mockResolvedValue({
@@ -58,13 +61,15 @@ describe('NodeStatusView', () => {
       progress: 45,
       startedAt: '2026-03-12T08:00:00Z',
       updatedAt: '2026-03-12T08:00:03Z',
-      fileName: 'diag_gateway-a-01_20260312T080000_diag-001.zip',
+      fileName: 'diag_gateway_a_01_20260312T080000Z_req_req-1_trace_trace-1_diag-001.zip',
       sections: [
-        { key: 'config_snapshot', label: '当前配置快照', done: true },
-        { key: 'node_runtime', label: '节点运行状态', done: true },
-        { key: 'failed_tasks', label: '最近失败任务摘要', done: false },
-        { key: 'log_index', label: '关键日志索引', done: false },
-        { key: 'alerts_summary', label: '最近告警摘要', done: false }
+        { key: 'transport_config', label: '当前 transport 配置', done: true },
+        { key: 'connection_stats_snapshot', label: '连接统计快照', done: true },
+        { key: 'port_pool_status', label: '端口池状态', done: true },
+        { key: 'transport_error_summary', label: '最近 transport 错误摘要', done: false },
+        { key: 'task_failure_summary', label: '最近 task failure 摘要', done: false },
+        { key: 'rate_limit_hit_summary', label: '最近 rate limit 命中摘要', done: false },
+        { key: 'profile_entry', label: 'profile 采集入口信息（如果启用）', done: false }
       ]
     })
 
@@ -72,7 +77,7 @@ describe('NodeStatusView', () => {
     await wrapper.findAll('button')[1].trigger('click')
     await flushPromises()
 
-    expect(gatewayApi.createDiagnosticExport).toHaveBeenCalled()
+    expect(gatewayApi.createDiagnosticExport).toHaveBeenCalledWith({ nodeId: "gateway-a-01", requestId: undefined, traceId: undefined })
     expect(gatewayApi.fetchDiagnosticExport).toHaveBeenCalled()
     expect(wrapper.text()).toContain('diag-001')
     expect(wrapper.text()).toContain('正在采集信息')

@@ -148,3 +148,42 @@ paths:
       responses:
         '200': { description: OK }
         '400': { description: Invalid argument }
+  /api/diagnostics/export:
+    get:
+      summary: Export diagnostics manifest snapshot
+      parameters:
+        - in: query
+          name: request_id
+          schema: { type: string }
+          description: optional request_id scoped export
+        - in: query
+          name: trace_id
+          schema: { type: string }
+          description: optional trace_id scoped export
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: string, example: OK }
+                  message: { type: string, example: success }
+                  data:
+                    type: object
+                    properties:
+                      generated_at: { type: string, format: date-time }
+                      node_id: { type: string }
+                      request_id: { type: string }
+                      trace_id: { type: string }
+                      file_name: { type: string }
+                      output_dir: { type: string }
+                      files:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            name: { type: string }
+                            description: { type: string }
+                            content: {}
