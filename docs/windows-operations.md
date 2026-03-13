@@ -15,6 +15,7 @@ SIPTunnel/
 │  ├─ README.md
 │  └─ windows-operations.md
 ├─ scripts/
+│  ├─ embed-ui.ps1
 │  └─ service-skeleton.ps1
 └─ start-gateway.ps1
 ```
@@ -88,6 +89,48 @@ notepad .\configs\config.yaml
 ```
 
 如果你是通过快捷方式启动，还要检查“起始位置（Start in）”是否为安装目录；否则会误读相对路径配置，导致排障混乱。
+
+### 2.2 Windows 下嵌入并运行 UI（embedded）
+
+适用于“单进程同时承载 UI + API”的交付方式。
+
+```powershell
+# 1) 在仓库根目录构建并同步前端静态资源到 gateway-server 内嵌目录
+Set-Location C:\SIPTunnel
+.\scripts\embed-ui.ps1
+
+# 2) 编辑配置，开启 embedded 模式
+notepad .\gateway-server\configs\config.yaml
+```
+
+`config.yaml` 关键项：
+
+```yaml
+ui:
+  enabled: true
+  mode: embedded
+  listen_ip: 0.0.0.0
+  listen_port: 18080
+  base_path: /
+```
+
+然后启动：
+
+```powershell
+Set-Location C:\SIPTunnel\gateway-server
+go run .\cmd\gateway --config .\configs\config.yaml
+```
+
+访问入口：
+- UI：`http://127.0.0.1:18080/`
+- API：`http://127.0.0.1:18080/api`
+
+若你当前使用的是 `gateway.exe` 交付目录，也可将该配置同步到 `configs\config.yaml` 后直接运行：
+
+```powershell
+Set-Location C:\SIPTunnel
+.\gateway.exe --config .\configs\config.yaml
+```
 
 ## 3. 配置修改
 
