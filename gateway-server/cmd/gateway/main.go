@@ -781,7 +781,7 @@ func pickFriendlyStartupPort(osName string) string {
 }
 
 func pickFriendlySIPPort() int {
-	candidates := []int{5060, 15060, 25060, 35060}
+	candidates := []int{59226, 15060, 25060, 35060, 5060}
 	return pickFirstAvailablePort(candidates, func(port int) bool {
 		return isTCPAddrAvailable("0.0.0.0", port)
 	})

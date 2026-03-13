@@ -250,7 +250,7 @@ func TestDefaultConfigYAMLWindowsUsesFriendlySIPPort(t *testing.T) {
 	if !strings.Contains(text, "listen_port:") {
 		t.Fatalf("default config should contain sip.listen_port, got %q", text)
 	}
-	allowed := []string{"listen_port: 5060", "listen_port: 15060", "listen_port: 25060", "listen_port: 35060"}
+	allowed := []string{"listen_port: 59226", "listen_port: 15060", "listen_port: 25060", "listen_port: 35060", "listen_port: 5060"}
 	for _, item := range allowed {
 		if strings.Contains(text, item) {
 			return
