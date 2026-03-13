@@ -207,6 +207,21 @@ make gen-config-docs
 
 CI 同步加入 benchmark smoke（低强度），用于持续校验关键基准可执行性。
 
+## 性能诊断（pprof）
+
+网关新增了可控 pprof 诊断能力，默认关闭，必须同时满足以下条件才可开启：
+
+- `GATEWAY_PPROF_ENABLED=true`
+- 配置访问令牌 `GATEWAY_PPROF_AUTH_TOKEN`
+- 配置网段白名单 `GATEWAY_PPROF_ALLOWED_CIDRS`
+
+支持采集 `cpu / heap / goroutine / block / mutex` profile，并提供脚本：
+
+- `scripts/perf/collect_pprof.sh`：采集 profile
+- `scripts/perf/export_flame_input.sh`：导出火焰图输入
+
+详细流程（压测采样、热点分析、生产安全开关）见：`docs/performance-diagnostics.md`。
+
 ## 长稳测试（1h / 6h / 24h）
 
 仓库新增长稳（soak）测试能力，用于持续验证控制面/文件面链路在长时间运行下的稳定性，重点关注 goroutine、FD、连接回收、内存与缓冲区增长、错误率。
