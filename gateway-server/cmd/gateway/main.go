@@ -397,7 +397,7 @@ func handleConfigCommands(args []string) (bool, error) {
 		}
 		return true, nil
 	case "print-default-config":
-		b, err := defaultConfigYAML()
+		b, err := defaultConfigYAML(runtime.GOOS)
 		if err != nil {
 			return true, err
 		}
@@ -518,8 +518,11 @@ func parseRuntimeConfigFromTopLevelYAML(data []byte) (runtimeConfig, error) {
 	return runtimeConfig{Network: networkCfg, UI: uiCfg}, nil
 }
 
-func defaultConfigYAML() ([]byte, error) {
+func defaultConfigYAML(osName string) ([]byte, error) {
 	networkCfg := config.DefaultNetworkConfig()
+	if osName == "windows" {
+		networkCfg.SIP.ListenPort = pickFriendlySIPPort()
+	}
 	yamlCfg := fullConfigFile{
 		Server: map[string]any{"port": 18080},
 		SIP:    networkCfg.SIP,
@@ -587,7 +590,7 @@ func writeConfigIfNotExists(path string, template bool) (bool, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return false, err
 	}
-	b, err := defaultConfigYAML()
+	b, err := defaultConfigYAML(runtime.GOOS)
 	if err != nil {
 		return false, err
 	}
@@ -777,6 +780,16 @@ func pickFriendlyStartupPort(osName string) string {
 		}
 	}
 	return strconv.Itoa(candidates[0])
+}
+
+func pickFriendlySIPPort() int {
+	candidates := []int{5060, 15060, 25060, 35060}
+	for _, port := range candidates {
+		if isPortAvailable(port) {
+			return port
+		}
+	}
+	return candidates[0]
 }
 
 func isPortAvailable(port int) bool {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"net"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -227,7 +228,7 @@ func TestReadCLIConfigPath(t *testing.T) {
 }
 
 func TestDefaultConfigYAMLContainsRequiredSections(t *testing.T) {
-	raw, err := defaultConfigYAML()
+	raw, err := defaultConfigYAML("linux")
 	if err != nil {
 		t.Fatalf("defaultConfigYAML() error=%v", err)
 	}
@@ -236,6 +237,36 @@ func TestDefaultConfigYAMLContainsRequiredSections(t *testing.T) {
 		if !strings.Contains(text, section) {
 			t.Fatalf("default config missing section %q", section)
 		}
+	}
+}
+
+
+func TestDefaultConfigYAMLWindowsUsesFriendlySIPPort(t *testing.T) {
+	raw, err := defaultConfigYAML("windows")
+	if err != nil {
+		t.Fatalf("defaultConfigYAML() error=%v", err)
+	}
+	text := string(raw)
+	if !strings.Contains(text, "listen_port:") {
+		t.Fatalf("default config should contain sip.listen_port, got %q", text)
+	}
+	allowed := []string{"listen_port: 5060", "listen_port: 15060", "listen_port: 25060", "listen_port: 35060"}
+	for _, item := range allowed {
+		if strings.Contains(text, item) {
+			return
+		}
+	}
+	t.Fatalf("windows default config should use friendly sip port, got %q", text)
+}
+
+func TestPickFriendlySIPPortSkipsOccupiedPort(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:5060")
+	if err != nil {
+		t.Skipf("unable to occupy 5060 for test: %v", err)
+	}
+	defer ln.Close()
+	if got := pickFriendlySIPPort(); got == 5060 {
+		t.Fatalf("pickFriendlySIPPort()=%d, should skip occupied 5060", got)
 	}
 }
 
