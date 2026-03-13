@@ -3,12 +3,13 @@ groups:
     interval: 30s
     rules:
       - alert: SIPTunnelConnectionErrorSpike
-        expr: sum(rate(siptunnel_sip_tcp_connection_errors_total{job="siptunnel-gateway"}[5m])) by (instance) > 5
+        expr: sum by (instance) (rate(siptunnel_sip_tcp_connection_errors_total{job="siptunnel-gateway"}[5m])) > 5
         for: 5m
         labels:
           severity: warning
           team: siptunnel-ops
           service: siptunnel-gateway
+          component: sip-tcp
           category: connectivity
         annotations:
           summary: "SIP TCP 连接异常突增"
@@ -18,15 +19,16 @@ groups:
       - alert: SIPTunnelTaskFailureRateHigh
         expr: |
           (
-            sum(rate(siptunnel_task_total{job="siptunnel-gateway",status="failed"}[10m])) by (instance)
+            sum by (instance) (rate(siptunnel_task_total{job="siptunnel-gateway",status="failed"}[10m]))
             /
-            clamp_min(sum(rate(siptunnel_task_total{job="siptunnel-gateway"}[10m])) by (instance), 0.001)
+            clamp_min(sum by (instance) (rate(siptunnel_task_total{job="siptunnel-gateway"}[10m])), 0.001)
           ) > 0.05
         for: 10m
         labels:
           severity: critical
           team: siptunnel-ops
           service: siptunnel-gateway
+          component: task-engine
           category: task
         annotations:
           summary: "任务失败率过高"
@@ -36,15 +38,16 @@ groups:
       - alert: SIPTunnelRateLimitHitHigh
         expr: |
           (
-            sum(rate(siptunnel_rate_limit_hits_total{job="siptunnel-gateway"}[5m])) by (instance)
+            sum by (instance) (rate(siptunnel_rate_limit_hits_total{job="siptunnel-gateway"}[5m]))
             /
-            clamp_min(sum(rate(siptunnel_requests_total{job="siptunnel-gateway"}[5m])) by (instance), 0.001)
+            clamp_min(sum by (instance) (rate(siptunnel_requests_total{job="siptunnel-gateway"}[5m])), 0.001)
           ) > 0.2
         for: 5m
         labels:
           severity: warning
           team: siptunnel-ops
           service: siptunnel-gateway
+          component: traffic-guard
           category: traffic
         annotations:
           summary: "限流命中率过高"
@@ -58,6 +61,7 @@ groups:
           severity: critical
           team: siptunnel-ops
           service: siptunnel-gateway
+          component: rtp-port-pool
           category: media
         annotations:
           summary: "RTP 端口分配失败"
@@ -71,6 +75,7 @@ groups:
           severity: critical
           team: siptunnel-ops
           service: siptunnel-gateway
+          component: transport
           category: transport
         annotations:
           summary: "传输恢复失败"
@@ -89,6 +94,7 @@ groups:
           severity: warning
           team: siptunnel-ops
           service: siptunnel-gateway
+          component: runtime
           category: runtime
         annotations:
           summary: "Goroutine 异常增长"
@@ -109,8 +115,9 @@ groups:
           severity: critical
           team: siptunnel-ops
           service: siptunnel-gateway
+          component: storage
           category: storage
         annotations:
           summary: "业务目录磁盘占用过高"
-          description: "/var/lib/siptunnel 使用率超过 85%，建议清理归档文件或扩容磁盘。"
+          description: "实例 {{ $labels.instance }} 的 /var/lib/siptunnel 使用率超过 85%，建议清理归档文件或扩容磁盘。"
           runbook_url: "https://siptunnel.local/docs/observability#alert-siptunneldatadiskusagehigh"
