@@ -1,0 +1,123 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {"type": "grafana", "uid": "-- Grafana --"},
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "id": 1,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {"expr": "sum(siptunnel_sip_tcp_current_connections{job=\"siptunnel-gateway\"})", "legendFormat": "当前连接", "refId": "A"},
+        {"expr": "sum(rate(siptunnel_sip_tcp_connection_errors_total{job=\"siptunnel-gateway\"}[5m]))", "legendFormat": "连接错误速率", "refId": "B"},
+        {"expr": "sum(rate(siptunnel_sip_tcp_read_timeout_total{job=\"siptunnel-gateway\"}[5m]))", "legendFormat": "读超时速率", "refId": "C"}
+      ],
+      "title": "SIP TCP 面板",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "id": 2,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {"expr": "sum(siptunnel_rtp_active_transfers{job=\"siptunnel-gateway\"})", "legendFormat": "活跃传输", "refId": "A"},
+        {"expr": "sum(siptunnel_rtp_port_pool_used{job=\"siptunnel-gateway\"})", "legendFormat": "端口池占用", "refId": "B"},
+        {"expr": "sum(rate(siptunnel_transport_tcp_write_errors_total{job=\"siptunnel-gateway\"}[5m]))", "legendFormat": "TCP 写错误速率", "refId": "C"}
+      ],
+      "title": "RTP UDP/TCP 面板",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "percentunit"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "id": 3,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {
+          "expr": "sum(rate(siptunnel_task_total{job=\"siptunnel-gateway\",status=\"failed\"}[10m])) / clamp_min(sum(rate(siptunnel_task_total{job=\"siptunnel-gateway\"}[10m])), 0.001)",
+          "legendFormat": "任务失败率",
+          "refId": "A"
+        },
+        {"expr": "sum(siptunnel_task_inflight{job=\"siptunnel-gateway\"})", "legendFormat": "处理中任务", "refId": "B"}
+      ],
+      "title": "任务面板",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "decbytes"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "id": 4,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {"expr": "sum(rate(siptunnel_file_transfer_bytes_total{job=\"siptunnel-gateway\",direction=\"tx\"}[5m]))", "legendFormat": "发送吞吐", "refId": "A"},
+        {"expr": "sum(rate(siptunnel_file_transfer_bytes_total{job=\"siptunnel-gateway\",direction=\"rx\"}[5m]))", "legendFormat": "接收吞吐", "refId": "B"},
+        {"expr": "sum(siptunnel_file_transfer_active{job=\"siptunnel-gateway\"})", "legendFormat": "活跃文件任务", "refId": "C"}
+      ],
+      "title": "文件传输面板",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+      "id": 5,
+      "options": {"legend": {"displayMode": "table", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "targets": [
+        {"expr": "sum(rate(siptunnel_rate_limit_hits_total{job=\"siptunnel-gateway\"}[5m]))", "legendFormat": "限流命中速率", "refId": "A"},
+        {"expr": "sum(rate(siptunnel_errors_total{job=\"siptunnel-gateway\"}[5m])) by (code)", "legendFormat": "错误 {{code}}", "refId": "B"},
+        {"expr": "sum(increase(siptunnel_transport_recovery_failed_total{job=\"siptunnel-gateway\"}[10m]))", "legendFormat": "恢复失败数(10m)", "refId": "C"}
+      ],
+      "title": "限流与错误面板",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["siptunnel", "ops", "gateway"],
+  "templating": {
+    "list": [
+      {
+        "current": {"selected": true, "text": "Prometheus", "value": "Prometheus"},
+        "hide": 0,
+        "includeAll": false,
+        "label": "Datasource",
+        "name": "DS_PROMETHEUS",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": "",
+        "type": "datasource"
+      }
+    ]
+  },
+  "time": {"from": "now-6h", "to": "now"},
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "SIPTunnel 运维高频指标",
+  "uid": "siptunnel-ops-overview",
+  "version": 1,
+  "weekStart": ""
+}
