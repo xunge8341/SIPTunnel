@@ -38,6 +38,26 @@ Set-Location C:\SIPTunnel
 
 如果找不到配置，将自动生成默认配置并创建所需目录（dev/test 模式）。
 
+> 首启优化（已修复）：Windows 自动生成配置时，会优先选择可用的 SIP 端口（按 `5060 -> 15060 -> 25060 -> 35060` 顺序探测），避免大量机器上首启即因 `5060` 被占用而被 self-check 拦截。
+
+推荐首启步骤（避免你截图里那类问题）：
+
+```powershell
+# 1) 进入安装目录（非常关键）
+Set-Location C:\SIPTunnel
+
+# 2) 主动生成配置（若已存在则不会覆盖）
+.\gateway.exe init-config --config .\configs\config.yaml
+
+# 3) 校验配置
+.\gateway.exe validate-config -f .\configs\config.yaml
+
+# 4) 启动
+.\gateway.exe --config .\configs\config.yaml
+```
+
+若仍提示 SIP 端口占用，请改 `configs\config.yaml` 的 `sip.listen_port` 为其他空闲端口（如 `15060`），再重启。
+
 ## 3. 配置修改
 
 1. 编辑 `configs\config.yaml`。
