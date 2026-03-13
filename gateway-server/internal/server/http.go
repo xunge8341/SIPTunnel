@@ -713,7 +713,51 @@ func (d handlerDeps) handleSelfCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	report := d.selfCheckProvider(r.Context())
+	if level := strings.TrimSpace(r.URL.Query().Get("level")); level != "" {
+		report.Items = filterSelfCheckItemsByLevel(report.Items, level)
+		report.Overall, report.Summary = summarizeSelfCheckItems(report.Items)
+	}
 	writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: report})
+}
+
+func filterSelfCheckItemsByLevel(items []selfcheck.Item, raw string) []selfcheck.Item {
+	allowed := map[selfcheck.Level]struct{}{}
+	for _, part := range strings.Split(raw, ",") {
+		l := selfcheck.Level(strings.ToLower(strings.TrimSpace(part)))
+		if l == selfcheck.LevelInfo || l == selfcheck.LevelWarn || l == selfcheck.LevelError {
+			allowed[l] = struct{}{}
+		}
+	}
+	if len(allowed) == 0 {
+		return items
+	}
+	out := make([]selfcheck.Item, 0, len(items))
+	for _, item := range items {
+		if _, ok := allowed[item.Level]; ok {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func summarizeSelfCheckItems(items []selfcheck.Item) (selfcheck.Level, selfcheck.Summary) {
+	summary := selfcheck.Summary{}
+	overall := selfcheck.LevelInfo
+	for _, item := range items {
+		switch item.Level {
+		case selfcheck.LevelError:
+			summary.Error++
+			overall = selfcheck.LevelError
+		case selfcheck.LevelWarn:
+			summary.Warn++
+			if overall != selfcheck.LevelError {
+				overall = selfcheck.LevelWarn
+			}
+		default:
+			summary.Info++
+		}
+	}
+	return overall, summary
 }
 
 func (d handlerDeps) handleNodeNetworkStatus(w http.ResponseWriter, r *http.Request) {
