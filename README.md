@@ -108,6 +108,31 @@ GATEWAY_DATA_DIR=./runtime-data go run ./cmd/gateway
 若目录不可创建或不可写，服务会在启动阶段直接失败并输出可读错误信息，便于运维快速定位。
 
 
+## gateway-server 配置查找优先级（启动加载）
+
+`gateway-server` 启动时会按以下顺序查找配置文件，命中即使用：
+
+1. CLI 参数 `--config <path>`
+2. 环境变量 `GATEWAY_CONFIG`
+3. 可执行文件目录下 `configs/config.yaml`
+4. 可执行文件目录下 `config.yaml`
+5. 当前工作目录下 `configs/config.yaml`
+6. 当前工作目录下 `config.yaml`
+
+若以上路径均不存在，程序会明确记录日志并进入**默认配置生成逻辑**（`config source=default_generated`），不再仅输出“静默回退”语义，便于运维快速判断是否误配路径。
+
+启动日志会打印两项关键字段：
+
+- `config path`：最终使用的配置路径（若走默认生成则为空）。
+- `config source`：配置来源（`cli/env/exe_dir/cwd/default_generated`）。
+
+示例：
+
+```bash
+cd gateway-server
+go run ./cmd/gateway --config ./configs/config.yaml
+```
+
 ## SIP/RTP 独立网络配置模型
 
 `gateway-server/configs/config.yaml` 提供了 `network.sip` 与 `network.rtp` 两套完全独立的配置段：
