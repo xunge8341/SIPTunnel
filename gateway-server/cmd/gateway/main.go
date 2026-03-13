@@ -184,8 +184,11 @@ func runGatewayStartup(args []string) {
 		log.Printf("env_self_check_report=%s", raw)
 	}
 	log.Print(report.ToCLI())
-	if report.Overall == selfcheck.LevelError {
+	if shouldBlockStartupOnSelfCheckError(report, runMode) {
 		log.Fatal(formatStartupFailure("environment self-check", errors.New("please fix errors before startup"), "", runtime.GOOS))
+	}
+	if report.Overall == selfcheck.LevelError {
+		log.Printf("environment self-check has blocking-level findings, but startup is allowed in run_mode=%s (degraded mode)", runMode)
 	}
 	unifiedSummary = buildStartupSummary(nodeID, cfgLoad, uiCfg, selfCheckInput.NetworkConfig, paths, defaultPort, rtpTransport.Mode(), report, len(selfCheckInput.DownstreamRoutes), runMode)
 
@@ -561,6 +564,13 @@ func resolveRunMode() string {
 		return mode
 	}
 	return "dev"
+}
+
+func shouldBlockStartupOnSelfCheckError(report selfcheck.Report, runMode string) bool {
+	if report.Overall != selfcheck.LevelError {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(runMode), "prod")
 }
 
 func resolveConfigOutputPath(cliConfigPath string, envConfigPath string, getwd func() (string, error), executablePath func() (string, error), osName string) string {

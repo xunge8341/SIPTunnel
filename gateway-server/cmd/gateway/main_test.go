@@ -80,6 +80,24 @@ func TestReadPort(t *testing.T) {
 	}
 }
 
+func TestShouldBlockStartupOnSelfCheckError(t *testing.T) {
+	errorReport := selfcheck.Report{Overall: selfcheck.LevelError}
+	warnReport := selfcheck.Report{Overall: selfcheck.LevelWarn}
+
+	if !shouldBlockStartupOnSelfCheckError(errorReport, "prod") {
+		t.Fatal("expected prod mode to block startup on self-check error")
+	}
+	if shouldBlockStartupOnSelfCheckError(errorReport, "dev") {
+		t.Fatal("expected dev mode not to block startup on self-check error")
+	}
+	if shouldBlockStartupOnSelfCheckError(errorReport, "test") {
+		t.Fatal("expected test mode not to block startup on self-check error")
+	}
+	if shouldBlockStartupOnSelfCheckError(warnReport, "prod") {
+		t.Fatal("expected non-error report not to block startup")
+	}
+}
+
 func TestResolveHTTPListenAddr(t *testing.T) {
 	addr := resolveHTTPListenAddr("18080", config.UIConfig{Enabled: true, Mode: "embedded", ListenIP: "0.0.0.0", ListenPort: 19090})
 	if addr != "0.0.0.0:19090" {
@@ -239,7 +257,6 @@ func TestDefaultConfigYAMLContainsRequiredSections(t *testing.T) {
 		}
 	}
 }
-
 
 func TestDefaultConfigYAMLWindowsUsesFriendlySIPPort(t *testing.T) {
 	raw, err := defaultConfigYAML("windows")
