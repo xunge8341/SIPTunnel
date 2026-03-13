@@ -122,3 +122,29 @@ paths:
                       recent_network_errors:
                         type: array
                         items: { type: string }
+
+
+  /api/capacity/recommendation:
+    post:
+      summary: Assess capacity and rate-limit recommendation by loadtest summary
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [summary_file]
+              properties:
+                summary_file: { type: string, description: Path to loadtest summary.json on gateway host }
+                current:
+                  type: object
+                  properties:
+                    command_max_concurrent: { type: integer }
+                    file_transfer_max_concurrent: { type: integer }
+                    rtp_port_pool_size: { type: integer }
+                    max_connections: { type: integer }
+                    rate_limit_rps: { type: integer }
+                    rate_limit_burst: { type: integer }
+      responses:
+        '200': { description: OK }
+        '400': { description: Invalid argument }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -25,8 +26,34 @@ func main() {
 		httpURL      = flag.String("http-url", "http://127.0.0.1:18080/demo/process", "A网HTTP invoke URL")
 		outputDir    = flag.String("output-dir", "./loadtest/results", "结果输出目录")
 		timeout      = flag.Duration("timeout", 3*time.Second, "单请求超时")
+		analyzeFile  = flag.String("analyze-summary", "", "读取 summary.json 并输出容量评估建议")
+		currentCmd   = flag.Int("current-command-max-concurrent", 100, "当前命令并发上限")
+		currentFile  = flag.Int("current-file-max-concurrent", 60, "当前文件传输并发上限")
+		currentRTP   = flag.Int("current-rtp-port-pool", 256, "当前RTP端口池大小")
+		currentConn  = flag.Int("current-max-connections", 200, "当前 max_connections")
+		currentRPS   = flag.Int("current-rate-limit-rps", 300, "当前限流RPS")
+		currentBurst = flag.Int("current-rate-limit-burst", 450, "当前限流突发值")
 	)
 	flag.Parse()
+
+	if strings.TrimSpace(*analyzeFile) != "" {
+		report, err := loadtest.LoadReportFromSummary(*analyzeFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "load summary failed: %v\n", err)
+			os.Exit(1)
+		}
+		assessment := loadtest.AssessCapacity(report, loadtest.CapacityCurrentConfig{
+			CommandMaxConcurrent:      *currentCmd,
+			FileTransferMaxConcurrent: *currentFile,
+			RTPPortPoolSize:           *currentRTP,
+			MaxConnections:            *currentConn,
+			RateLimitRPS:              *currentRPS,
+			RateLimitBurst:            *currentBurst,
+		})
+		output, _ := json.MarshalIndent(assessment, "", "  ")
+		fmt.Println(string(output))
+		return
+	}
 
 	cfg := loadtest.Config{
 		Targets:      normalizeTargets(strings.Split(*targets, ","), *transferMode),
