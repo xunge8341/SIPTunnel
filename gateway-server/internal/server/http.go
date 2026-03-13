@@ -19,6 +19,7 @@ import (
 	"siptunnel/internal/selfcheck"
 	"siptunnel/internal/service"
 	"siptunnel/internal/service/taskengine"
+	"siptunnel/loadtest"
 )
 
 type handlerDeps struct {
@@ -127,6 +128,18 @@ type updateLimitsRequest struct {
 
 type updateRoutesRequest struct {
 	Routes []OpsRoute `json:"routes"`
+}
+
+type capacityAssessmentRequest struct {
+	SummaryFile string `json:"summary_file"`
+	Current     struct {
+		CommandMaxConcurrent      int `json:"command_max_concurrent"`
+		FileTransferMaxConcurrent int `json:"file_transfer_max_concurrent"`
+		RTPPortPoolSize           int `json:"rtp_port_pool_size"`
+		MaxConnections            int `json:"max_connections"`
+		RateLimitRPS              int `json:"rate_limit_rps"`
+		RateLimitBurst            int `json:"rate_limit_burst"`
+	} `json:"current"`
 }
 
 type HandlerOptions struct {
@@ -263,6 +276,7 @@ func newMux(deps handlerDeps) http.Handler {
 	mux.HandleFunc("/api/audits", deps.handleAudits)
 	mux.HandleFunc("/api/selfcheck", deps.handleSelfCheck)
 	mux.HandleFunc("/api/node/network-status", deps.handleNodeNetworkStatus)
+	mux.HandleFunc("/api/capacity/recommendation", deps.handleCapacityRecommendation)
 	return deps.withObservability(mux)
 }
 
@@ -503,6 +517,60 @@ func (d handlerDeps) handleRoutes(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
 	}
+}
+
+func (d handlerDeps) handleCapacityRecommendation(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
+		return
+	}
+	var req capacityAssessmentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid json body")
+		return
+	}
+	if strings.TrimSpace(req.SummaryFile) == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", "summary_file is required")
+		return
+	}
+	report, err := loadtest.LoadReportFromSummary(req.SummaryFile)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", fmt.Sprintf("read summary failed: %v", err))
+		return
+	}
+	d.mu.RLock()
+	limits := d.limits
+	d.mu.RUnlock()
+	status := d.networkStatusFunc(r.Context())
+	current := loadtest.CapacityCurrentConfig{
+		CommandMaxConcurrent:      fallbackPositive(req.Current.CommandMaxConcurrent, limits.MaxConcurrent),
+		FileTransferMaxConcurrent: fallbackPositive(req.Current.FileTransferMaxConcurrent, status.RTP.ActiveTransfers),
+		RTPPortPoolSize:           fallbackPositive(req.Current.RTPPortPoolSize, status.RTP.PortPoolTotal),
+		MaxConnections:            fallbackPositive(req.Current.MaxConnections, status.SIP.MaxConnections),
+		RateLimitRPS:              fallbackPositive(req.Current.RateLimitRPS, limits.RPS),
+		RateLimitBurst:            fallbackPositive(req.Current.RateLimitBurst, limits.Burst),
+	}
+	assessment := loadtest.AssessCapacity(report, current)
+	response := map[string]any{
+		"assessment": assessment,
+		"summary": map[string]any{
+			"run_id":       report.RunID,
+			"generated_at": report.Generated,
+			"targets":      len(report.Summaries),
+		},
+	}
+	d.recordOpsAudit(r, readOperator(r), "QUERY_CAPACITY_RECOMMENDATION", map[string]any{"summary_file": req.SummaryFile})
+	writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: response})
+}
+
+func fallbackPositive(v int, fallback int) int {
+	if v > 0 {
+		return v
+	}
+	if fallback > 0 {
+		return fallback
+	}
+	return 1
 }
 
 func (d handlerDeps) handleNodes(w http.ResponseWriter, r *http.Request) {

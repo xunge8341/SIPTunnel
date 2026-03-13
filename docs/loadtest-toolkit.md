@@ -74,3 +74,24 @@ go run ./cmd/loadtest \
 - `transfer-mode`
 - `p95_ms`
 - `success_rate`
+
+
+## 容量评估（基于压测结果）
+
+可基于 `summary.json` 生成参数建议：
+
+```bash
+./scripts/loadtest/capacity.sh \
+  gateway-server/loadtest/results/<run_id>/summary.json \
+  120 60 256 220 300 450
+```
+
+输出包含：
+
+- 推荐最大并发 command 数
+- 推荐最大并发 file transfer 数
+- 推荐 RTP 端口池大小
+- 推荐 `max_connections`
+- 推荐限流阈值（RPS/burst）
+
+详细规则见 `docs/capacity.md`。

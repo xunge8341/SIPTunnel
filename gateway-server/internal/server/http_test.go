@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -177,6 +178,33 @@ func TestNodeNetworkStatusEndpointAndAudit(t *testing.T) {
 	}
 	if events[0].OpsAction != "QUERY_NODE_NETWORK_STATUS" {
 		t.Fatalf("unexpected ops action: %s", events[0].OpsAction)
+	}
+}
+
+func TestCapacityRecommendationEndpoint(t *testing.T) {
+	h, _, audit := buildTestHandler(t)
+	summary := `{"run_id":"r1","generated_at":"2026-01-01T00:00:00Z","config":{"Targets":null,"Concurrency":0,"QPS":0,"Duration":0,"FileSize":0,"ChunkSize":0,"TransferMode":"","SIPAddress":"","RTPAddress":"","HTTPURL":"","OutputDir":"","Timeout":0},"summaries":{"sip-command-create":{"target":"sip-command-create","total":1000,"success":998,"failed":2,"success_rate":0.998,"throughput_qps":220,"p50_ms":30,"p95_ms":120,"p99_ms":180,"error_types":{},"elapsed_ms":10000,"concurrency":120,"configured_qps":300},"rtp-udp-upload":{"target":"rtp-udp-upload","total":600,"success":598,"failed":2,"success_rate":0.996,"throughput_qps":80,"p50_ms":100,"p95_ms":220,"p99_ms":350,"error_types":{},"elapsed_ms":10000,"concurrency":50,"configured_qps":0}},"result_file":"/tmp/results.jsonl"}`
+	path := t.TempDir() + "/summary.json"
+	if err := os.WriteFile(path, []byte(summary), 0o644); err != nil {
+		t.Fatalf("write summary failed: %v", err)
+	}
+	body := `{"summary_file":"` + path + `","current":{"command_max_concurrent":90,"file_transfer_max_concurrent":40,"rtp_port_pool_size":120,"max_connections":150,"rate_limit_rps":280,"rate_limit_burst":420}}`
+	req := httptest.NewRequest(http.MethodPost, "/api/capacity/recommendation", bytes.NewBufferString(body))
+	req.Header.Set("X-Initiator", "capacity-ops")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "recommended_command_max_concurrent") {
+		t.Fatalf("unexpected response: %s", rr.Body.String())
+	}
+	events, err := audit.List(t.Context(), observability.AuditQuery{Who: "capacity-ops", Limit: 10})
+	if err != nil {
+		t.Fatalf("query audit failed: %v", err)
+	}
+	if len(events) == 0 || events[0].OpsAction != "QUERY_CAPACITY_RECOMMENDATION" {
+		t.Fatalf("unexpected audit events: %+v", events)
 	}
 }
 
