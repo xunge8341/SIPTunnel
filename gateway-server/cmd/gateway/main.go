@@ -3,11 +3,15 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -31,12 +35,16 @@ var (
 )
 
 func main() {
+	cliConfigPath, err := readCLIConfigPath(os.Args[1:])
+	if err != nil {
+		log.Fatalf("parse flags failed: %v", err)
+	}
 	port := readPort()
 	paths := config.LoadStoragePathsFromEnv()
 	if err := paths.EnsureWritable(); err != nil {
 		log.Fatalf("startup directory validation failed: %v", err)
 	}
-	selfCheckInput := buildSelfCheckInput(paths)
+	selfCheckInput := buildSelfCheckInput(paths, cliConfigPath)
 	rtpTransport, err := filetransfer.NewTransport(selfCheckInput.NetworkConfig.RTP.Transport)
 	if err != nil {
 		log.Fatalf("init rtp transport failed: %v", err)
@@ -184,9 +192,12 @@ func main() {
 	}
 }
 
-func buildSelfCheckInput(paths config.StoragePaths) selfcheck.Input {
+func buildSelfCheckInput(paths config.StoragePaths, cliConfigPath string) selfcheck.Input {
+	networkCfg, cfgLoad := loadNetworkConfig(cliConfigPath)
+	log.Printf("network config resolved path=%q source=%s", cfgLoad.Path, cfgLoad.Source)
+
 	in := selfcheck.Input{
-		NetworkConfig: loadNetworkConfig(),
+		NetworkConfig: networkCfg,
 		StoragePaths:  paths,
 	}
 	if routePath := os.Getenv("GATEWAY_HTTPINVOKE_CONFIG"); routePath != "" {
@@ -200,29 +211,115 @@ func buildSelfCheckInput(paths config.StoragePaths) selfcheck.Input {
 	return in
 }
 
-func loadNetworkConfig() config.NetworkConfig {
-	path := os.Getenv("GATEWAY_NETWORK_CONFIG")
-	if path == "" {
-		path = "configs/config.yaml"
+type configSource string
+
+const (
+	configSourceCLI              configSource = "cli"
+	configSourceEnv              configSource = "env"
+	configSourceExeDir           configSource = "exe_dir"
+	configSourceCWD              configSource = "cwd"
+	configSourceDefaultGenerated configSource = "default_generated"
+)
+
+type configCandidate struct {
+	path   string
+	source configSource
+}
+
+type configLoadResult struct {
+	Path   string
+	Source configSource
+}
+
+func readCLIConfigPath(args []string) (string, error) {
+	fs := flag.NewFlagSet("gateway", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	configPath := fs.String("config", "", "gateway config file path")
+	if err := fs.Parse(args); err != nil {
+		return "", err
 	}
-	data, err := os.ReadFile(path)
+	return strings.TrimSpace(*configPath), nil
+}
+
+func loadNetworkConfig(cliConfigPath string) (config.NetworkConfig, configLoadResult) {
+	candidate, ok := pickExistingConfigCandidate(cliConfigPath, os.Getenv("GATEWAY_CONFIG"), os.Executable, os.Getwd, fileExists)
+	if !ok {
+		log.Print("network config not found in lookup chain, entering default config generation logic")
+		return config.DefaultNetworkConfig(), configLoadResult{Source: configSourceDefaultGenerated}
+	}
+
+	data, err := os.ReadFile(candidate.path)
 	if err != nil {
-		log.Printf("load network config path=%q failed: %v, fallback to defaults", path, err)
-		return config.DefaultNetworkConfig()
+		log.Printf("load network config path=%q source=%s failed: %v, entering default config generation logic", candidate.path, candidate.source, err)
+		return config.DefaultNetworkConfig(), configLoadResult{Path: candidate.path, Source: configSourceDefaultGenerated}
 	}
 	var fileCfg struct {
 		Network config.NetworkConfig `yaml:"network"`
 	}
 	if err := yaml.Unmarshal(data, &fileCfg); err != nil {
-		log.Printf("parse network config path=%q failed: %v, fallback to defaults", path, err)
-		return config.DefaultNetworkConfig()
+		log.Printf("parse network config path=%q source=%s failed: %v, entering default config generation logic", candidate.path, candidate.source, err)
+		return config.DefaultNetworkConfig(), configLoadResult{Path: candidate.path, Source: configSourceDefaultGenerated}
 	}
 	fileCfg.Network.ApplyDefaults()
 	if err := fileCfg.Network.Validate(); err != nil {
-		log.Printf("validate network config path=%q failed: %v, fallback to defaults", path, err)
-		return config.DefaultNetworkConfig()
+		log.Printf("validate network config path=%q source=%s failed: %v, entering default config generation logic", candidate.path, candidate.source, err)
+		return config.DefaultNetworkConfig(), configLoadResult{Path: candidate.path, Source: configSourceDefaultGenerated}
 	}
-	return fileCfg.Network
+	return fileCfg.Network, configLoadResult{Path: candidate.path, Source: candidate.source}
+}
+
+func pickExistingConfigCandidate(cliConfigPath string, envConfigPath string, executablePath func() (string, error), getwd func() (string, error), exists func(string) bool) (configCandidate, bool) {
+	exePath, err := executablePath()
+	if err != nil {
+		exePath = ""
+	}
+	cwd, err := getwd()
+	if err != nil {
+		cwd = "."
+	}
+	for _, candidate := range configCandidates(cliConfigPath, envConfigPath, executableDir(exePath), cwd) {
+		if exists(candidate.path) {
+			return candidate, true
+		}
+	}
+	return configCandidate{}, false
+}
+
+func configCandidates(cliConfigPath string, envConfigPath string, exeDir string, cwd string) []configCandidate {
+	candidates := make([]configCandidate, 0, 6)
+	if p := strings.TrimSpace(cliConfigPath); p != "" {
+		candidates = append(candidates, configCandidate{path: p, source: configSourceCLI})
+	}
+	if p := strings.TrimSpace(envConfigPath); p != "" {
+		candidates = append(candidates, configCandidate{path: p, source: configSourceEnv})
+	}
+	if exeDir != "" {
+		candidates = append(candidates,
+			configCandidate{path: filepath.Join(exeDir, "configs", "config.yaml"), source: configSourceExeDir},
+			configCandidate{path: filepath.Join(exeDir, "config.yaml"), source: configSourceExeDir},
+		)
+	}
+	candidates = append(candidates,
+		configCandidate{path: filepath.Join(cwd, "configs", "config.yaml"), source: configSourceCWD},
+		configCandidate{path: filepath.Join(cwd, "config.yaml"), source: configSourceCWD},
+	)
+	return candidates
+}
+
+func executableDir(executablePath string) string {
+	if executablePath == "" {
+		return ""
+	}
+	if strings.Contains(executablePath, "\\") {
+		normalized := strings.ReplaceAll(executablePath, "\\", "/")
+		return strings.ReplaceAll(path.Dir(normalized), "/", "\\")
+	}
+	return filepath.Dir(executablePath)
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 func readPort() string {

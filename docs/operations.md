@@ -188,16 +188,33 @@ systemctl restart siptunnel-gateway.service
 
 ### 9.2 配置入口
 
-- `GATEWAY_NETWORK_CONFIG`：网络配置文件路径（默认 `gateway-server/configs/config.yaml`）。
+网络配置文件按以下优先级查找（命中即停止）：
+
+1. CLI 参数：`--config <path>`
+2. 环境变量：`GATEWAY_CONFIG`
+3. `exe_dir/configs/config.yaml`
+4. `exe_dir/config.yaml`
+5. `cwd/configs/config.yaml`
+6. `cwd/config.yaml`
+
+若以上路径都不存在，服务会明确记录“进入默认配置生成逻辑（default_generated）”并使用内置默认网络配置。
+
 - `GATEWAY_HTTPINVOKE_CONFIG`：下游路由配置（YAML，含 routes 列表）。
 
-示例：
+示例（Linux）：
 
 ```bash
 cd gateway-server
-GATEWAY_NETWORK_CONFIG=./configs/config.yaml \
+GATEWAY_CONFIG=./configs/config.yaml \
 GATEWAY_HTTPINVOKE_CONFIG=./configs/httpinvoke_routes.example.yaml \
 go run ./cmd/gateway
+```
+
+示例（显式 CLI，优先级最高）：
+
+```bash
+cd gateway-server
+go run ./cmd/gateway --config ./configs/config.yaml
 ```
 
 ### 9.3 运维 API
