@@ -1,1 +1,0 @@
-placeholder asset for go:embed. run ./scripts/embed-ui.sh to replace with gateway-ui dist assets.
