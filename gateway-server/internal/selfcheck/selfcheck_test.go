@@ -227,3 +227,88 @@ func TestRunnerRun_SIPUDPMessageSizeRiskWarn(t *testing.T) {
 	}
 	t.Fatalf("risk item not found: %+v", report.Items)
 }
+
+func TestRunnerRun_PortConflictIncludesLinuxDiagnosticsAndSuggestedPort(t *testing.T) {
+	runner := &Runner{
+		nowFn:          func() time.Time { return time.Now().UTC() },
+		interfaceIPs:   func() (map[string]struct{}, error) { return map[string]struct{}{"127.0.0.1": {}}, nil },
+		listenTCP:      func(_, _ string) (net.Listener, error) { return nil, errors.New("address already in use") },
+		listenUDP:      func(_, _ string) (net.PacketConn, error) { return fakePacketConn{}, nil },
+		ensureWritable: func(_ string) error { return nil },
+		dialTCP:        func(_ context.Context, _ string) error { return nil },
+		lookPath: func(file string) (string, error) {
+			if file == "lsof" {
+				return "/usr/bin/lsof", nil
+			}
+			return "", errors.New("missing")
+		},
+		execCommand: func(_ context.Context, name string, args ...string) ([]byte, error) {
+			if name == "lsof" {
+				return []byte(`COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME
+nginx 234 root 6u IPv4 0t0 TCP *:5060 (LISTEN)
+`), nil
+			}
+			return nil, errors.New("unsupported")
+		},
+		findFreePort: func(_ string, _ string) (int, error) { return 25060, nil },
+	}
+
+	cfg := config.DefaultNetworkConfig()
+	cfg.SIP.ListenIP = "127.0.0.1"
+	cfg.SIP.ListenPort = 5060
+	cfg.SIP.Transport = "TCP"
+	cfg.RTP.Enabled = false
+
+	report := runner.Run(t.Context(), Input{NetworkConfig: cfg, StoragePaths: config.StoragePaths{TempDir: "./tmp", FinalDir: "./final", AuditDir: "./audit"}, RunMode: "dev"})
+	for _, item := range report.Items {
+		if item.Name != "sip.listen_port_occupancy" {
+			continue
+		}
+		if item.Level != LevelError {
+			t.Fatalf("level=%s, want error", item.Level)
+		}
+		if !strings.Contains(item.Message, "nginx(pid=234)") {
+			t.Fatalf("message missing owner: %s", item.Message)
+		}
+		if !strings.Contains(item.Suggestion, "ss -ltnp") || !strings.Contains(item.Suggestion, "lsof -i :5060") {
+			t.Fatalf("suggestion missing linux commands: %s", item.Suggestion)
+		}
+		if !strings.Contains(item.Suggestion, "sip.listen_port=25060") {
+			t.Fatalf("suggestion missing free port: %s", item.Suggestion)
+		}
+		return
+	}
+	t.Fatalf("sip.listen_port_occupancy not found: %+v", report.Items)
+}
+
+func TestRunnerRun_PortConflictProdNoSuggestedPort(t *testing.T) {
+	runner := &Runner{
+		nowFn:          func() time.Time { return time.Now().UTC() },
+		interfaceIPs:   func() (map[string]struct{}, error) { return map[string]struct{}{"127.0.0.1": {}}, nil },
+		listenTCP:      func(_, _ string) (net.Listener, error) { return nil, errors.New("address already in use") },
+		listenUDP:      func(_, _ string) (net.PacketConn, error) { return fakePacketConn{}, nil },
+		ensureWritable: func(_ string) error { return nil },
+		dialTCP:        func(_ context.Context, _ string) error { return nil },
+		lookPath:       func(string) (string, error) { return "", errors.New("missing") },
+		execCommand:    func(_ context.Context, _ string, _ ...string) ([]byte, error) { return nil, errors.New("missing") },
+		findFreePort:   func(_ string, _ string) (int, error) { return 25060, nil },
+	}
+
+	cfg := config.DefaultNetworkConfig()
+	cfg.SIP.ListenIP = "127.0.0.1"
+	cfg.SIP.ListenPort = 5060
+	cfg.SIP.Transport = "TCP"
+	cfg.RTP.Enabled = false
+
+	report := runner.Run(t.Context(), Input{NetworkConfig: cfg, StoragePaths: config.StoragePaths{TempDir: "./tmp", FinalDir: "./final", AuditDir: "./audit"}, RunMode: "prod"})
+	for _, item := range report.Items {
+		if item.Name != "sip.listen_port_occupancy" {
+			continue
+		}
+		if strings.Contains(item.Suggestion, "sip.listen_port=25060") {
+			t.Fatalf("prod suggestion should not include free port: %s", item.Suggestion)
+		}
+		return
+	}
+	t.Fatalf("sip.listen_port_occupancy not found: %+v", report.Items)
+}
