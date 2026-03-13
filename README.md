@@ -108,6 +108,35 @@ GATEWAY_DATA_DIR=./runtime-data go run ./cmd/gateway
 若目录不可创建或不可写，服务会在启动阶段直接失败并输出可读错误信息，便于运维快速定位。
 
 
+
+## gateway 配置初始化 / 打印 / 校验命令
+
+在 `gateway-server` 目录下可直接使用以下命令：
+
+```bash
+# 生成默认配置（已存在则不覆盖）
+go run ./cmd/gateway init-config
+
+# 打印默认配置到 stdout
+go run ./cmd/gateway print-default-config
+
+# 校验配置文件
+go run ./cmd/gateway validate-config -f ./configs/config.yaml
+```
+
+启动时若找不到配置文件：
+
+- `GATEWAY_MODE=dev/test`：自动生成默认配置并继续启动。
+- `GATEWAY_MODE=prod`：生成生产模板后退出，并提示运维先修改再启动。
+
+启动日志会明确输出：
+
+- 是否自动生成配置（`auto_generated=true|false`）
+- 配置文件路径（`config_path`）
+- 下一步建议（`next_step`）
+
+默认目录仍会自动创建并校验可写：`data/temp`、`data/final`、`data/audit`（以及 `data/logs`）。
+
 ## gateway-server 配置查找优先级（启动加载）
 
 `gateway-server` 启动时会按以下顺序查找配置文件，命中即使用：
