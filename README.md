@@ -24,6 +24,24 @@ SIPTunnel 是跨安全边界业务交换网关，当前仓库为 monorepo 结构
 ./scripts/dev.sh
 ```
 
+该脚本会同时启动后端与前端（real API 模式）。若只需要单独运行前端，可使用：
+
+```bash
+# mock 模式（默认）
+./scripts/ui-dev.sh
+
+# real 模式（对接本地后端）
+./scripts/ui-dev.sh real
+```
+
+```powershell
+# mock 模式（默认）
+.\scripts\ui-dev.ps1
+
+# real 模式（对接本地后端）
+.\scripts\ui-dev.ps1 -Mode real
+```
+
 ### 分别启动
 
 后端：
@@ -36,9 +54,19 @@ go run ./cmd/gateway
 前端：
 
 ```bash
-cd gateway-ui
-npm install
-npm run dev
+./scripts/ui-dev.sh
+```
+
+前端编译与预览：
+
+```bash
+./scripts/ui-build.sh
+./scripts/ui-preview.sh
+```
+
+```powershell
+.\scripts\ui-build.ps1
+.\scripts\ui-preview.ps1
 ```
 
 默认地址：
@@ -83,8 +111,12 @@ Windows 交付包组装：
 前端默认使用 mock 数据，联调时请切换 real 模式：
 
 ```bash
-cd gateway-ui
-VITE_API_MODE=real VITE_API_BASE_URL=http://127.0.0.1:18080/api npm run dev
+VITE_API_BASE_URL=http://127.0.0.1:18080/api ./scripts/ui-dev.sh real
+```
+
+```powershell
+$env:VITE_API_BASE_URL='http://127.0.0.1:18080/api'
+.\scripts\ui-dev.ps1 -Mode real
 ```
 
 页面将直接调用后端运维接口：
@@ -125,9 +157,8 @@ VITE_API_MODE=real VITE_API_BASE_URL=http://127.0.0.1:18080/api npm run dev
 cd gateway-server
 go run ./cmd/gateway --config ./configs/config.yaml
 
-# 终端 2：启动前端开发服务器
-cd gateway-ui
-VITE_API_MODE=real VITE_API_BASE_URL=http://127.0.0.1:18080/api npm run dev
+# 终端 2：启动前端开发服务器（real 模式）
+VITE_API_BASE_URL=http://127.0.0.1:18080/api ./scripts/ui-dev.sh real
 ```
 
 说明：
@@ -163,7 +194,7 @@ startup summary:
 
 ### embedded 模式（单进程打包交付）
 
-1) 构建并同步 UI 静态产物到后端嵌入目录：
+1) 构建并同步 UI 静态产物到后端嵌入目录（内部会调用 `./scripts/ui-build.sh`）：
 
 ```bash
 # Linux / macOS
@@ -172,7 +203,7 @@ startup summary:
 
 ```powershell
 # Windows PowerShell
-./scripts/embed-ui.ps1
+.\scripts\embed-ui.ps1
 ```
 
 2) 在 `gateway-server/configs/config.yaml` 中设置：
