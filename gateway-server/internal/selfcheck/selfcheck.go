@@ -213,8 +213,12 @@ func (r *Runner) buildPortOccupancyError(name string, transport string, listenIP
 }
 
 func buildPortDiagnosticSuggestion(port int) string {
-	if runtime.GOOS == "windows" {
-		return fmt.Sprintf("Windows 排查可执行：netstat -ano | findstr :%d；tasklist /fi \"PID eq <pid>\"", port)
+	return buildPortDiagnosticSuggestionForOS(runtime.GOOS, port)
+}
+
+func buildPortDiagnosticSuggestionForOS(goos string, port int) string {
+	if goos == "windows" {
+		return fmt.Sprintf("Windows 排查可执行：Get-NetTCPConnection -LocalPort %d；netstat -ano | findstr :%d；tasklist /fi \"PID eq <pid>\"", port, port)
 	}
 	return fmt.Sprintf("Linux 排查可执行：ss -ltnp；lsof -i :%d", port)
 }
