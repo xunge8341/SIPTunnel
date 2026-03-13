@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"siptunnel/internal/config"
 )
 
 func TestReadPort(t *testing.T) {
@@ -22,6 +24,17 @@ func TestReadPort(t *testing.T) {
 	t.Setenv("GATEWAY_PORT", "abc")
 	if got := readPort(); got != "18080" {
 		t.Fatalf("readPort() with invalid env = %s, want 18080", got)
+	}
+}
+
+func TestResolveHTTPListenAddr(t *testing.T) {
+	addr := resolveHTTPListenAddr("18080", config.UIConfig{Enabled: true, Mode: "embedded", ListenIP: "0.0.0.0", ListenPort: 19090})
+	if addr != "0.0.0.0:19090" {
+		t.Fatalf("resolveHTTPListenAddr embedded=%q, want 0.0.0.0:19090", addr)
+	}
+	addr = resolveHTTPListenAddr("18080", config.UIConfig{Enabled: true, Mode: "external", ListenIP: "0.0.0.0", ListenPort: 19090})
+	if addr != ":18080" {
+		t.Fatalf("resolveHTTPListenAddr external=%q, want :18080", addr)
 	}
 }
 
@@ -125,22 +138,29 @@ func TestDefaultConfigYAMLContainsRequiredSections(t *testing.T) {
 	}
 }
 
-func TestParseNetworkConfigFromTopLevelYAML(t *testing.T) {
+func TestParseRuntimeConfigFromTopLevelYAML(t *testing.T) {
 	raw := []byte(`sip:
   listen_port: 16060
 rtp:
   port_start: 22000
   port_end: 22020
+ui:
+  enabled: true
+  mode: embedded
+  base_path: /ops
 `)
-	cfg, err := parseNetworkConfigFromTopLevelYAML(raw)
+	cfg, err := parseRuntimeConfigFromTopLevelYAML(raw)
 	if err != nil {
-		t.Fatalf("parseNetworkConfigFromTopLevelYAML() error=%v", err)
+		t.Fatalf("parseRuntimeConfigFromTopLevelYAML() error=%v", err)
 	}
-	if cfg.SIP.ListenPort != 16060 {
-		t.Fatalf("sip.listen_port=%d, want 16060", cfg.SIP.ListenPort)
+	if cfg.Network.SIP.ListenPort != 16060 {
+		t.Fatalf("sip.listen_port=%d, want 16060", cfg.Network.SIP.ListenPort)
 	}
-	if cfg.RTP.PortStart != 22000 || cfg.RTP.PortEnd != 22020 {
-		t.Fatalf("rtp range=[%d,%d], want [22000,22020]", cfg.RTP.PortStart, cfg.RTP.PortEnd)
+	if cfg.Network.RTP.PortStart != 22000 || cfg.Network.RTP.PortEnd != 22020 {
+		t.Fatalf("rtp range=[%d,%d], want [22000,22020]", cfg.Network.RTP.PortStart, cfg.Network.RTP.PortEnd)
+	}
+	if cfg.UI.Mode != "embedded" || cfg.UI.BasePath != "/ops" {
+		t.Fatalf("ui config mismatch mode=%q base_path=%q", cfg.UI.Mode, cfg.UI.BasePath)
 	}
 }
 

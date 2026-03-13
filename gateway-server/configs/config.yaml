@@ -48,7 +48,10 @@ observability:
 
 ui:
   enabled: true
-  base_url: http://127.0.0.1:5173
+  mode: external
+  listen_ip: 127.0.0.1
+  listen_port: 18080
+  base_path: /
 
 ops:
   run_mode: dev

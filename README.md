@@ -74,6 +74,56 @@ VITE_API_MODE=real VITE_API_BASE_URL=http://127.0.0.1:18080/api npm run dev
 - API 清单（OpenAPI）：`gateway-server/docs/openapi-ops.yaml`
 
 
+
+## Embedded UI（后端自宿主）模式
+
+`gateway-server` 支持两种 UI 模式，可通过 `ui.*` 配置切换：
+
+- `ui.enabled`：是否启用 UI 入口。
+- `ui.mode`：`external`（前后端分离）或 `embedded`（静态资源嵌入后端二进制）。
+- `ui.listen_ip` / `ui.listen_port`：`embedded` 模式下 HTTP 监听地址。
+- `ui.base_path`：UI 挂载路径（如 `/`、`/ops`）。
+
+### external 模式（默认）
+
+保持现有前后端分离开发：
+
+- 后端仅提供 `/api/*`。
+- 前端继续 `npm run dev`（Vite）独立启动。
+
+### embedded 模式
+
+1) 构建并同步 UI 静态产物：
+
+```bash
+./scripts/embed-ui.sh
+```
+
+2) 在 `gateway-server/configs/config.yaml` 中设置：
+
+```yaml
+ui:
+  enabled: true
+  mode: embedded
+  listen_ip: 0.0.0.0
+  listen_port: 18080
+  base_path: /
+```
+
+3) 启动后单进程同时承载：
+
+- `/api/*`（运维 API）
+- `/assets/*`（前端静态资源）
+- `/`（SPA 入口，含 Vue Router fallback 到 `index.html`）
+
+启动日志会打印 `ui.mode` 与 `ui_url`。
+
+### 最小验证
+
+```bash
+./scripts/verify-embedded-ui.sh
+```
+
 ## gateway-server 路径与文件系统配置（跨平台）
 
 gateway-server 启动时会自动检查并创建以下目录，且验证可写：
