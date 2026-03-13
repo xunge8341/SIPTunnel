@@ -212,8 +212,10 @@ func buildSelfCheckInput(paths config.StoragePaths, cliConfigPath string) selfch
 	}
 
 	in := selfcheck.Input{
-		NetworkConfig: networkCfg,
-		StoragePaths:  paths,
+		NetworkConfig:   networkCfg,
+		StoragePaths:    paths,
+		RunMode:         resolveRunMode(),
+		SuggestFreePort: parseBoolEnv("GATEWAY_SELFCHECK_SUGGEST_FREE_PORT"),
 	}
 	if routePath := os.Getenv("GATEWAY_HTTPINVOKE_CONFIG"); routePath != "" {
 		routeCfg, err := httpinvoke.LoadConfig(routePath)
@@ -531,6 +533,18 @@ func executableDir(executablePath string) string {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+func parseBoolEnv(name string) bool {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return false
+	}
+	v, err := strconv.ParseBool(raw)
+	if err != nil {
+		return false
+	}
+	return v
 }
 
 func readPort() string {

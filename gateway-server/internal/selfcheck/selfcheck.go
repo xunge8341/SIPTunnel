@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -47,6 +50,8 @@ type Input struct {
 	StoragePaths     config.StoragePaths
 	DownstreamRoutes []httpinvoke.RouteConfig
 	DialTimeout      time.Duration
+	RunMode          string
+	SuggestFreePort  bool
 }
 
 type Runner struct {
@@ -56,6 +61,9 @@ type Runner struct {
 	listenUDP      func(network, address string) (net.PacketConn, error)
 	ensureWritable func(path string) error
 	dialTCP        func(ctx context.Context, address string) error
+	execCommand    func(ctx context.Context, name string, args ...string) ([]byte, error)
+	lookPath       func(file string) (string, error)
+	findFreePort   func(transport string, ip string) (int, error)
 }
 
 func NewRunner() *Runner {
@@ -66,6 +74,11 @@ func NewRunner() *Runner {
 		listenTCP:      net.Listen,
 		listenUDP:      net.ListenPacket,
 		ensureWritable: ensureDirWritable,
+		execCommand: func(ctx context.Context, name string, args ...string) ([]byte, error) {
+			return exec.CommandContext(ctx, name, args...).CombinedOutput()
+		},
+		lookPath:     exec.LookPath,
+		findFreePort: findAvailablePort,
 		dialTCP: func(ctx context.Context, address string) error {
 			conn, err := dialer.DialContext(ctx, "tcp", address)
 			if err != nil {
@@ -84,11 +97,14 @@ func (r *Runner) Run(ctx context.Context, in Input) Report {
 	if in.DialTimeout <= 0 {
 		in.DialTimeout = 2 * time.Second
 	}
+	if !isProdMode(in.RunMode) && !in.SuggestFreePort {
+		in.SuggestFreePort = true
+	}
 
 	items := []Item{}
 	items = append(items, r.checkListenIP("sip.listen_ip", in.NetworkConfig.SIP.Enabled, in.NetworkConfig.SIP.ListenIP)...)
 	items = append(items, r.checkListenIP("rtp.listen_ip", in.NetworkConfig.RTP.Enabled, in.NetworkConfig.RTP.ListenIP)...)
-	items = append(items, r.checkSIPPortOccupancy(in.NetworkConfig.SIP)...)
+	items = append(items, r.checkSIPPortOccupancy(in.NetworkConfig.SIP, in)...)
 	items = append(items, r.checkSIPUDPMessageSizeRisk(in.NetworkConfig.SIP)...)
 	items = append(items, r.checkRTPRange(in.NetworkConfig.RTP)...)
 	items = append(items, r.checkRTPTransportPlan(in.NetworkConfig.RTP)...)
@@ -144,7 +160,7 @@ func (r *Runner) checkListenIP(name string, enabled bool, ip string) []Item {
 	return []Item{{Name: name, Level: LevelInfo, Message: fmt.Sprintf("listen_ip=%s 存在于本机网卡", trimmed), Suggestion: "无需处理"}}
 }
 
-func (r *Runner) checkSIPPortOccupancy(sip config.SIPConfig) []Item {
+func (r *Runner) checkSIPPortOccupancy(sip config.SIPConfig, in Input) []Item {
 	const name = "sip.listen_port_occupancy"
 	if !sip.Enabled {
 		return []Item{{Name: name, Level: LevelInfo, Message: "SIP 已禁用，跳过端口占用检查", Suggestion: "如需启用 SIP，请配置 listen_port 并重新自检"}}
@@ -155,19 +171,154 @@ func (r *Runner) checkSIPPortOccupancy(sip config.SIPConfig) []Item {
 	case "TCP", "TLS":
 		ln, err := r.listenTCP("tcp", addr)
 		if err != nil {
-			return []Item{{Name: name, Level: LevelError, Message: fmt.Sprintf("SIP 端口检查失败：%v", err), Suggestion: "请释放冲突端口或调整 sip.listen_port"}}
+			return []Item{r.buildPortOccupancyError(name, transport, sip.ListenIP, sip.ListenPort, err, in)}
 		}
 		_ = ln.Close()
 	case "UDP":
 		pc, err := r.listenUDP("udp", addr)
 		if err != nil {
-			return []Item{{Name: name, Level: LevelError, Message: fmt.Sprintf("SIP 端口检查失败：%v", err), Suggestion: "请释放冲突端口或调整 sip.listen_port"}}
+			return []Item{r.buildPortOccupancyError(name, transport, sip.ListenIP, sip.ListenPort, err, in)}
 		}
 		_ = pc.Close()
 	default:
 		return []Item{{Name: name, Level: LevelError, Message: fmt.Sprintf("不支持的 SIP transport=%s", sip.Transport), Suggestion: "请将 sip.transport 设置为 TCP/UDP/TLS"}}
 	}
 	return []Item{{Name: name, Level: LevelInfo, Message: fmt.Sprintf("SIP 监听地址 %s 可成功绑定", addr), Suggestion: "无需处理"}}
+}
+
+func (r *Runner) buildPortOccupancyError(name string, transport string, listenIP string, port int, bindErr error, in Input) Item {
+	owner := r.detectPortOwner(context.Background(), port)
+	message := fmt.Sprintf("SIP 端口检查失败（%s %s:%d）：%v", transport, strings.TrimSpace(listenIP), port, bindErr)
+	if owner != "" {
+		message += "；疑似占用进程=" + owner
+	}
+	suggestionParts := []string{buildPortDiagnosticSuggestion(port)}
+	if in.SuggestFreePort {
+		if freePort, err := r.findFreePort(transport, listenIP); err == nil && freePort > 0 && freePort != port {
+			suggestionParts = append(suggestionParts, fmt.Sprintf("开发模式建议先切换 sip.listen_port=%d 进行快速联调（变更后请重启并复核 /api/selfcheck）", freePort))
+		}
+	}
+	suggestionParts = append(suggestionParts, "生产模式默认不自动改端口，请先释放冲突端口或人工修改 sip.listen_port")
+	return Item{Name: name, Level: LevelError, Message: message, Suggestion: strings.Join(suggestionParts, "；")}
+}
+
+func buildPortDiagnosticSuggestion(port int) string {
+	if runtime.GOOS == "windows" {
+		return fmt.Sprintf("Windows 排查可执行：netstat -ano | findstr :%d；tasklist /fi \"PID eq <pid>\"", port)
+	}
+	return fmt.Sprintf("Linux 排查可执行：ss -ltnp；lsof -i :%d", port)
+}
+
+func (r *Runner) detectPortOwner(ctx context.Context, port int) string {
+	if r == nil || r.lookPath == nil || r.execCommand == nil || port <= 0 {
+		return ""
+	}
+	if runtime.GOOS == "windows" {
+		pid := r.detectWindowsPID(ctx, port)
+		if pid == "" {
+			return ""
+		}
+		return r.lookupWindowsProcess(ctx, pid)
+	}
+	return r.lookupLinuxProcess(ctx, port)
+}
+
+func (r *Runner) lookupLinuxProcess(ctx context.Context, port int) string {
+	if _, err := r.lookPath("lsof"); err != nil {
+		return ""
+	}
+	out, err := r.execCommand(ctx, "lsof", "-nP", fmt.Sprintf("-i:%d", port))
+	if err != nil {
+		return ""
+	}
+	lines := strings.Split(string(out), "\n")
+	for _, line := range lines[1:] {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		if _, err := strconv.Atoi(fields[1]); err != nil {
+			continue
+		}
+		return fields[0] + "(pid=" + fields[1] + ")"
+	}
+	return ""
+}
+
+func (r *Runner) detectWindowsPID(ctx context.Context, port int) string {
+	if _, err := r.lookPath("netstat"); err != nil {
+		return ""
+	}
+	out, err := r.execCommand(ctx, "netstat", "-ano")
+	if err != nil {
+		return ""
+	}
+	target := ":" + strconv.Itoa(port)
+	for _, line := range strings.Split(string(out), "\n") {
+		if !strings.Contains(line, target) {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 5 {
+			continue
+		}
+		pid := fields[len(fields)-1]
+		if _, err := strconv.Atoi(pid); err == nil {
+			return pid
+		}
+	}
+	return ""
+}
+
+func (r *Runner) lookupWindowsProcess(ctx context.Context, pid string) string {
+	if pid == "" {
+		return ""
+	}
+	if _, err := r.lookPath("tasklist"); err != nil {
+		return "pid=" + pid
+	}
+	out, err := r.execCommand(ctx, "tasklist", "/fi", "PID eq "+pid)
+	if err != nil {
+		return "pid=" + pid
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		if fields[len(fields)-1] == pid {
+			return fields[0] + "(pid=" + pid + ")"
+		}
+	}
+	return "pid=" + pid
+}
+
+func findAvailablePort(transport string, ip string) (int, error) {
+	bindIP := strings.TrimSpace(ip)
+	if bindIP == "" {
+		bindIP = "0.0.0.0"
+	}
+	addr := net.JoinHostPort(bindIP, "0")
+	if strings.EqualFold(transport, "UDP") {
+		pc, err := net.ListenPacket("udp", addr)
+		if err != nil {
+			return 0, err
+		}
+		defer pc.Close()
+		port := pc.LocalAddr().(*net.UDPAddr).Port
+		return port, nil
+	}
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return 0, err
+	}
+	defer ln.Close()
+	port := ln.Addr().(*net.TCPAddr).Port
+	return port, nil
+}
+
+func isProdMode(mode string) bool {
+	return strings.EqualFold(strings.TrimSpace(mode), "prod")
 }
 
 func (r *Runner) checkSIPUDPMessageSizeRisk(sip config.SIPConfig) []Item {

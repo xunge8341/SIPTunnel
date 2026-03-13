@@ -149,7 +149,9 @@ systemctl restart siptunnel-gateway.service
 
 ### 场景 2：服务启动失败，日志提示端口占用
 - 现象：`network check` 或 systemd 日志提示 `LISTEN_PORT` 被占用。
-- 处理：变更 `GATEWAY_PORT`，或释放冲突端口后 `systemctl restart`。
+- 处理：先执行诊断命令定位占用进程，再决定释放端口或变更 `GATEWAY_PORT`，最后 `systemctl restart`。
+  - Linux：`ss -ltnp`、`lsof -i :<port>`
+  - Windows：`netstat -ano | findstr :<port>`、`tasklist /fi "PID eq <pid>"`
 
 ### 场景 3：升级后健康检查失败
 - 现象：`upgrade.sh` 报错并触发自动回滚。
@@ -185,6 +187,14 @@ systemctl restart siptunnel-gateway.service
 6. 下游 HTTP 基础可达性（按 `target_host:target_port` 做 TCP 连通）
 
 报告分级：`info / warn / error`，每项均包含 `message` 与 `suggestion`，适用于 API、CLI、日志三端复用。
+
+当检测到监听端口冲突时，自检会增强输出：
+- 明确冲突地址与 transport；
+- 在可安全识别时附带 `进程名(pid=PID)`；
+- Linux 给出 `ss -ltnp`、`lsof -i :<port>`；
+- Windows 给出 `netstat -ano | findstr :<port>`、`tasklist /fi "PID eq <pid>"`；
+- 生产模式默认不自动改端口，仅输出诊断与人工调整建议；
+- 开发模式可选输出建议空闲端口（`GATEWAY_SELFCHECK_SUGGEST_FREE_PORT=true` 或默认 dev/test）。
 
 ### 9.2 配置入口
 
