@@ -91,8 +91,10 @@ export const gatewayApi = {
         rtpPortRange: '20000-20999',
         activeSessions: allTasks.filter((item) => item.status !== 'cancelled').length,
         activeTransfers: allTasks.filter((item) => item.status === 'transferring').length,
-        failedTasks24h: failedCount,
-        rateLimitHits24h: 0
+        currentConnections: allTasks.filter((item) => item.status !== 'cancelled').length,
+        failedTasks1h: failedCount,
+        transportErrors1h: 0,
+        rateLimitHits1h: 0
       },
       recentTrends: []
     } as DashboardPayload

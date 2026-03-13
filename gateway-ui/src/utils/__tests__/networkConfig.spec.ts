@@ -26,8 +26,12 @@ const baseConfig: NetworkConfigPayload = {
   portPool: {
     totalAvailablePorts: 1000,
     occupiedPorts: 120,
-    activeTransfers: 48
-  }
+    activeTransfers: 48,
+    usageRate: 12
+  },
+  connectionErrors: [],
+  selfCheckItems: [],
+  linkTests: []
 }
 
 describe('networkConfig utils', () => {

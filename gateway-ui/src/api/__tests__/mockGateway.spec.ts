@@ -5,7 +5,9 @@ import {
   fetchConfigGovernanceMock,
   getDiagnosticExportMock,
   retryDiagnosticExportMock,
-  rollbackConfigMock
+  rollbackConfigMock,
+  fetchDashboardMock,
+  fetchNetworkConfigMock
 } from '../mockGateway'
 
 describe('config governance mock api', () => {
@@ -26,6 +28,24 @@ describe('config governance mock api', () => {
     const result = await rollbackConfigMock('v2026.03.12.2')
     const target = result.snapshots.find((item) => item.version === 'v2026.03.12.2')
     expect(target?.status).toBe('active')
+  })
+
+
+
+  it('provides enhanced dashboard metrics for ops', async () => {
+    const result = await fetchDashboardMock()
+    expect(result.metrics.currentConnections).toBeGreaterThan(0)
+    expect(result.metrics.failedTasks1h).toBeGreaterThanOrEqual(0)
+    expect(result.metrics.transportErrors1h).toBeGreaterThanOrEqual(0)
+    expect(result.metrics.rateLimitHits1h).toBeGreaterThanOrEqual(0)
+  })
+
+  it('provides network status extensions and link test data', async () => {
+    const result = await fetchNetworkConfigMock()
+    expect(result.portPool.usageRate).toBeGreaterThan(0)
+    expect(result.connectionErrors.length).toBeGreaterThan(0)
+    expect(result.selfCheckItems.length).toBeGreaterThan(0)
+    expect(result.linkTests.length).toBeGreaterThan(0)
   })
 
   it('supports diagnostic export fail then retry success flow', async () => {
