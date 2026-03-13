@@ -66,7 +66,9 @@ Set-Location C:\SIPTunnel
 - `validate-config`：只做**静态配置合法性**检查（字段、格式、范围）。
 - `gateway.exe --config ...`：才会执行运行时环境自检（包括端口实际绑定检查）。
 
-因此出现“`validate-config` 通过，但启动报 `sip.listen_port_occupancy`”是预期行为，根因通常是目标 SIP 端口已被其他进程占用。
+在 `run_mode=prod` 下，出现“`validate-config` 通过，但启动报 `sip.listen_port_occupancy`”是预期行为，根因通常是目标 SIP 端口已被其他进程占用。
+
+在 `run_mode=dev/test` 下，`overall=error` 不再阻断进程启动（会以 degraded mode 继续，便于先通过 UI/API 远程排障），但该错误仍必须尽快处理并复核 `/api/selfcheck`。
 
 建议按以下顺序处理（示例端口按你的日志 `59226`）：
 
