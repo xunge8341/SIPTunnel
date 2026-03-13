@@ -13,7 +13,6 @@ import (
 	"siptunnel/internal/selfcheck"
 )
 
-
 func TestRunMainSkipsStartupForToolCommands(t *testing.T) {
 	workspace := t.TempDir()
 	configPath := filepath.Join(workspace, "config.yaml")
@@ -65,18 +64,18 @@ func TestRunMainRunsStartupForServerMode(t *testing.T) {
 
 func TestReadPort(t *testing.T) {
 	t.Setenv("GATEWAY_PORT", "")
-	if got := readPort(); got != "18080" {
+	if got := readPort("prod", "linux"); got != "18080" {
 		t.Fatalf("readPort() default = %s, want 18080", got)
 	}
 
 	t.Setenv("GATEWAY_PORT", "19090")
-	if got := readPort(); got != "19090" {
+	if got := readPort("dev", "linux"); got != "19090" {
 		t.Fatalf("readPort() with env = %s, want 19090", got)
 	}
 
 	t.Setenv("GATEWAY_PORT", "abc")
-	if got := readPort(); got != "18080" {
-		t.Fatalf("readPort() with invalid env = %s, want 18080", got)
+	if got := readPort("dev", "linux"); got == "" {
+		t.Fatal("readPort() with invalid env should fallback to friendly port")
 	}
 }
 
@@ -102,6 +101,7 @@ func TestBuildStartupSummary(t *testing.T) {
 		"udp",
 		selfCheckReportForTest(),
 		0,
+		"dev",
 	)
 	if summary.NodeID != "gateway-a-01" {
 		t.Fatalf("node_id=%q", summary.NodeID)
@@ -168,7 +168,7 @@ func TestPickExistingConfigCandidate(t *testing.T) {
 		filepath.Join(cwd, "config.yaml"): true,
 	}
 
-	candidate, ok := pickExistingConfigCandidate(
+	candidate, allCandidates, ok := pickExistingConfigCandidate(
 		"",
 		"",
 		func() (string, error) { return exePath, nil },
@@ -177,6 +177,9 @@ func TestPickExistingConfigCandidate(t *testing.T) {
 	)
 	if !ok {
 		t.Fatal("pickExistingConfigCandidate() ok=false, want true")
+	}
+	if len(allCandidates) == 0 {
+		t.Fatal("expected config candidate list")
 	}
 	if candidate.source != configSourceCWD {
 		t.Fatalf("candidate source=%s, want %s", candidate.source, configSourceCWD)
@@ -306,6 +309,29 @@ func TestEnsureWindowsDefaultDataDir(t *testing.T) {
 	ensureWindowsDefaultDataDir(`C:\SIPTunnel`)
 	if got := os.Getenv("GATEWAY_DATA_DIR"); got != filepath.Join(`C:\SIPTunnel`, "data") {
 		t.Fatalf("GATEWAY_DATA_DIR=%q", got)
+	}
+}
+
+func TestReadPortPrefersFriendlyFallbackWhenUnset(t *testing.T) {
+	t.Setenv("GATEWAY_PORT", "")
+	if got := readPort("prod", "linux"); got != "18080" {
+		t.Fatalf("prod default port=%s, want 18080", got)
+	}
+	if got := readPort("dev", "windows"); got == "" {
+		t.Fatal("dev windows fallback should not be empty")
+	}
+}
+
+func TestRunMainSkipsStartupWhenToolCommandAfterFlags(t *testing.T) {
+	called := false
+	err := runMain([]string{"--config", "./configs/config.yaml", "print-default-config"}, func(_ []string) {
+		called = true
+	})
+	if err != nil {
+		t.Fatalf("runMain() error=%v", err)
+	}
+	if called {
+		t.Fatal("startup should be skipped when tool command appears after flags")
 	}
 }
 

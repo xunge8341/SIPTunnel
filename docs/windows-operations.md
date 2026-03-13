@@ -34,6 +34,8 @@ Set-Location C:\SIPTunnel
 
 如果未显式传 `--config`，程序会按优先级查找：`CLI > GATEWAY_CONFIG > exe目录\configs\config.yaml > exe目录\config.yaml > 当前目录`。
 
+首启端口策略：未设置 `GATEWAY_PORT` 时，Windows dev/test 模式优先尝试 `18180`，若占用则自动回退到 `18080/18081/8080`。
+
 如果找不到配置，将自动生成默认配置并创建所需目录（dev/test 模式）。
 
 ## 3. 配置修改
@@ -46,7 +48,7 @@ Set-Location C:\SIPTunnel
 ```
 
 
-> 说明：`init-config` / `print-default-config` / `validate-config` 都是纯工具命令，执行后会直接退出，不会进入完整启动流程（不会加载网络服务、不会初始化 SIP/RTP、不会执行 environment self-check）。
+> 说明：`init-config` / `print-default-config` / `validate-config` 都是纯工具命令，执行后会直接退出，不会进入完整启动流程（不会加载网络服务、不会初始化 SIP/RTP、不会执行 environment self-check）。即使命令参数中前置了 `--config` 等启动参数，也会优先识别工具命令并直接退出。
 
 3. 再重启服务。
 

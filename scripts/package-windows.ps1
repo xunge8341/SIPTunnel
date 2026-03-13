@@ -28,7 +28,7 @@ foreach ($dir in @('configs', 'data', 'logs', 'docs', 'scripts')) {
 }
 
 Copy-Item $GatewayExe (Join-Path $PackageDir 'gateway.exe') -Force
-Copy-Item (Join-Path $RepoRoot 'gateway-server/configs/config.default.example.yaml') (Join-Path $PackageDir 'configs/config.yaml') -Force
+& (Join-Path $PackageDir 'gateway.exe') print-default-config | Set-Content -Path (Join-Path $PackageDir 'configs/config.yaml') -Encoding UTF8
 Copy-Item (Join-Path $RepoRoot 'README.md') (Join-Path $PackageDir 'docs/README.md') -Force
 Copy-Item (Join-Path $RepoRoot 'docs/windows-operations.md') (Join-Path $PackageDir 'docs/windows-operations.md') -Force
 Copy-Item (Join-Path $RepoRoot 'scripts/smoke.ps1') (Join-Path $PackageDir 'docs/smoke.ps1') -Force

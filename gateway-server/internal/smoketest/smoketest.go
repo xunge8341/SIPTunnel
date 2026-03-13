@@ -73,6 +73,9 @@ func Run(ctx context.Context, opts Options) SuiteResult {
 		runNamedCheck("UI/API 可访问", func() (bool, string) {
 			return checkUIAndAPI(ctx, opts.Client, baseURL)
 		}),
+		runNamedCheck("首启摘要", func() (bool, string) {
+			return checkFirstStartSummary(ctx, opts.Client, baseURL)
+		}),
 		runNamedCheck("最小 command 链路", func() (bool, string) {
 			return checkCommandChain(ctx, opts.Client, baseURL)
 		}),
@@ -195,6 +198,23 @@ func checkUIAndAPI(ctx context.Context, client *http.Client, baseURL string) (bo
 		return true, fmt.Sprintf("api=ok ui=embedded %s", uiURL)
 	}
 	return true, fmt.Sprintf("api=ok ui_mode=%s", uiMode)
+}
+
+func checkFirstStartSummary(ctx context.Context, client *http.Client, baseURL string) (bool, string) {
+	body, code, err := getJSON(ctx, client, baseURL+"/api/startup-summary")
+	if err != nil {
+		return false, err.Error()
+	}
+	if code >= 400 {
+		return false, fmt.Sprintf("startup-summary status=%d", code)
+	}
+	mode := strings.TrimSpace(jsonPathString(body, "data", "run_mode"))
+	configPath := strings.TrimSpace(jsonPathString(body, "data", "config_path"))
+	configSource := strings.TrimSpace(jsonPathString(body, "data", "config_source"))
+	if mode == "" || configPath == "" || configSource == "" {
+		return false, "missing run_mode/config_path/config_source"
+	}
+	return true, fmt.Sprintf("mode=%s source=%s", mode, configSource)
 }
 
 func checkCommandChain(ctx context.Context, client *http.Client, baseURL string) (bool, string) {

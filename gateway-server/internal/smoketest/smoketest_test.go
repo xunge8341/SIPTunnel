@@ -71,3 +71,18 @@ func TestFormatSummaryIncludesFailedChecks(t *testing.T) {
 		t.Fatalf("unexpected summary: %s", s)
 	}
 }
+
+func TestCheckFirstStartSummary(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/startup-summary" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"code":"OK","data":{"run_mode":"dev","config_path":"./configs/config.yaml","config_source":"exe_dir"}}`))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer ts.Close()
+	if ok, detail := checkFirstStartSummary(context.Background(), ts.Client(), ts.URL); !ok {
+		t.Fatalf("checkFirstStartSummary fail: %s", detail)
+	}
+}

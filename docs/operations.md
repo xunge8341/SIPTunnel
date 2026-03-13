@@ -209,6 +209,11 @@ systemctl restart siptunnel-gateway.service
 
 若以上路径都不存在，服务会明确记录“进入默认配置生成逻辑（default_generated）”并使用内置默认网络配置。
 
+启动摘要（`startup summary` / `/api/startup-summary`）会额外展示：
+- `run_mode`（dev/test/prod）
+- `auto_generated_config`（是否首启自动生成配置）
+- `config_candidates`（配置自动发现顺序，便于定位来源）
+
 - `GATEWAY_HTTPINVOKE_CONFIG`：下游路由配置（YAML，含 routes 列表）。
 
 示例（Linux）：
@@ -219,6 +224,10 @@ GATEWAY_CONFIG=./configs/config.yaml \
 GATEWAY_HTTPINVOKE_CONFIG=./configs/httpinvoke_routes.example.yaml \
 go run ./cmd/gateway
 ```
+
+### 9.3 首启 smoke test 回归项
+
+`opssmoke` 套件新增了“首启摘要”检查，要求 `/api/startup-summary` 至少返回 `run_mode/config_path/config_source`，用于保障首启可观测性不回退。
 
 示例（显式 CLI，优先级最高）：
 
