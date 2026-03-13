@@ -238,6 +238,39 @@ go run ./cmd/gateway validate-config -f ./configs/config.yaml
 
 默认目录仍会自动创建并校验可写：`data/temp`、`data/final`、`data/audit`（以及 `data/logs`）。
 
+## 运维 Smoke Test（上线前 / 故障恢复后）
+
+仓库提供了面向运维的一键 smoke test 套件，默认覆盖以下检查项：
+
+- 配置加载校验（`validate-config`）
+- 自检接口（`/api/selfcheck`）
+- SIP listener 可用性
+- RTP listener / 端口池可用性
+- UI/API 可访问性（`/healthz` + `/api/startup-summary`，embedded 模式额外探测 UI URL）
+- 最小 command 链路（`POST /demo/process`）
+
+### Linux
+
+```bash
+./scripts/smoke.sh
+```
+
+### Windows (PowerShell)
+
+```powershell
+./scripts/smoke.ps1
+```
+
+### 常用环境变量
+
+- `SMOKE_START_GATEWAY=true|false`：是否由脚本自动拉起 `gateway-server`（默认 `true`）。
+- `SMOKE_BASE_URL`：目标网关地址，默认 `http://127.0.0.1:${GATEWAY_PORT:-18080}`。
+- `SMOKE_CONFIG_PATH`：配置文件路径，默认 `gateway-server/configs/config.yaml`。
+- `SMOKE_WAIT_SECONDS`：自动拉起网关时等待健康检查的超时时间，默认 25 秒。
+- `SMOKE_LOG_FILE`：自动拉起模式下 gateway 日志输出文件。
+
+脚本执行结束会输出统一测试摘要（PASS/FAIL + 每项耗时与详情），适合上线前和故障恢复后的快速巡检。
+
 ## gateway-server 配置查找优先级（启动加载）
 
 `gateway-server` 启动时会按以下顺序查找配置文件，命中即使用：
