@@ -131,9 +131,11 @@
 
 #### 排查步骤
 
-1. 查占用进程：`ss -lntup | rg ':5060|:18080|:20[0-9]{3}'`
+> 先澄清：`validate-config` 通过仅代表配置字段合法；端口占用属于运行时检查，只会在真实启动（`gateway --config ...`）阶段暴露。
+
+1. 查占用进程：`ss -lntup | rg ':5060|:18080|:20[0-9]{3}'`（Windows 可用 `Get-NetTCPConnection -LocalPort <port>`）。
 2. 查配置冲突：确认 `sip.listen_port` 不在 `[rtp.port_start, rtp.port_end]`。
-3. 查实例重复：`systemctl list-units | rg siptunnel`
+3. 查实例重复：`systemctl list-units | rg siptunnel`（Windows 同机多开可查任务管理器/服务列表）。
 
 #### 修复建议
 
