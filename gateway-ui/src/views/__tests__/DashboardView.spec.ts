@@ -23,8 +23,10 @@ describe('DashboardView', () => {
         rtpPortRange: '20000-20999',
         activeSessions: 20,
         activeTransfers: 8,
-        failedTasks24h: 2,
-        rateLimitHits24h: 3
+        currentConnections: 42,
+        failedTasks1h: 2,
+        transportErrors1h: 1,
+        rateLimitHits1h: 3
       },
       recentTrends: [
         { time: '10:00', total: 10, success: 9, failed: 1 },
@@ -37,8 +39,8 @@ describe('DashboardView', () => {
 
     expect(gatewayApi.fetchDashboard).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).toContain('成功率')
-    expect(wrapper.text()).toContain('UDP / 5060')
-    expect(wrapper.text()).toContain('活跃会话数')
+    expect(wrapper.text()).toContain('当前 SIP transport')
+    expect(wrapper.text()).toContain('最近 1h transport error')
     expect(wrapper.findAll('circle')).toHaveLength(2)
   })
 })

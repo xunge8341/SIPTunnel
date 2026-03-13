@@ -24,8 +24,10 @@ export interface DashboardMetrics {
   rtpPortRange: string
   activeSessions: number
   activeTransfers: number
-  failedTasks24h: number
-  rateLimitHits24h: number
+  currentConnections: number
+  failedTasks1h: number
+  transportErrors1h: number
+  rateLimitHits1h: number
 }
 
 export interface TrendPoint {
@@ -206,12 +208,43 @@ export interface PortPoolStatus {
   totalAvailablePorts: number
   occupiedPorts: number
   activeTransfers: number
+  usageRate: number
+}
+
+export interface ConnectionErrorEvent {
+  id: string
+  occurredAt: string
+  transport: 'SIP' | 'RTP'
+  protocol: TransportProtocol
+  nodeId: string
+  errorCode: string
+  reason: string
+}
+
+export interface SelfCheckItem {
+  key: string
+  name: string
+  level: 'pass' | 'warn' | 'fail'
+  detail: string
+}
+
+export interface LinkTestResult {
+  id: string
+  scene: string
+  status: 'pass' | 'warn' | 'fail'
+  avgLatencyMs: number
+  packetLossRate: number
+  throughputMbps: number
+  executedAt: string
 }
 
 export interface NetworkConfigPayload {
   sip: SipNetworkConfig
   rtp: RtpNetworkConfig
   portPool: PortPoolStatus
+  connectionErrors: ConnectionErrorEvent[]
+  selfCheckItems: SelfCheckItem[]
+  linkTests: LinkTestResult[]
 }
 
 export interface UpdateNetworkConfigPayload {

@@ -23,6 +23,23 @@
       />
     </a-card>
 
+    <a-card title="运行态网络状态">
+      <a-row :gutter="[16, 16]">
+        <a-col :xs="24" :md="12" :xl="6">
+          <a-statistic title="SIP TCP/UDP 当前模式" :value="`${config.sip.protocol} / ${config.sip.listenPort}`" />
+        </a-col>
+        <a-col :xs="24" :md="12" :xl="6">
+          <a-statistic title="RTP UDP/TCP 当前模式" :value="`${config.rtp.protocol} / ${formatPortRange(config.rtp.portRangeStart, config.rtp.portRangeEnd)}`" />
+        </a-col>
+        <a-col :xs="24" :md="12" :xl="6">
+          <a-statistic title="端口池使用率" :value="config.portPool.usageRate" suffix="%" :precision="2" />
+        </a-col>
+        <a-col :xs="24" :md="12" :xl="6">
+          <a-progress :percent="config.portPool.usageRate" :status="portPoolStatus" />
+        </a-col>
+      </a-row>
+    </a-card>
+
     <a-row :gutter="16">
       <a-col :span="12">
         <a-card title="SIP 配置">
@@ -108,21 +125,9 @@
                 <field-label-tooltip label="端口范围" tooltip="RTP 端口池，建议预留连续区间并在网络策略中整体放行。" />
               </template>
               <a-space style="width: 100%">
-                <a-input-number
-                  v-model:value="draft.rtp.portRangeStart"
-                  :min="1"
-                  :max="65535"
-                  :disabled="!isEditable"
-                  style="width: 45%"
-                />
-                <span>-</span>
-                <a-input-number
-                  v-model:value="draft.rtp.portRangeEnd"
-                  :min="1"
-                  :max="65535"
-                  :disabled="!isEditable"
-                  style="width: 45%"
-                />
+                <a-input-number v-model:value="draft.rtp.portRangeStart" :min="1" :max="65535" :disabled="!isEditable" style="width: 45%" />
+                <span>~</span>
+                <a-input-number v-model:value="draft.rtp.portRangeEnd" :min="1" :max="65535" :disabled="!isEditable" style="width: 45%" />
               </a-space>
             </a-form-item>
             <a-form-item>
@@ -144,29 +149,62 @@
               <template #label>
                 <field-label-tooltip label="最大并发传输数" tooltip="限制同时进行的 RTP 传输会话，超过阈值后新任务排队。" />
               </template>
-              <a-input-number
-                v-model:value="draft.rtp.maxConcurrentTransfers"
-                :min="1"
-                :max="20000"
-                :disabled="!isEditable"
-                style="width: 100%"
-              />
+              <a-input-number v-model:value="draft.rtp.maxConcurrentTransfers" :min="1" :max="20000" :disabled="!isEditable" style="width: 100%" />
             </a-form-item>
           </a-form>
         </a-card>
       </a-col>
     </a-row>
 
-    <a-card title="端口池状态">
-      <a-row :gutter="12">
-        <a-col :span="8"><a-statistic title="可用端口总数" :value="config.portPool.totalAvailablePorts" /></a-col>
-        <a-col :span="8"><a-statistic title="已占用端口数" :value="config.portPool.occupiedPorts" /></a-col>
-        <a-col :span="8"><a-statistic title="活跃传输数" :value="config.portPool.activeTransfers" /></a-col>
-      </a-row>
-      <a-divider />
-      <a-descriptions :column="1" size="small" bordered>
-        <a-descriptions-item label="当前 RTP 端口范围">{{ formatPortRange(draft.rtp.portRangeStart, draft.rtp.portRangeEnd) }}</a-descriptions-item>
-      </a-descriptions>
+    <a-row :gutter="16">
+      <a-col :xs="24" :xl="14">
+        <a-card title="连接错误事件表">
+          <a-table :data-source="config.connectionErrors" :pagination="{ pageSize: 5 }" size="small" row-key="id">
+            <a-table-column title="时间" data-index="occurredAt" key="occurredAt" width="170" />
+            <a-table-column title="transport" key="transport" width="120">
+              <template #default="{ record }">
+                <a-tag :color="record.transport === 'SIP' ? 'blue' : 'purple'">{{ record.transport }} {{ record.protocol }}</a-tag>
+              </template>
+            </a-table-column>
+            <a-table-column title="节点" data-index="nodeId" key="nodeId" width="140" />
+            <a-table-column title="错误码" data-index="errorCode" key="errorCode" width="150" />
+            <a-table-column title="原因" data-index="reason" key="reason" />
+          </a-table>
+        </a-card>
+      </a-col>
+      <a-col :xs="24" :xl="10">
+        <a-card title="自检结果面板">
+          <a-list :data-source="config.selfCheckItems" size="small" bordered>
+            <template #renderItem="{ item }">
+              <a-list-item>
+                <a-space direction="vertical" size="small" style="width: 100%">
+                  <a-space>
+                    <a-typography-text strong>{{ item.name }}</a-typography-text>
+                    <a-tag :color="selfCheckTagColor(item.level)">{{ selfCheckTagText(item.level) }}</a-tag>
+                  </a-space>
+                  <a-typography-text type="secondary">{{ item.detail }}</a-typography-text>
+                </a-space>
+              </a-list-item>
+            </template>
+          </a-list>
+        </a-card>
+      </a-col>
+    </a-row>
+
+    <a-card title="链路测试结果展示（只读）">
+      <a-alert type="info" show-icon message="该区域仅展示最近链路测试结果，前端不触发真实压测。" style="margin-bottom: 12px" />
+      <a-table :data-source="config.linkTests" :pagination="false" row-key="id" size="small">
+        <a-table-column title="场景" data-index="scene" key="scene" />
+        <a-table-column title="状态" key="status" width="120">
+          <template #default="{ record }">
+            <a-tag :color="selfCheckTagColor(record.status)">{{ selfCheckTagText(record.status) }}</a-tag>
+          </template>
+        </a-table-column>
+        <a-table-column title="平均时延(ms)" data-index="avgLatencyMs" key="avgLatencyMs" width="140" />
+        <a-table-column title="丢包率(%)" data-index="packetLossRate" key="packetLossRate" width="120" />
+        <a-table-column title="吞吐(Mbps)" data-index="throughputMbps" key="throughputMbps" width="130" />
+        <a-table-column title="执行时间" data-index="executedAt" key="executedAt" width="170" />
+      </a-table>
     </a-card>
 
     <a-modal
@@ -199,7 +237,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { gatewayApi } from '../api/gateway'
 import type { HighRiskChange } from '../utils/networkConfig'
@@ -236,8 +274,12 @@ const config = reactive<NetworkConfigPayload>({
   portPool: {
     totalAvailablePorts: 0,
     occupiedPorts: 0,
-    activeTransfers: 0
-  }
+    activeTransfers: 0,
+    usageRate: 0
+  },
+  connectionErrors: [],
+  selfCheckItems: [],
+  linkTests: []
 })
 
 const draft = reactive<UpdateNetworkConfigPayload>({
@@ -262,6 +304,24 @@ const draft = reactive<UpdateNetworkConfigPayload>({
     maxConcurrentTransfers: 100
   }
 })
+
+const portPoolStatus = computed(() => {
+  if (config.portPool.usageRate >= 85) return 'exception'
+  if (config.portPool.usageRate >= 70) return 'active'
+  return 'normal'
+})
+
+const selfCheckTagColor = (level: 'pass' | 'warn' | 'fail') => {
+  if (level === 'pass') return 'success'
+  if (level === 'warn') return 'warning'
+  return 'error'
+}
+
+const selfCheckTagText = (level: 'pass' | 'warn' | 'fail') => {
+  if (level === 'pass') return '通过'
+  if (level === 'warn') return '告警'
+  return '失败'
+}
 
 const loadConfig = async () => {
   const data = await gatewayApi.fetchNetworkConfig()

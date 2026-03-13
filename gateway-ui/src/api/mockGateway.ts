@@ -93,8 +93,10 @@ export async function fetchDashboardMock(): Promise<DashboardPayload> {
       rtpPortRange: '20000-20999',
       activeSessions: 128,
       activeTransfers: 42,
-      failedTasks24h: 19,
-      rateLimitHits24h: 31
+      currentConnections: 186,
+      failedTasks1h: 7,
+      transportErrors1h: 5,
+      rateLimitHits1h: 12
     },
     recentTrends: [
       { time: '09:00', total: 120, success: 118, failed: 2 },
@@ -208,8 +210,55 @@ let networkConfigState: NetworkConfigPayload = {
   portPool: {
     totalAvailablePorts: 1000,
     occupiedPorts: 126,
-    activeTransfers: 58
-  }
+    activeTransfers: 58,
+    usageRate: 12.6
+  },
+  connectionErrors: [
+    {
+      id: "conn-001",
+      occurredAt: "2026-03-12 14:07:52",
+      transport: "SIP",
+      protocol: "UDP",
+      nodeId: "gateway-a-02",
+      errorCode: "SIP_CONN_RESET",
+      reason: "上游设备重启导致连接重置，重连耗时 1.4s。"
+    },
+    {
+      id: "conn-002",
+      occurredAt: "2026-03-12 14:18:11",
+      transport: "RTP",
+      protocol: "UDP",
+      nodeId: "gateway-b-01",
+      errorCode: "RTP_BIND_TIMEOUT",
+      reason: "端口池争抢导致端口绑定超时，自动重试恢复。"
+    }
+  ],
+  selfCheckItems: [
+    { key: "sip-listener", name: "SIP 监听", level: "pass", detail: "SIP 套接字响应正常，时延 < 10ms。" },
+    { key: "rtp-portpool", name: "RTP 端口池", level: "warn", detail: "端口占用率接近阈值 80%，建议扩容。" },
+    { key: "route-template", name: "路由模板", level: "pass", detail: "api_code 模板加载完整，无异常。" },
+    { key: "audit-pipeline", name: "审计链路", level: "pass", detail: "审计写入成功率 100%。" }
+  ],
+  linkTests: [
+    {
+      id: "lt-001",
+      scene: "A->B 控制链路基线",
+      status: "pass",
+      avgLatencyMs: 8.7,
+      packetLossRate: 0.03,
+      throughputMbps: 96.4,
+      executedAt: "2026-03-12 14:10:00"
+    },
+    {
+      id: "lt-002",
+      scene: "B->A 文件回传链路",
+      status: "warn",
+      avgLatencyMs: 27.4,
+      packetLossRate: 0.32,
+      throughputMbps: 81.2,
+      executedAt: "2026-03-12 14:20:00"
+    }
+  ]
 }
 
 export async function fetchNetworkConfigMock(): Promise<NetworkConfigPayload> {
@@ -231,6 +280,7 @@ export async function updateNetworkConfigMock(payload: UpdateNetworkConfigPayloa
     networkConfigState.portPool.occupiedPorts,
     Math.round(payload.rtp.maxConcurrentTransfers * 0.35)
   )
+  networkConfigState.portPool.usageRate = span === 0 ? 0 : Number(((networkConfigState.portPool.occupiedPorts / span) * 100).toFixed(2))
   return JSON.parse(JSON.stringify(networkConfigState))
 }
 
