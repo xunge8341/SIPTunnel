@@ -14,7 +14,8 @@ import type {
   RuntimeGatewayConfig,
   DiagnosticExportJob,
   DiagnosticExportCreatePayload,
-  DeploymentModePayload
+  DeploymentModePayload,
+  StartupSummaryPayload
 } from '../types/gateway'
 
 const wait = (ms = 200) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -120,6 +121,32 @@ export async function fetchDeploymentModeMock(): Promise<DeploymentModePayload> 
     apiUrl: 'http://127.0.0.1:8360/api',
     configPath: '/etc/siptunnel/config.yaml',
     configSource: 'local-file'
+  }
+}
+
+
+export async function fetchStartupSummaryMock(): Promise<StartupSummaryPayload> {
+  await wait()
+  return {
+    node_id: 'gateway-a-01',
+    config_path: '/etc/siptunnel/config.yaml',
+    config_source: 'local-file',
+    ui_mode: 'embedded',
+    ui_url: 'http://127.0.0.1:8360/ui',
+    api_url: 'http://127.0.0.1:8360/api',
+    business_execution: {
+      state: 'protocol_only',
+      route_count: 0,
+      message: '协议层可启动，业务执行层未激活（未加载下游 HTTP 路由）',
+      impact: '仅完成 SIP/RTP 协议交互，不会执行 A 网 HTTP 落地'
+    },
+    self_check_summary: {
+      generated_at: '2026-03-12T14:20:00Z',
+      overall: 'warn',
+      info: 8,
+      warn: 1,
+      error: 0
+    }
   }
 }
 
@@ -267,10 +294,10 @@ let networkConfigState: NetworkConfigPayload = {
     {
       key: "downstream-http",
       name: "downstream.http_base_reachability",
-      level: "error",
-      message: "未配置下游 HTTP 路由，跳过可达性检查。",
-      suggestion: "请加载 httpinvoke 路由配置后重试。",
-      action_hint: "先补齐 api_code 到下游地址映射，再重启并验证连通性。",
+      level: "warn",
+      message: "未配置下游 HTTP 路由：当前处于协议层可启动、业务执行层未激活状态。",
+      suggestion: "请加载最小 httpinvoke 路由配置以激活业务执行层。",
+      action_hint: "补齐 api_code 映射后重启并复核 /api/selfcheck。",
       doc_link: "docs/troubleshooting.md#310-下游-http-未配置"
     }
   ],

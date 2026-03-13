@@ -7,16 +7,24 @@ import (
 )
 
 type Summary struct {
-	NodeID           string           `json:"node_id"`
-	ConfigPath       string           `json:"config_path"`
-	ConfigSource     string           `json:"config_source"`
-	UIMode           string           `json:"ui_mode"`
-	UIURL            string           `json:"ui_url"`
-	APIURL           string           `json:"api_url"`
-	SIPListen        ListenEndpoint   `json:"sip_listen"`
-	RTPListen        RTPListen        `json:"rtp_listen"`
-	StorageDirs      StorageDirs      `json:"storage_dirs"`
-	SelfCheckSummary SelfCheckSummary `json:"self_check_summary"`
+	NodeID            string                  `json:"node_id"`
+	ConfigPath        string                  `json:"config_path"`
+	ConfigSource      string                  `json:"config_source"`
+	UIMode            string                  `json:"ui_mode"`
+	UIURL             string                  `json:"ui_url"`
+	APIURL            string                  `json:"api_url"`
+	SIPListen         ListenEndpoint          `json:"sip_listen"`
+	RTPListen         RTPListen               `json:"rtp_listen"`
+	StorageDirs       StorageDirs             `json:"storage_dirs"`
+	BusinessExecution BusinessExecutionStatus `json:"business_execution"`
+	SelfCheckSummary  SelfCheckSummary        `json:"self_check_summary"`
+}
+
+type BusinessExecutionStatus struct {
+	State      string `json:"state"`
+	RouteCount int    `json:"route_count"`
+	Message    string `json:"message"`
+	Impact     string `json:"impact"`
 }
 
 type ListenEndpoint struct {
@@ -60,6 +68,7 @@ func (s Summary) ToLogText() string {
 		fmt.Sprintf("- sip_listen: ip=%s port=%d transport=%s", safeValue(s.SIPListen.IP), s.SIPListen.Port, safeValue(s.SIPListen.Transport)),
 		fmt.Sprintf("- rtp_listen: ip=%s port_range=%s transport=%s", safeValue(s.RTPListen.IP), safeValue(s.RTPListen.PortRange), safeValue(s.RTPListen.Transport)),
 		fmt.Sprintf("- storage_dirs: temp=%s final=%s audit=%s log=%s", safeValue(s.StorageDirs.TempDir), safeValue(s.StorageDirs.FinalDir), safeValue(s.StorageDirs.AuditDir), safeValue(s.StorageDirs.LogDir)),
+		fmt.Sprintf("- business_execution: state=%s route_count=%d message=%s impact=%s", safeValue(s.BusinessExecution.State), s.BusinessExecution.RouteCount, safeValue(s.BusinessExecution.Message), safeValue(s.BusinessExecution.Impact)),
 		fmt.Sprintf("- self_check_summary: generated_at=%s overall=%s info=%d warn=%d error=%d", generatedAt, safeValue(s.SelfCheckSummary.Overall), s.SelfCheckSummary.Info, s.SelfCheckSummary.Warn, s.SelfCheckSummary.Error),
 	}
 	return strings.Join(lines, "\n")

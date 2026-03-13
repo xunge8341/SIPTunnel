@@ -5,7 +5,8 @@ import { gatewayApi } from '../../api/gateway'
 vi.mock('../../api/gateway', () => ({
   gatewayApi: {
     fetchDashboard: vi.fn(),
-    fetchDeploymentMode: vi.fn()
+    fetchDeploymentMode: vi.fn(),
+    fetchStartupSummary: vi.fn()
   }
 }))
 
@@ -42,16 +43,41 @@ describe('DashboardView', () => {
       configSource: 'config-center'
     })
 
+    vi.mocked(gatewayApi.fetchStartupSummary).mockResolvedValue({
+      node_id: 'gateway-a-01',
+      config_path: '/etc/siptunnel/config.yaml',
+      config_source: 'config-center',
+      ui_mode: 'external',
+      ui_url: 'https://ops.example.com',
+      api_url: 'https://api.example.com',
+      business_execution: {
+        state: 'protocol_only',
+        route_count: 0,
+        message: '协议层可启动，业务执行层未激活（未加载下游 HTTP 路由）',
+        impact: '仅完成 SIP/RTP 协议交互，不会执行 A 网 HTTP 落地'
+      },
+      self_check_summary: {
+        generated_at: '2026-03-12T10:00:00Z',
+        overall: 'warn',
+        info: 8,
+        warn: 1,
+        error: 0
+      }
+    })
+
     const wrapper = mount(DashboardView)
     await flushPromises()
 
     expect(gatewayApi.fetchDashboard).toHaveBeenCalledTimes(1)
     expect(gatewayApi.fetchDeploymentMode).toHaveBeenCalledTimes(1)
+    expect(gatewayApi.fetchStartupSummary).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).toContain('成功率')
     expect(wrapper.text()).toContain('当前 SIP transport')
     expect(wrapper.text()).toContain('最近 1h transport error')
     expect(wrapper.text()).toContain('external mode')
     expect(wrapper.text()).toContain('config-center')
+    expect(wrapper.text()).toContain('当前未加载业务路由')
+    expect(wrapper.text()).toContain('不会执行 A 网 HTTP 落地')
     expect(wrapper.findAll('circle')).toHaveLength(2)
   })
 })
