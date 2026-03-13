@@ -17,6 +17,7 @@ import (
 	"siptunnel/internal/selfcheck"
 	"siptunnel/internal/service"
 	"siptunnel/internal/service/taskengine"
+	"siptunnel/internal/startupsummary"
 )
 
 func buildTestHandler(t *testing.T) (http.Handler, repository.TaskRepository, observability.AuditStore) {
@@ -33,6 +34,9 @@ func buildTestHandler(t *testing.T) (http.Handler, repository.TaskRepository, ob
 		nodes:  []OpsNode{{NodeID: "n1", Role: "gateway", Status: "ready", Endpoint: "127.0.0.1:18080"}},
 		selfCheckProvider: func(_ context.Context) selfcheck.Report {
 			return selfcheck.Report{Overall: selfcheck.LevelInfo, Summary: selfcheck.Summary{Info: 1}, Items: []selfcheck.Item{{Name: "sample", Level: selfcheck.LevelInfo, Message: "ok", Suggestion: "none"}}}
+		},
+		startupSummaryFn: func(_ context.Context) startupsummary.Summary {
+			return startupsummary.Summary{NodeID: "n1", ConfigPath: "./configs/config.yaml", ConfigSource: "cli", UIMode: "embedded", UIURL: "http://127.0.0.1:18080/", APIURL: "http://127.0.0.1:18080/api"}
 		},
 		networkStatusFunc: func(_ context.Context) NodeNetworkStatus {
 			return NodeNetworkStatus{
@@ -131,6 +135,7 @@ func TestLimitsRoutesNodesAndAudits(t *testing.T) {
 		{http.MethodGet, "/api/routes", "", http.StatusOK},
 		{http.MethodPut, "/api/routes", `{"routes":[{"api_code":"asset.sync","http_method":"POST","http_path":"/sync","enabled":true}]}`, http.StatusOK},
 		{http.MethodGet, "/api/nodes", "", http.StatusOK},
+		{http.MethodGet, "/api/startup-summary", "", http.StatusOK},
 		{http.MethodGet, "/api/audits?trace_id=t1&page=1&page_size=10", "", http.StatusOK},
 	}
 	for _, tc := range cases {
@@ -247,8 +252,11 @@ func TestDiagnosticsExportEndpointWithFilters(t *testing.T) {
 	if payload.Data.JobID == "" || !strings.Contains(payload.Data.FileName, payload.Data.JobID) || !strings.Contains(payload.Data.OutputDir, payload.Data.JobID) || !strings.Contains(payload.Data.FileName, "req_req_d") || !strings.Contains(payload.Data.OutputDir, "trace_trace_d") {
 		t.Fatalf("unexpected naming: file=%s dir=%s", payload.Data.FileName, payload.Data.OutputDir)
 	}
-	if len(payload.Data.Files) < 8 {
+	if len(payload.Data.Files) < 9 {
 		t.Fatalf("expected diagnostic files, got %d", len(payload.Data.Files))
+	}
+	if payload.Data.Files[0].Name != "00_startup_summary.json" {
+		t.Fatalf("expected first file to be startup summary, got %s", payload.Data.Files[0].Name)
 	}
 	var taskFile DiagFile
 	for _, f := range payload.Data.Files {
@@ -297,4 +305,3 @@ func TestDiagnosticsExportEndpointWithFilters(t *testing.T) {
 		t.Fatalf("readme filters mismatch: %#v", readmeFile.Content)
 	}
 }
-

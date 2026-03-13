@@ -20,6 +20,7 @@ import (
 	"siptunnel/internal/selfcheck"
 	"siptunnel/internal/service"
 	"siptunnel/internal/service/taskengine"
+	"siptunnel/internal/startupsummary"
 	"siptunnel/loadtest"
 )
 
@@ -27,6 +28,7 @@ type handlerDeps struct {
 	logger            *observability.StructuredLogger
 	selfCheckProvider func(context.Context) selfcheck.Report
 	networkStatusFunc func(context.Context) NodeNetworkStatus
+	startupSummaryFn  func(context.Context) startupsummary.Summary
 	audit             observability.AuditStore
 	repo              repository.TaskRepository
 	engine            *taskengine.Engine
@@ -161,10 +163,11 @@ type capacityAssessmentRequest struct {
 }
 
 type HandlerOptions struct {
-	LogDir            string
-	AuditDir          string
-	SelfCheckProvider func(context.Context) selfcheck.Report
-	NetworkStatusFunc func(context.Context) NodeNetworkStatus
+	LogDir                 string
+	AuditDir               string
+	SelfCheckProvider      func(context.Context) selfcheck.Report
+	NetworkStatusFunc      func(context.Context) NodeNetworkStatus
+	StartupSummaryProvider func(context.Context) startupsummary.Summary
 }
 
 func NewHandler() http.Handler {
@@ -213,6 +216,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, io.Closer, error)
 		nodes:             []OpsNode{{NodeID: "gateway-a-01", Role: "gateway", Status: "ready", Endpoint: "10.0.0.11:18080"}},
 		selfCheckProvider: opts.SelfCheckProvider,
 		networkStatusFunc: opts.NetworkStatusFunc,
+		startupSummaryFn:  opts.StartupSummaryProvider,
 	}
 	if deps.networkStatusFunc == nil {
 		defaults := config.DefaultNetworkConfig()
@@ -248,6 +252,11 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, io.Closer, error)
 				RecentBindErrors:    []string{},
 				RecentNetworkErrors: []string{},
 			}
+		}
+	}
+	if deps.startupSummaryFn == nil {
+		deps.startupSummaryFn = func(context.Context) startupsummary.Summary {
+			return startupsummary.Summary{NodeID: "gateway-a-01", ConfigSource: "default", UIMode: "external", UIURL: "external", APIURL: "http://127.0.0.1:18080/api"}
 		}
 	}
 	return newMux(deps), joinClosers(logCloser, auditCloser), nil
@@ -295,6 +304,7 @@ func newMux(deps handlerDeps) http.Handler {
 	mux.HandleFunc("/api/nodes", deps.handleNodes)
 	mux.HandleFunc("/api/audits", deps.handleAudits)
 	mux.HandleFunc("/api/selfcheck", deps.handleSelfCheck)
+	mux.HandleFunc("/api/startup-summary", deps.handleStartupSummary)
 	mux.HandleFunc("/api/node/network-status", deps.handleNodeNetworkStatus)
 	mux.HandleFunc("/api/diagnostics/export", deps.handleDiagnosticsExport)
 	mux.HandleFunc("/api/capacity/recommendation", deps.handleCapacityRecommendation)
@@ -716,6 +726,19 @@ func (d handlerDeps) handleNodeNetworkStatus(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: status})
 }
 
+func (d handlerDeps) handleStartupSummary(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
+		return
+	}
+	if d.startupSummaryFn == nil {
+		writeError(w, http.StatusNotImplemented, "STARTUP_SUMMARY_NOT_ENABLED", "startup summary provider not configured")
+		return
+	}
+	summary := d.startupSummaryFn(r.Context())
+	writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: summary})
+}
+
 func (d handlerDeps) handleDiagnosticsExport(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
@@ -772,6 +795,7 @@ func (d handlerDeps) handleDiagnosticsExport(w http.ResponseWriter, r *http.Requ
 
 	readmeLines := []string{
 		"诊断包文件说明（字段已脱敏，可用于人工排障）",
+		"00_startup_summary.json: 统一启动与运行摘要，供日志/API/UI/诊断复用。",
 		"01_transport_config.json: 当前 SIP/RTP transport 与关键网络参数快照。",
 		"02_connection_stats_snapshot.json: SIP/RTP 连接计数与错误累计值。",
 		"03_port_pool_status.json: RTP 端口池使用情况与分配失败累计值。",
@@ -782,6 +806,7 @@ func (d handlerDeps) handleDiagnosticsExport(w http.ResponseWriter, r *http.Requ
 	}
 
 	files := []DiagFile{
+		{Name: "00_startup_summary.json", Description: "统一启动与运行摘要", Content: d.startupSummaryFn(r.Context())},
 		{Name: "README.md", Description: "诊断包文件说明", Content: map[string]any{"filters": map[string]any{"request_id": requestID, "trace_id": traceID}, "files": readmeLines}},
 		{Name: "01_transport_config.json", Description: "当前 transport 配置", Content: map[string]any{"sip": map[string]any{"listen_ip": status.SIP.ListenIP, "listen_port": status.SIP.ListenPort, "transport": status.SIP.Transport}, "rtp": map[string]any{"listen_ip": status.RTP.ListenIP, "port_start": status.RTP.PortStart, "port_end": status.RTP.PortEnd, "transport": status.RTP.Transport}}},
 		{Name: "02_connection_stats_snapshot.json", Description: "连接统计快照", Content: map[string]any{"sip": map[string]any{"current_sessions": status.SIP.CurrentSessions, "current_connections": status.SIP.CurrentConnections, "accepted_connections_total": status.SIP.AcceptedConnectionsTotal, "closed_connections_total": status.SIP.ClosedConnectionsTotal, "read_timeout_total": status.SIP.ReadTimeoutTotal, "write_timeout_total": status.SIP.WriteTimeoutTotal, "connection_error_total": status.SIP.ConnectionErrorTotal}, "rtp": map[string]any{"active_transfers": status.RTP.ActiveTransfers, "rtp_tcp_sessions_current": status.RTP.TCPSessionsCurrent, "rtp_tcp_sessions_total": status.RTP.TCPSessionsTotal, "rtp_tcp_read_errors_total": status.RTP.TCPReadErrorsTotal, "rtp_tcp_write_errors_total": status.RTP.TCPWriteErrorsTotal}}},
