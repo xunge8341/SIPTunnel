@@ -45,6 +45,9 @@ Set-Location C:\SIPTunnel
 .\gateway.exe validate-config -f .\configs\config.yaml
 ```
 
+
+> 说明：`init-config` / `print-default-config` / `validate-config` 都是纯工具命令，执行后会直接退出，不会进入完整启动流程（不会加载网络服务、不会初始化 SIP/RTP、不会执行 environment self-check）。
+
 3. 再重启服务。
 
 ## 4. 端口排查

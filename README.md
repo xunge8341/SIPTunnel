@@ -233,16 +233,16 @@ GATEWAY_DATA_DIR=./runtime-data go run ./cmd/gateway
 
 ## gateway 配置初始化 / 打印 / 校验命令
 
-在 `gateway-server` 目录下可直接使用以下命令：
+在 `gateway-server` 目录下可直接使用以下命令（均为**纯工具命令**，在 `main()` 最早阶段分流并直接退出，不会启动服务或触发 startup/self-check）：
 
 ```bash
 # 生成默认配置（已存在则不覆盖）
 go run ./cmd/gateway init-config
 
-# 打印默认配置到 stdout
+# 打印默认配置到 stdout（仅输出内容后退出）
 go run ./cmd/gateway print-default-config
 
-# 校验配置文件
+# 校验配置文件（仅做文件/格式/字段校验，不依赖实际网络环境）
 go run ./cmd/gateway validate-config -f ./configs/config.yaml
 ```
 
