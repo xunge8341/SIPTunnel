@@ -25,6 +25,11 @@ import (
 
 const defaultBaseURL = "http://127.0.0.1:18080"
 
+const (
+	runbookDocPath = "docs/runbook.md"
+	oncallDocPath  = "docs/oncall-handbook.md"
+)
+
 type cliOptions struct {
 	baseURL string
 	output  string
@@ -394,6 +399,7 @@ func printRootUsage(w io.Writer) {
 	fmt.Fprintln(w, "  node inspect")
 	fmt.Fprintln(w, "  task query --request-id <id>")
 	fmt.Fprintln(w, "  diag export [--request-id <id>] [--trace-id <id>] [--out diagnostics.json]")
+	fmt.Fprintf(w, "Docs: %s (Runbook), %s (On-call)\n", runbookDocPath, oncallDocPath)
 }
 
 func printConfigUsage(w io.Writer) {

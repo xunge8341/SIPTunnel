@@ -67,6 +67,12 @@ VITE_API_MODE=real VITE_API_BASE_URL=http://127.0.0.1:18080/api npm run dev
 - `POST /api/config-governance/rollback`
 - `GET /api/config-governance/export?target=current|pending`
 
+运维联动文档（页面/API/CLI 统一入口）：
+
+- Runbook（启动停止、发布回滚、链路自检、端口/transport/TCP/RTP 排障、压测前准备）：`docs/runbook.md`
+- 值班手册（告警、排查顺序、升级路径、研发介入阈值）：`docs/oncall-handbook.md`
+- API 清单（OpenAPI）：`gateway-server/docs/openapi-ops.yaml`
+
 
 ## gateway-server 路径与文件系统配置（跨平台）
 
@@ -329,6 +335,11 @@ API 示例：
 
 `gateway-server` 新增了 `gatewayctl`，用于复用现有运维 API 与配置校验能力，支持文本与 JSON 双输出。
 
+CLI 对应操作文档：
+
+- 日常处置动作：`docs/runbook.md`
+- 值班升级规范：`docs/oncall-handbook.md`
+
 编译与运行：
 
 ```bash
@@ -442,12 +453,12 @@ cd gateway-ui && npm run test -- --run
 
 ## 运维页面覆盖
 
-- Dashboard：成功率/失败率/并发等指标总览
-- 命令任务与文件任务：过滤、分页、详情跳转
-- 任务详情：基础信息、状态流转、SIP/RTP/HTTP执行结果
-- 限流策略：在线查看/更新全局限流
-- 路由配置：按 api_code 编辑映射路由
-- 审计日志：查询与详情查看
+- Dashboard：成功率/失败率/并发等指标总览（值班动作见 `docs/oncall-handbook.md`）
+- 命令任务与文件任务：过滤、分页、详情跳转（故障处置见 `docs/runbook.md`）
+- 任务详情：基础信息、状态流转、SIP/RTP/HTTP执行结果（诊断导出见 `gatewayctl diag export`）
+- 限流策略：在线查看/更新全局限流（变更前后请执行 `docs/runbook.md` 的链路自检）
+- 路由配置：按 api_code 编辑映射路由（发布/回滚流程见 `docs/operations.md`）
+- 审计日志：查询与详情查看（升级研发前需附带审计与诊断信息）
 
 ## 统一压测工具集（loadtest）
 
