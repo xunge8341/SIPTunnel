@@ -1,8 +1,10 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -108,4 +110,75 @@ func TestReadCLIConfigPath(t *testing.T) {
 	if path != "./configs/custom.yaml" {
 		t.Fatalf("readCLIConfigPath()=%q, want %q", path, "./configs/custom.yaml")
 	}
+}
+
+func TestDefaultConfigYAMLContainsRequiredSections(t *testing.T) {
+	raw, err := defaultConfigYAML()
+	if err != nil {
+		t.Fatalf("defaultConfigYAML() error=%v", err)
+	}
+	text := string(raw)
+	for _, section := range []string{"server:", "sip:", "rtp:", "storage:", "observability:", "ui:", "ops:"} {
+		if !strings.Contains(text, section) {
+			t.Fatalf("default config missing section %q", section)
+		}
+	}
+}
+
+func TestParseNetworkConfigFromTopLevelYAML(t *testing.T) {
+	raw := []byte(`sip:
+  listen_port: 16060
+rtp:
+  port_start: 22000
+  port_end: 22020
+`)
+	cfg, err := parseNetworkConfigFromTopLevelYAML(raw)
+	if err != nil {
+		t.Fatalf("parseNetworkConfigFromTopLevelYAML() error=%v", err)
+	}
+	if cfg.SIP.ListenPort != 16060 {
+		t.Fatalf("sip.listen_port=%d, want 16060", cfg.SIP.ListenPort)
+	}
+	if cfg.RTP.PortStart != 22000 || cfg.RTP.PortEnd != 22020 {
+		t.Fatalf("rtp range=[%d,%d], want [22000,22020]", cfg.RTP.PortStart, cfg.RTP.PortEnd)
+	}
+}
+
+func TestHandleMissingConfigFile(t *testing.T) {
+	t.Run("dev mode auto generates", func(t *testing.T) {
+		t.Setenv("GATEWAY_MODE", "dev")
+		root := t.TempDir()
+		path, mode, err := handleMissingConfigFile("", filepath.Join(root, "custom.yaml"), func() (string, error) { return root, nil })
+		if err != nil {
+			t.Fatalf("handleMissingConfigFile() error=%v", err)
+		}
+		if mode != "dev" {
+			t.Fatalf("mode=%q, want dev", mode)
+		}
+		if path != filepath.Join(root, "custom.yaml") {
+			t.Fatalf("path=%q, want %q", path, filepath.Join(root, "custom.yaml"))
+		}
+		if _, statErr := os.Stat(path); statErr != nil {
+			t.Fatalf("expected generated file exists: %v", statErr)
+		}
+	})
+
+	t.Run("prod mode generates template and returns error", func(t *testing.T) {
+		t.Setenv("GATEWAY_MODE", "prod")
+		root := t.TempDir()
+		path, mode, err := handleMissingConfigFile(filepath.Join(root, "prod.yaml"), "", func() (string, error) { return root, nil })
+		if mode != "prod" {
+			t.Fatalf("mode=%q, want prod", mode)
+		}
+		if err == nil {
+			t.Fatal("expected production mode error, got nil")
+		}
+		raw, readErr := os.ReadFile(path)
+		if readErr != nil {
+			t.Fatalf("read generated template error=%v", readErr)
+		}
+		if !strings.Contains(string(raw), "PRODUCTION TEMPLATE") {
+			t.Fatalf("expected production template banner, got: %s", string(raw))
+		}
+	})
 }

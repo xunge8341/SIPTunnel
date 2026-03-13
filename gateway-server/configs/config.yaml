@@ -1,17 +1,60 @@
 server:
   port: 18080
 
-# 存储目录（支持跨平台路径）：
-# - 可通过环境变量覆盖：
-#   GATEWAY_DATA_DIR / GATEWAY_TEMP_DIR / GATEWAY_FINAL_DIR / GATEWAY_AUDIT_DIR / GATEWAY_LOG_DIR
-# - 若只配置 GATEWAY_DATA_DIR，会自动使用其子目录 temp/final/audit/logs。
 storage:
   temp_dir: ./data/temp
   final_dir: ./data/final
   audit_dir: ./data/audit
   log_dir: ./data/logs
 
-# 网络面配置示例（SIP 与 RTP 独立配置、独立校验）
+sip:
+  enabled: true
+  listen_ip: 0.0.0.0
+  listen_port: 5060
+  transport: TCP
+  advertise_ip: 192.168.10.10
+  domain: siptunnel.local
+  max_message_bytes: 65535
+  read_timeout_ms: 5000
+  write_timeout_ms: 5000
+  idle_timeout_ms: 60000
+  tcp_keepalive_enabled: true
+  tcp_keepalive_interval_ms: 30000
+  tcp_read_buffer_bytes: 65536
+  tcp_write_buffer_bytes: 65536
+  max_connections: 2048
+
+rtp:
+  enabled: true
+  listen_ip: 0.0.0.0
+  advertise_ip: 192.168.10.10
+  port_start: 20000
+  port_end: 20100
+  transport: UDP
+  max_packet_bytes: 1400
+  tcp_read_timeout_ms: 5000
+  tcp_write_timeout_ms: 5000
+  tcp_keepalive_enabled: true
+  max_tcp_sessions: 128
+  max_inflight_transfers: 64
+  receive_buffer_bytes: 4194304
+  transfer_timeout_ms: 30000
+  retransmit_max_rounds: 3
+
+observability:
+  log_level: info
+  pprof_enabled: false
+  metrics_enabled: true
+
+ui:
+  enabled: true
+  base_url: http://127.0.0.1:5173
+
+ops:
+  run_mode: dev
+  allow_auto_init_config: true
+
+# 兼容旧版配置格式（network.*）
 network:
   sip:
     enabled: true
@@ -20,7 +63,6 @@ network:
     transport: TCP
     advertise_ip: 192.168.10.10
     domain: siptunnel.local
-    # TCP 默认可保持较大消息；若切换 UDP，建议不超过 1300 以降低分片风险
     max_message_bytes: 65535
     read_timeout_ms: 5000
     write_timeout_ms: 5000
@@ -37,7 +79,6 @@ network:
     advertise_ip: 192.168.10.10
     port_start: 20000
     port_end: 20100
-    # 生产默认 UDP；TCP 已可联调验证（受控发布）
     transport: UDP
     max_packet_bytes: 1400
     tcp_read_timeout_ms: 5000
@@ -48,14 +89,3 @@ network:
     receive_buffer_bytes: 4194304
     transfer_timeout_ms: 30000
     retransmit_max_rounds: 3
-
-# 以下字段用于部署规划与 preflight 校验：
-# - 当前服务进程实际读取 GATEWAY_PORT 作为监听端口。
-# - MEDIA_PORT_* 与 node.role 用于统一跨环境部署参数口径。
-media:
-  port_range:
-    start: 20000
-    end: 20100
-
-node:
-  role: receiver # receiver / sender
