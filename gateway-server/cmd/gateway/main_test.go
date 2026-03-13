@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -91,7 +92,7 @@ func TestConfigCandidatesPriority(t *testing.T) {
 	exeDir := "/opt/siptunnel"
 	cwd := "/workspace/SIPTunnel/gateway-server"
 
-	candidates := configCandidates(cli, env, exeDir, cwd)
+	candidates := configCandidates(cli, env, exeDir, cwd, "linux")
 	if len(candidates) != 6 {
 		t.Fatalf("configCandidates length=%d, want 6", len(candidates))
 	}
@@ -208,6 +209,53 @@ ui:
 	}
 	if cfg.UI.Mode != "embedded" || cfg.UI.BasePath != "/ops" {
 		t.Fatalf("ui config mismatch mode=%q base_path=%q", cfg.UI.Mode, cfg.UI.BasePath)
+	}
+}
+
+func TestResolveConfigOutputPathWindowsUsesExeDir(t *testing.T) {
+	cli := ""
+	env := ""
+	getwd := func() (string, error) { return `D:\work`, nil }
+	execFn := func() (string, error) { return `C:\SIPTunnel\gateway.exe`, nil }
+	got := resolveConfigOutputPath(cli, env, getwd, execFn, "windows")
+	want := filepath.Join(`C:\SIPTunnel`, "configs", "config.yaml")
+	if got != want {
+		t.Fatalf("resolveConfigOutputPath()=%q, want %q", got, want)
+	}
+}
+
+func TestConfigCandidatesWindowsPrefersExeRelativeForRelativeCLIAndEnv(t *testing.T) {
+	candidates := configCandidates("configs/custom.yaml", "configs/env.yaml", `C:\SIPTunnel`, `D:\work`, "windows")
+	if len(candidates) != 8 {
+		t.Fatalf("configCandidates length=%d, want 8", len(candidates))
+	}
+	if candidates[0].path != filepath.Join(`C:\SIPTunnel`, "configs", "custom.yaml") {
+		t.Fatalf("first candidate=%q", candidates[0].path)
+	}
+	if candidates[2].path != filepath.Join(`C:\SIPTunnel`, "configs", "env.yaml") {
+		t.Fatalf("third candidate=%q", candidates[2].path)
+	}
+}
+
+func TestFormatStartupFailureWindowsContainsPortHints(t *testing.T) {
+	err := errors.New("listen tcp 127.0.0.1:18080: bind: Only one usage of each socket address")
+	msg := formatStartupFailure("start gateway http server", err, "127.0.0.1:18080", "windows")
+	for _, part := range []string{"PowerShell", "CMD", "当前监听地址=127.0.0.1:18080"} {
+		if !strings.Contains(msg, part) {
+			t.Fatalf("formatStartupFailure() missing %q in %q", part, msg)
+		}
+	}
+}
+
+func TestEnsureWindowsDefaultDataDir(t *testing.T) {
+	t.Setenv("GATEWAY_DATA_DIR", "")
+	t.Setenv("GATEWAY_TEMP_DIR", "")
+	t.Setenv("GATEWAY_FINAL_DIR", "")
+	t.Setenv("GATEWAY_AUDIT_DIR", "")
+	t.Setenv("GATEWAY_LOG_DIR", "")
+	ensureWindowsDefaultDataDir(`C:\SIPTunnel`)
+	if got := os.Getenv("GATEWAY_DATA_DIR"); got != filepath.Join(`C:\SIPTunnel`, "data") {
+		t.Fatalf("GATEWAY_DATA_DIR=%q", got)
 	}
 }
 

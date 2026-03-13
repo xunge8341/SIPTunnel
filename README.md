@@ -46,6 +46,27 @@ npm run dev
 - 后端健康检查：`http://127.0.0.1:18080/healthz`
 - 前端 Dashboard：`http://127.0.0.1:5173/dashboard`
 
+## Windows 快速启动
+
+面向首启体验，建议将 `gateway.exe`、`configs/`、`data/`、`logs/` 放在同一安装目录下。
+
+```powershell
+Set-Location C:\SIPTunnel
+.\gateway.exe --config .\configs\config.yaml
+```
+
+Windows 下配置查找优先顺序同 Linux，但会优先尝试 **exe 所在目录**（`configs/config.yaml`、`config.yaml`），避免从快捷方式/其他目录启动时相对路径失效。
+
+若找不到配置，`dev/test` 模式会自动生成默认配置并创建目录；报错信息中会附带 Windows 友好排查建议（包括 PowerShell/CMD 端口排查命令）。
+
+Windows 详细运维手册见：`docs/windows-operations.md`。
+
+Windows 交付包组装：
+
+```powershell
+.\scripts\package-windows.ps1 -Version v0.1.0
+```
+
 ## 前端联调模式
 
 前端默认使用 mock 数据，联调时请切换 real 模式：

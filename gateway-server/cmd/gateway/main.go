@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -50,21 +51,26 @@ func main() {
 		log.Fatalf("parse flags failed: %v", err)
 	}
 	defaultPort := readPort()
+	windowsExeDir := ""
+	if runtime.GOOS == "windows" {
+		windowsExeDir = executableDir(getExecutablePathOrEmpty(os.Executable))
+		ensureWindowsDefaultDataDir(windowsExeDir)
+	}
 	paths := config.LoadStoragePathsFromEnv()
 	if err := paths.EnsureWritable(); err != nil {
-		log.Fatalf("startup directory validation failed: %v", err)
+		log.Fatal(formatStartupFailure("startup directory validation", err, "", runtime.GOOS))
 	}
 	selfCheckInput, uiCfg, cfgLoad := buildSelfCheckInput(paths, cliConfigPath, defaultPort)
 	rtpTransport, err := filetransfer.NewTransport(selfCheckInput.NetworkConfig.RTP.Transport)
 	if err != nil {
-		log.Fatalf("init rtp transport failed: %v", err)
+		log.Fatal(formatStartupFailure("init rtp transport", err, "", runtime.GOOS))
 	}
 	if err := rtpTransport.Bootstrap(selfCheckInput.NetworkConfig.RTP); err != nil {
-		log.Fatalf("bootstrap rtp transport mode=%s failed: %v", rtpTransport.Mode(), err)
+		log.Fatal(formatStartupFailure(fmt.Sprintf("bootstrap rtp transport mode=%s", rtpTransport.Mode()), err, "", runtime.GOOS))
 	}
 	portPool, err := filetransfer.NewMemoryRTPPortPool(selfCheckInput.NetworkConfig.RTP.PortStart, selfCheckInput.NetworkConfig.RTP.PortEnd)
 	if err != nil {
-		log.Fatalf("init rtp port pool failed: %v", err)
+		log.Fatal(formatStartupFailure("init rtp port pool", err, "", runtime.GOOS))
 	}
 	sipMetrics := &siptcp.ConnectionMetrics{}
 	var sipServer *siptcp.Server
@@ -85,7 +91,8 @@ func main() {
 			return payload, nil
 		}), slog.Default(), sipMetrics)
 		if err := sipServer.Start(context.Background()); err != nil {
-			log.Fatalf("start sip tcp server failed: %v", err)
+			listenAddr := selfCheckInput.NetworkConfig.SIP.ListenIP + ":" + strconv.Itoa(selfCheckInput.NetworkConfig.SIP.ListenPort)
+			log.Fatal(formatStartupFailure("start sip tcp server", err, listenAddr, runtime.GOOS))
 		}
 		defer func() {
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -154,12 +161,12 @@ func main() {
 		},
 	})
 	if err != nil {
-		log.Fatalf("initialize handler failed: %v", err)
+		log.Fatal(formatStartupFailure("initialize handler", err, "", runtime.GOOS))
 	}
 	if uiCfg.Enabled && uiCfg.Mode == "embedded" {
 		handler, err = server.NewEmbeddedUIFallbackHandler(handler, server.EmbeddedUIOptions{BasePath: uiCfg.BasePath})
 		if err != nil {
-			log.Fatalf("initialize embedded ui handler failed: %v", err)
+			log.Fatal(formatStartupFailure("initialize embedded ui handler", err, "", runtime.GOOS))
 		}
 	}
 
@@ -169,7 +176,7 @@ func main() {
 	}
 	log.Print(report.ToCLI())
 	if report.Overall == selfcheck.LevelError {
-		log.Fatal("environment self-check failed, please fix errors before startup")
+		log.Fatal(formatStartupFailure("environment self-check", errors.New("please fix errors before startup"), "", runtime.GOOS))
 	}
 	unifiedSummary = buildStartupSummary(nodeID, cfgLoad, uiCfg, selfCheckInput.NetworkConfig, paths, defaultPort, rtpTransport.Mode(), report, len(selfCheckInput.DownstreamRoutes))
 
@@ -189,7 +196,7 @@ func main() {
 	pprofCfg := diagnostics.LoadPprofConfigFromEnv()
 	pprofServer, err := diagnostics.StartPprofServer(pprofCfg, slog.Default())
 	if err != nil {
-		log.Fatalf("start pprof server failed: %v", err)
+		log.Fatal(formatStartupFailure("start pprof server", err, pprofCfg.ListenAddress, runtime.GOOS))
 	}
 
 	go func() {
@@ -199,7 +206,7 @@ func main() {
 			log.Printf("ui mode=external note=%q", "UI 由外部承载，请单独部署 gateway-ui 并将 API 指向 api_url")
 		}
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("server failed: %v", err)
+			log.Fatal(formatStartupFailure("start gateway http server", err, httpServer.Addr, runtime.GOOS))
 		}
 	}()
 
@@ -361,7 +368,7 @@ func handleConfigCommands(args []string) (bool, error) {
 		if err != nil {
 			return true, err
 		}
-		path := resolveConfigOutputPath(cliPath, os.Getenv("GATEWAY_CONFIG"), os.Getwd)
+		path := resolveConfigOutputPath(cliPath, os.Getenv("GATEWAY_CONFIG"), os.Getwd, os.Executable, runtime.GOOS)
 		created, err := writeConfigIfNotExists(path, false)
 		if err != nil {
 			return true, err
@@ -539,12 +546,18 @@ func resolveRunMode() string {
 	return "dev"
 }
 
-func resolveConfigOutputPath(cliConfigPath string, envConfigPath string, getwd func() (string, error)) string {
+func resolveConfigOutputPath(cliConfigPath string, envConfigPath string, getwd func() (string, error), executablePath func() (string, error), osName string) string {
 	if p := strings.TrimSpace(cliConfigPath); p != "" {
 		return p
 	}
 	if p := strings.TrimSpace(envConfigPath); p != "" {
 		return p
+	}
+	if osName == "windows" {
+		exeDir := executableDir(getExecutablePathOrEmpty(executablePath))
+		if exeDir != "" {
+			return filepath.Join(exeDir, "configs", "config.yaml")
+		}
 	}
 	cwd, err := getwd()
 	if err != nil {
@@ -575,7 +588,7 @@ func writeConfigIfNotExists(path string, template bool) (bool, error) {
 
 func handleMissingConfigFile(cliConfigPath string, envConfigPath string, getwd func() (string, error)) (string, string, error) {
 	mode := resolveRunMode()
-	path := resolveConfigOutputPath(cliConfigPath, envConfigPath, getwd)
+	path := resolveConfigOutputPath(cliConfigPath, envConfigPath, getwd, os.Executable, runtime.GOOS)
 	created, err := writeConfigIfNotExists(path, mode == "prod")
 	if err != nil {
 		return "", mode, err
@@ -592,15 +605,12 @@ func handleMissingConfigFile(cliConfigPath string, envConfigPath string, getwd f
 }
 
 func pickExistingConfigCandidate(cliConfigPath string, envConfigPath string, executablePath func() (string, error), getwd func() (string, error), exists func(string) bool) (configCandidate, bool) {
-	exePath, err := executablePath()
-	if err != nil {
-		exePath = ""
-	}
+	exePath := getExecutablePathOrEmpty(executablePath)
 	cwd, err := getwd()
 	if err != nil {
 		cwd = "."
 	}
-	for _, candidate := range configCandidates(cliConfigPath, envConfigPath, executableDir(exePath), cwd) {
+	for _, candidate := range configCandidates(cliConfigPath, envConfigPath, executableDir(exePath), cwd, runtime.GOOS) {
 		if exists(candidate.path) {
 			return candidate, true
 		}
@@ -608,12 +618,18 @@ func pickExistingConfigCandidate(cliConfigPath string, envConfigPath string, exe
 	return configCandidate{}, false
 }
 
-func configCandidates(cliConfigPath string, envConfigPath string, exeDir string, cwd string) []configCandidate {
+func configCandidates(cliConfigPath string, envConfigPath string, exeDir string, cwd string, osName string) []configCandidate {
 	candidates := make([]configCandidate, 0, 6)
 	if p := strings.TrimSpace(cliConfigPath); p != "" {
+		if osName == "windows" && filepath.IsAbs(p) == false && exeDir != "" {
+			candidates = append(candidates, configCandidate{path: filepath.Join(exeDir, p), source: configSourceCLI})
+		}
 		candidates = append(candidates, configCandidate{path: p, source: configSourceCLI})
 	}
 	if p := strings.TrimSpace(envConfigPath); p != "" {
+		if osName == "windows" && filepath.IsAbs(p) == false && exeDir != "" {
+			candidates = append(candidates, configCandidate{path: filepath.Join(exeDir, p), source: configSourceEnv})
+		}
 		candidates = append(candidates, configCandidate{path: p, source: configSourceEnv})
 	}
 	if exeDir != "" {
@@ -627,6 +643,58 @@ func configCandidates(cliConfigPath string, envConfigPath string, exeDir string,
 		configCandidate{path: filepath.Join(cwd, "config.yaml"), source: configSourceCWD},
 	)
 	return candidates
+}
+
+func getExecutablePathOrEmpty(executablePath func() (string, error)) string {
+	if executablePath == nil {
+		return ""
+	}
+	path, err := executablePath()
+	if err != nil {
+		return ""
+	}
+	return path
+}
+
+func ensureWindowsDefaultDataDir(exeDir string) {
+	if exeDir == "" {
+		return
+	}
+	if strings.TrimSpace(os.Getenv("GATEWAY_DATA_DIR")) != "" {
+		return
+	}
+	for _, key := range []string{"GATEWAY_TEMP_DIR", "GATEWAY_FINAL_DIR", "GATEWAY_AUDIT_DIR", "GATEWAY_LOG_DIR"} {
+		if strings.TrimSpace(os.Getenv(key)) != "" {
+			return
+		}
+	}
+	_ = os.Setenv("GATEWAY_DATA_DIR", filepath.Join(exeDir, "data"))
+}
+
+func formatStartupFailure(stage string, err error, listenAddr string, osName string) string {
+	msg := fmt.Sprintf("%s failed: %v", stage, err)
+	if osName != "windows" {
+		return msg
+	}
+	b := &strings.Builder{}
+	b.WriteString(msg)
+	b.WriteString(" | Windows 排查建议: 1) 确认在 gateway.exe 所在目录执行，或显式传入 --config .\\configs\\config.yaml；2) 检查配置与数据目录是否具备写权限；3) 若路径来自快捷方式，请将‘起始位置’设置为程序目录")
+	if isAddrInUseError(err) {
+		b.WriteString(" | 端口冲突排查(PowerShell): Get-NetTCPConnection -LocalPort <端口> | Select-Object -First 5 -Property LocalAddress,LocalPort,State,OwningProcess; Get-Process -Id <PID> | Format-Table Id,ProcessName,Path")
+		b.WriteString(" | 端口冲突排查(CMD): netstat -ano | findstr :<端口> && tasklist /FI \"PID eq <PID>\"")
+		if strings.TrimSpace(listenAddr) != "" {
+			b.WriteString(fmt.Sprintf(" | 当前监听地址=%s", listenAddr))
+		}
+	}
+	return b.String()
+}
+
+func isAddrInUseError(err error) bool {
+	if err == nil {
+		return false
+	}
+	text := strings.ToLower(err.Error())
+	return strings.Contains(text, "address already in use") || strings.Contains(text, "only one usage of each socket address")
 }
 
 func executableDir(executablePath string) string {
