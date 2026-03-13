@@ -70,3 +70,4 @@ RELEASE_FILE=./dist/gateway-linux-amd64 ./deploy/scripts/upgrade.sh
 ./scripts/verify-embedded-ui.sh
 ```
 
+若未嵌入真实前端产物，内置占位页会显示“首启部署引导”，同时 API 保持可用，便于先完成配置初始化与联调。

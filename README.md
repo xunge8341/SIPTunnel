@@ -57,7 +57,7 @@ Set-Location C:\SIPTunnel
 
 Windows 下配置查找优先顺序同 Linux，但会优先尝试 **exe 所在目录**（`configs/config.yaml`、`config.yaml`），避免从快捷方式/其他目录启动时相对路径失效。
 
-若找不到配置，`dev/test` 模式会自动生成默认配置并创建目录；报错信息中会附带 Windows 友好排查建议（包括 PowerShell/CMD 端口排查命令）。
+若找不到配置，`dev/test` 模式会自动生成默认配置并创建目录；并优先选择可用的友好端口（Windows 优先 `18180`，其次 `18080`）。报错信息中会附带 Windows 友好排查建议（包括 PowerShell/CMD 端口排查命令）。
 
 Windows 详细运维手册见：`docs/windows-operations.md`。
 
@@ -124,6 +124,8 @@ VITE_API_MODE=real VITE_API_BASE_URL=http://127.0.0.1:18080/api npm run dev
 - 启动日志会输出统一 `startup summary`（结构化字段可复用到日志/API/UI/诊断导出），包含：
   - `node_id`
   - `config_path` / `config_source`
+  - `run_mode` / `auto_generated_config`
+  - `config_candidates`（配置自动发现顺序）
   - `ui_mode` / `ui_url`
   - `api_url`
   - `sip_listen(ip/port/transport)`
@@ -255,6 +257,7 @@ go run ./cmd/gateway validate-config -f ./configs/config.yaml
 
 - 是否自动生成配置（`auto_generated=true|false`）
 - 配置文件路径（`config_path`）
+- 配置来源与自动发现候选（`config_source` + `config_candidates`）
 - 下一步建议（`next_step`）
 
 默认目录仍会自动创建并校验可写：`data/temp`、`data/final`、`data/audit`（以及 `data/logs`）。
@@ -268,6 +271,7 @@ go run ./cmd/gateway validate-config -f ./configs/config.yaml
 - SIP listener 可用性
 - RTP listener / 端口池可用性
 - UI/API 可访问性（`/healthz` + `/api/startup-summary`，embedded 模式额外探测 UI URL）
+- 首启摘要完整性（`run_mode/config_path/config_source`）
 - 最小 command 链路（`POST /demo/process`）
 
 ### Linux
