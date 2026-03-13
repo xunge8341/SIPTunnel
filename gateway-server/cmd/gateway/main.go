@@ -39,14 +39,21 @@ var (
 )
 
 func main() {
-	if handled, err := handleConfigCommands(os.Args[1:]); handled {
-		if err != nil {
-			log.Fatalf("command failed: %v", err)
-		}
-		return
+	if err := runMain(os.Args[1:], runGatewayStartup); err != nil {
+		log.Fatalf("command failed: %v", err)
 	}
+}
 
-	cliConfigPath, err := readCLIConfigPath(os.Args[1:])
+func runMain(args []string, startup func([]string)) error {
+	if handled, err := handleConfigCommands(args); handled {
+		return err
+	}
+	startup(args)
+	return nil
+}
+
+func runGatewayStartup(args []string) {
+	cliConfigPath, err := readCLIConfigPath(args)
 	if err != nil {
 		log.Fatalf("parse flags failed: %v", err)
 	}

@@ -13,6 +13,56 @@ import (
 	"siptunnel/internal/selfcheck"
 )
 
+
+func TestRunMainSkipsStartupForToolCommands(t *testing.T) {
+	workspace := t.TempDir()
+	configPath := filepath.Join(workspace, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(`network:
+  sip:
+    listen_port: 15060
+`), 0o644); err != nil {
+		t.Fatalf("write config file: %v", err)
+	}
+
+	for _, tc := range []struct {
+		name string
+		args []string
+	}{
+		{name: "init-config", args: []string{"init-config", "--config", filepath.Join(workspace, "generated.yaml")}},
+		{name: "print-default-config", args: []string{"print-default-config"}},
+		{name: "validate-config", args: []string{"validate-config", "-f", configPath}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			startupCalled := false
+			err := runMain(tc.args, func(_ []string) {
+				startupCalled = true
+			})
+			if err != nil {
+				t.Fatalf("runMain() error=%v", err)
+			}
+			if startupCalled {
+				t.Fatalf("runMain() should skip startup for %s", tc.name)
+			}
+		})
+	}
+}
+
+func TestRunMainRunsStartupForServerMode(t *testing.T) {
+	startupCalled := false
+	err := runMain([]string{"--config", "./configs/config.yaml"}, func(args []string) {
+		startupCalled = true
+		if len(args) != 2 || args[0] != "--config" {
+			t.Fatalf("startup args=%v", args)
+		}
+	})
+	if err != nil {
+		t.Fatalf("runMain() error=%v", err)
+	}
+	if !startupCalled {
+		t.Fatal("expected startup to be called")
+	}
+}
+
 func TestReadPort(t *testing.T) {
 	t.Setenv("GATEWAY_PORT", "")
 	if got := readPort(); got != "18080" {
