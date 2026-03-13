@@ -16,4 +16,6 @@ go run ./cmd/loadtest \
   -rtp-address "${RTP_ADDRESS:-127.0.0.1:25000}" \
   -http-url "${HTTP_URL:-http://127.0.0.1:18080/demo/process}" \
   -output-dir "${OUTPUT_DIR:-./loadtest/results}" \
-  -timeout "${TIMEOUT:-3s}"
+  -timeout "${TIMEOUT:-3s}" \
+  -gateway-base-url "${GATEWAY_BASE_URL:-}" \
+  -diag-interval "${DIAG_INTERVAL:-15s}"
