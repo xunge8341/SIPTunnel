@@ -14,5 +14,4 @@ cleanup() {
 }
 trap cleanup EXIT
 
-cd "$ROOT_DIR/gateway-ui"
-npm run dev
+"$ROOT_DIR/scripts/ui-dev.sh" real

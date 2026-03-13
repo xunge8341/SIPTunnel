@@ -4,17 +4,7 @@ $RootDir = Split-Path -Parent $PSScriptRoot
 $UiDir = Join-Path $RootDir 'gateway-ui'
 $TargetDir = Join-Path $RootDir 'gateway-server/internal/server/embedded-ui'
 
-if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
-  throw 'npm not found in PATH'
-}
-
-Push-Location $UiDir
-try {
-  npm run build
-}
-finally {
-  Pop-Location
-}
+& (Join-Path $RootDir 'scripts/ui-build.ps1')
 
 $AssetsDir = Join-Path $TargetDir 'assets'
 if (Test-Path $AssetsDir) {
