@@ -2,6 +2,12 @@
 
 本文档面向一线运维与交付人员，提供可重复执行的安装、升级、回滚与排障流程。
 
+
+关联文档：
+- Runbook（现场动作清单）：`docs/runbook.md`
+- 值班手册（告警与升级）：`docs/oncall-handbook.md`
+- 故障类型排查：`docs/troubleshooting.md`
+
 ## 1. 安装前检查（Precheck）
 
 生产环境建议先执行统一预检查脚本，输出包含：

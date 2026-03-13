@@ -281,6 +281,8 @@ func joinClosers(closers ...io.Closer) io.Closer {
 	return out
 }
 
+// newMux 集中注册运维 API；接口清单见 gateway-server/docs/openapi-ops.yaml，
+// 排障动作与升级路径见 docs/runbook.md、docs/oncall-handbook.md。
 func newMux(deps handlerDeps) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", deps.healthz)
