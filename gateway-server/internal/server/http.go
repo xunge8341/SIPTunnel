@@ -123,6 +123,7 @@ type RTPNetworkStatus struct {
 
 type DiagnosticExportData struct {
 	GeneratedAt time.Time  `json:"generated_at"`
+	JobID       string     `json:"job_id"`
 	NodeID      string     `json:"node_id"`
 	RequestID   string     `json:"request_id,omitempty"`
 	TraceID     string     `json:"trace_id,omitempty"`
@@ -726,13 +727,16 @@ func (d handlerDeps) handleDiagnosticsExport(w http.ResponseWriter, r *http.Requ
 		nodeID = d.nodes[0].NodeID
 	}
 	generatedAt := time.Now().UTC()
-	prefix := fmt.Sprintf("diag_%s_%s", strings.ReplaceAll(nodeID, "-", "_"), generatedAt.Format("20060102T150405Z"))
+	jobID := generatedAt.Format("150405")
+	nodeToken := safeExportToken(nodeID)
+	prefix := fmt.Sprintf("diag_%s_%s", nodeToken, generatedAt.Format("20060102T150405Z"))
 	if requestID != "" {
-		prefix += "_req_" + requestID
+		prefix += "_req_" + safeExportToken(requestID)
 	}
 	if traceID != "" {
-		prefix += "_trace_" + traceID
+		prefix += "_trace_" + safeExportToken(traceID)
 	}
+	prefix += "_" + jobID
 
 	tasks, _ := d.repo.ListTasks(r.Context(), repository.TaskFilter{Status: repository.TaskStatusFailed, RequestID: requestID, TraceID: traceID, Limit: 20})
 	taskSummary := make([]map[string]any, 0, len(tasks))
@@ -760,22 +764,33 @@ func (d handlerDeps) handleDiagnosticsExport(w http.ResponseWriter, r *http.Requ
 			"request_id": evt.Core.RequestID,
 			"trace_id":   evt.Core.TraceID,
 			"api_code":   evt.Core.APICode,
-			"result":     evt.FinalResult,
+			"result":     maskText(evt.FinalResult),
 		})
 	}
 
+	readmeLines := []string{
+		"诊断包文件说明（字段已脱敏，可用于人工排障）",
+		"01_transport_config.json: 当前 SIP/RTP transport 与关键网络参数快照。",
+		"02_connection_stats_snapshot.json: SIP/RTP 连接计数与错误累计值。",
+		"03_port_pool_status.json: RTP 端口池使用情况与分配失败累计值。",
+		"04_transport_error_summary.json: 最近 transport 绑定/网络错误摘要。",
+		"05_task_failure_summary.json: 最近失败任务摘要，支持 request_id/trace_id 定向过滤。",
+		"06_rate_limit_hit_summary.json: 最近 rate limit 命中记录，支持 request_id/trace_id 定向过滤。",
+		"07_profile_entry.json: pprof 采集入口与启用状态（不包含凭据）。",
+	}
+
 	files := []DiagFile{
-		{Name: "README.md", Description: "诊断包文件说明", Content: map[string]any{"note": "按文件名前缀顺序阅读；字段已做脱敏处理，敏感值展示摘要。"}},
+		{Name: "README.md", Description: "诊断包文件说明", Content: map[string]any{"filters": map[string]any{"request_id": requestID, "trace_id": traceID}, "files": readmeLines}},
 		{Name: "01_transport_config.json", Description: "当前 transport 配置", Content: map[string]any{"sip": map[string]any{"listen_ip": status.SIP.ListenIP, "listen_port": status.SIP.ListenPort, "transport": status.SIP.Transport}, "rtp": map[string]any{"listen_ip": status.RTP.ListenIP, "port_start": status.RTP.PortStart, "port_end": status.RTP.PortEnd, "transport": status.RTP.Transport}}},
 		{Name: "02_connection_stats_snapshot.json", Description: "连接统计快照", Content: map[string]any{"sip": map[string]any{"current_sessions": status.SIP.CurrentSessions, "current_connections": status.SIP.CurrentConnections, "accepted_connections_total": status.SIP.AcceptedConnectionsTotal, "closed_connections_total": status.SIP.ClosedConnectionsTotal, "read_timeout_total": status.SIP.ReadTimeoutTotal, "write_timeout_total": status.SIP.WriteTimeoutTotal, "connection_error_total": status.SIP.ConnectionErrorTotal}, "rtp": map[string]any{"active_transfers": status.RTP.ActiveTransfers, "rtp_tcp_sessions_current": status.RTP.TCPSessionsCurrent, "rtp_tcp_sessions_total": status.RTP.TCPSessionsTotal, "rtp_tcp_read_errors_total": status.RTP.TCPReadErrorsTotal, "rtp_tcp_write_errors_total": status.RTP.TCPWriteErrorsTotal}}},
 		{Name: "03_port_pool_status.json", Description: "端口池状态", Content: map[string]any{"used_ports": status.RTP.UsedPorts, "available_ports": status.RTP.AvailablePorts, "rtp_port_pool_total": status.RTP.PortPoolTotal, "rtp_port_pool_used": status.RTP.PortPoolUsed, "rtp_port_alloc_fail_total": status.RTP.PortAllocFailTotal}},
-		{Name: "04_transport_error_summary.json", Description: "最近 transport 错误摘要", Content: map[string]any{"recent_bind_errors": status.RecentBindErrors, "recent_network_errors": status.RecentNetworkErrors}},
+		{Name: "04_transport_error_summary.json", Description: "最近 transport 错误摘要", Content: map[string]any{"recent_bind_errors": maskStringSlice(status.RecentBindErrors), "recent_network_errors": maskStringSlice(status.RecentNetworkErrors)}},
 		{Name: "05_task_failure_summary.json", Description: "最近 task failure 摘要", Content: taskSummary},
 		{Name: "06_rate_limit_hit_summary.json", Description: "最近 rate limit 命中摘要", Content: rateLimitHits},
 		{Name: "07_profile_entry.json", Description: "profile 采集入口信息（如果启用）", Content: map[string]any{"enabled": strings.EqualFold(strings.TrimSpace(os.Getenv("GATEWAY_PPROF_ENABLED")), "true") || strings.TrimSpace(os.Getenv("GATEWAY_PPROF_ENABLED")) == "1", "listen_address": strings.TrimSpace(os.Getenv("GATEWAY_PPROF_LISTEN_ADDR")), "profile_url": "/debug/pprof/profile"}},
 	}
 	d.recordOpsAudit(r, readOperator(r), "EXPORT_DIAGNOSTICS", map[string]any{"request_id": requestID, "trace_id": traceID})
-	writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: DiagnosticExportData{GeneratedAt: generatedAt, NodeID: nodeID, RequestID: requestID, TraceID: traceID, FileName: prefix + ".zip", OutputDir: prefix, Files: files}})
+	writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: DiagnosticExportData{GeneratedAt: generatedAt, JobID: jobID, NodeID: nodeID, RequestID: requestID, TraceID: traceID, FileName: prefix + ".zip", OutputDir: prefix, Files: files}})
 }
 
 func maskText(v string) string {
@@ -787,6 +802,31 @@ func maskText(v string) string {
 		return "***"
 	}
 	return v[:12] + "***"
+}
+
+func maskStringSlice(values []string) []string {
+	masked := make([]string, 0, len(values))
+	for _, item := range values {
+		masked = append(masked, maskText(item))
+	}
+	return masked
+}
+
+func safeExportToken(v string) string {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return "na"
+	}
+	safe := strings.Map(func(r rune) rune {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' {
+			return r
+		}
+		if r == '-' || r == '_' {
+			return '_'
+		}
+		return '_'
+	}, v)
+	return strings.Trim(safe, "_")
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload responseEnvelope) {

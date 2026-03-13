@@ -244,10 +244,10 @@ func TestDiagnosticsExportEndpointWithFilters(t *testing.T) {
 	if payload.Data.RequestID != "req-d" || payload.Data.TraceID != "trace-d" {
 		t.Fatalf("unexpected filters: %+v", payload.Data)
 	}
-	if !strings.Contains(payload.Data.FileName, "req_req-d") || !strings.Contains(payload.Data.OutputDir, "trace_trace-d") {
+	if payload.Data.JobID == "" || !strings.Contains(payload.Data.FileName, payload.Data.JobID) || !strings.Contains(payload.Data.OutputDir, payload.Data.JobID) || !strings.Contains(payload.Data.FileName, "req_req_d") || !strings.Contains(payload.Data.OutputDir, "trace_trace_d") {
 		t.Fatalf("unexpected naming: file=%s dir=%s", payload.Data.FileName, payload.Data.OutputDir)
 	}
-	if len(payload.Data.Files) < 7 {
+	if len(payload.Data.Files) < 8 {
 		t.Fatalf("expected diagnostic files, got %d", len(payload.Data.Files))
 	}
 	var taskFile DiagFile
@@ -265,4 +265,36 @@ func TestDiagnosticsExportEndpointWithFilters(t *testing.T) {
 	if got, _ := first["last_error"].(string); got == "token=secret-value" || got == "" {
 		t.Fatalf("last_error should be masked, got=%q", got)
 	}
+	var rateLimitFile DiagFile
+	for _, f := range payload.Data.Files {
+		if f.Name == "06_rate_limit_hit_summary.json" {
+			rateLimitFile = f
+			break
+		}
+	}
+	rateItems, ok := rateLimitFile.Content.([]any)
+	if !ok || len(rateItems) == 0 {
+		t.Fatalf("rate limit summary missing: %#v", rateLimitFile.Content)
+	}
+	rateFirst, _ := rateItems[0].(map[string]any)
+	if got, _ := rateFirst["result"].(string); got == "UPSTREAM_RATE_LIMIT" || got == "" {
+		t.Fatalf("rate limit result should be masked, got=%q", got)
+	}
+
+	var readmeFile DiagFile
+	for _, f := range payload.Data.Files {
+		if f.Name == "README.md" {
+			readmeFile = f
+			break
+		}
+	}
+	readme, ok := readmeFile.Content.(map[string]any)
+	if !ok {
+		t.Fatalf("readme content type mismatch: %#v", readmeFile.Content)
+	}
+	filters, ok := readme["filters"].(map[string]any)
+	if !ok || filters["request_id"] != "req-d" || filters["trace_id"] != "trace-d" {
+		t.Fatalf("readme filters mismatch: %#v", readmeFile.Content)
+	}
 }
+
