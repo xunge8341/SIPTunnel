@@ -53,7 +53,7 @@ func main() {
 	if err := paths.EnsureWritable(); err != nil {
 		log.Fatalf("startup directory validation failed: %v", err)
 	}
-	selfCheckInput, uiCfg := buildSelfCheckInput(paths, cliConfigPath, defaultPort)
+	selfCheckInput, uiCfg, cfgLoad := buildSelfCheckInput(paths, cliConfigPath, defaultPort)
 	rtpTransport, err := filetransfer.NewTransport(selfCheckInput.NetworkConfig.RTP.Transport)
 	if err != nil {
 		log.Fatalf("init rtp transport failed: %v", err)
@@ -187,11 +187,11 @@ func main() {
 
 	go func() {
 		log.Printf("gateway server listening on %s (version=%s commit=%s build_time=%s)", httpServer.Addr, version, commit, buildTime)
-		uiURL := fmt.Sprintf("http://%s:%d%s", uiCfg.ListenIP, uiCfg.ListenPort, uiCfg.BasePath)
-		if uiCfg.ListenIP == "0.0.0.0" {
-			uiURL = fmt.Sprintf("http://%s:%d%s", "127.0.0.1", uiCfg.ListenPort, uiCfg.BasePath)
+		summary := buildStartupSummary(cfgLoad, uiCfg, selfCheckInput.NetworkConfig, defaultPort, rtpTransport.Mode())
+		log.Printf("startup summary config_path=%q config_source=%s ui_url=%s api_url=%s sip_listen=%s rtp_listen_range=%s current_transport=%s", summary.ConfigPath, summary.ConfigSource, summary.UIURL, summary.APIURL, summary.SIPListen, summary.RTPListenRange, summary.CurrentTransport)
+		if uiCfg.Mode == "external" {
+			log.Printf("ui mode=external note=%q", "UI 由外部承载，请单独部署 gateway-ui 并将 API 指向 api_url")
 		}
-		log.Printf("ui service mode=%s enabled=%t ui_url=%s", uiCfg.Mode, uiCfg.Enabled, uiURL)
 		log.Printf("storage paths temp_dir=%q final_dir=%q audit_dir=%q log_dir=%q", paths.TempDir, paths.FinalDir, paths.AuditDir, paths.LogDir)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server failed: %v", err)
@@ -212,7 +212,7 @@ func main() {
 	}
 }
 
-func buildSelfCheckInput(paths config.StoragePaths, cliConfigPath string, defaultPort string) (selfcheck.Input, config.UIConfig) {
+func buildSelfCheckInput(paths config.StoragePaths, cliConfigPath string, defaultPort string) (selfcheck.Input, config.UIConfig, configLoadResult) {
 	runtimeCfg, cfgLoad, err := loadRuntimeConfig(cliConfigPath)
 	if parsedPort, parseErr := strconv.Atoi(defaultPort); parseErr == nil {
 		runtimeCfg.UI.ApplyDefaults(parsedPort)
@@ -235,11 +235,48 @@ func buildSelfCheckInput(paths config.StoragePaths, cliConfigPath string, defaul
 		routeCfg, err := httpinvoke.LoadConfig(routePath)
 		if err != nil {
 			log.Printf("load GATEWAY_HTTPINVOKE_CONFIG=%q failed: %v", routePath, err)
-			return in, runtimeCfg.UI
+			return in, runtimeCfg.UI, cfgLoad
 		}
 		in.DownstreamRoutes = routeCfg.Routes
 	}
-	return in, runtimeCfg.UI
+	return in, runtimeCfg.UI, cfgLoad
+}
+
+type startupSummary struct {
+	ConfigPath       string
+	ConfigSource     configSource
+	UIURL            string
+	APIURL           string
+	SIPListen        string
+	RTPListenRange   string
+	CurrentTransport string
+}
+
+func buildStartupSummary(cfgLoad configLoadResult, uiCfg config.UIConfig, networkCfg config.NetworkConfig, defaultPort string, currentTransport string) startupSummary {
+	apiURL := fmt.Sprintf("http://127.0.0.1:%s/api", defaultPort)
+	uiURL := "disabled"
+	if uiCfg.Mode == "embedded" {
+		host := uiCfg.ListenIP
+		if host == "0.0.0.0" {
+			host = "127.0.0.1"
+		}
+		apiURL = fmt.Sprintf("http://%s:%d/api", host, uiCfg.ListenPort)
+		if uiCfg.Enabled {
+			uiURL = fmt.Sprintf("http://%s:%d%s", host, uiCfg.ListenPort, uiCfg.BasePath)
+		}
+	} else if uiCfg.Enabled {
+		uiURL = "external"
+	}
+
+	return startupSummary{
+		ConfigPath:       cfgLoad.Path,
+		ConfigSource:     cfgLoad.Source,
+		UIURL:            uiURL,
+		APIURL:           apiURL,
+		SIPListen:        fmt.Sprintf("%s://%s:%d", strings.ToLower(networkCfg.SIP.Transport), networkCfg.SIP.ListenIP, networkCfg.SIP.ListenPort),
+		RTPListenRange:   fmt.Sprintf("%s://%s:%d-%d", strings.ToLower(currentTransport), networkCfg.RTP.ListenIP, networkCfg.RTP.PortStart, networkCfg.RTP.PortEnd),
+		CurrentTransport: strings.ToUpper(currentTransport),
+	}
 }
 
 type configSource string

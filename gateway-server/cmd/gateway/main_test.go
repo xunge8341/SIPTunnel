@@ -38,6 +38,34 @@ func TestResolveHTTPListenAddr(t *testing.T) {
 	}
 }
 
+func TestBuildStartupSummary(t *testing.T) {
+	summary := buildStartupSummary(
+		configLoadResult{Path: "./configs/config.yaml", Source: configSourceCLI},
+		config.UIConfig{Enabled: true, Mode: "embedded", ListenIP: "0.0.0.0", ListenPort: 18080, BasePath: "/ops"},
+		config.NetworkConfig{SIP: config.SIPConfig{Transport: "TCP", ListenIP: "0.0.0.0", ListenPort: 15060}, RTP: config.RTPConfig{ListenIP: "0.0.0.0", PortStart: 16000, PortEnd: 16020}},
+		"18080",
+		"udp",
+	)
+	if summary.ConfigPath != "./configs/config.yaml" || summary.ConfigSource != configSourceCLI {
+		t.Fatalf("config summary mismatch: %+v", summary)
+	}
+	if summary.UIURL != "http://127.0.0.1:18080/ops" {
+		t.Fatalf("ui_url=%q", summary.UIURL)
+	}
+	if summary.APIURL != "http://127.0.0.1:18080/api" {
+		t.Fatalf("api_url=%q", summary.APIURL)
+	}
+	if summary.SIPListen != "tcp://0.0.0.0:15060" {
+		t.Fatalf("sip_listen=%q", summary.SIPListen)
+	}
+	if summary.RTPListenRange != "udp://0.0.0.0:16000-16020" {
+		t.Fatalf("rtp_listen_range=%q", summary.RTPListenRange)
+	}
+	if summary.CurrentTransport != "UDP" {
+		t.Fatalf("current_transport=%q", summary.CurrentTransport)
+	}
+}
+
 func TestConfigCandidatesPriority(t *testing.T) {
 	cli := "/tmp/from-cli.yaml"
 	env := "/tmp/from-env.yaml"

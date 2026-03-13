@@ -84,16 +84,27 @@ VITE_API_MODE=real VITE_API_BASE_URL=http://127.0.0.1:18080/api npm run dev
 - `ui.listen_ip` / `ui.listen_port`：`embedded` 模式下 HTTP 监听地址。
 - `ui.base_path`：UI 挂载路径（如 `/`、`/ops`）。
 
-### external 模式（默认）
+### 开发模式（external，推荐本地联调）
 
-保持现有前后端分离开发：
+保持前后端分离：
 
-- 后端仅提供 `/api/*`。
-- 前端继续 `npm run dev`（Vite）独立启动。
+```bash
+# 终端 1：启动后端 API
+cd gateway-server
+go run ./cmd/gateway --config ./configs/config.yaml
 
-### embedded 模式
+# 终端 2：启动前端开发服务器
+cd gateway-ui
+VITE_API_MODE=real VITE_API_BASE_URL=http://127.0.0.1:18080/api npm run dev
+```
 
-1) 构建并同步 UI 静态产物：
+说明：
+- `gateway-server` 只承载 API（`/api/*`）；UI 由 Vite dev server 承载。
+- 启动日志会输出 `startup summary`，包含 config path/source、api url、sip/rtp 监听信息，便于运维核对。
+
+### embedded 模式（单进程打包交付）
+
+1) 构建并同步 UI 静态产物到后端嵌入目录：
 
 ```bash
 ./scripts/embed-ui.sh
@@ -110,13 +121,28 @@ ui:
   base_path: /
 ```
 
-3) 启动后单进程同时承载：
+3) 启动 gateway（建议显式指定配置）：
 
+```bash
+cd gateway-server
+go run ./cmd/gateway --config ./configs/config.yaml
+```
+
+embedded 模式下，网关将统一承载：
 - `/api/*`（运维 API）
-- `/assets/*`（前端静态资源）
-- `/`（SPA 入口，含 Vue Router fallback 到 `index.html`）
+- `/assets/*`（前端静态资源，带缓存头）
+- `/favicon.svg`（favicon）
+- `/`（SPA 入口，含 Vue Router fallback）
+- UI 404/500 友好页面（最小版）
 
-启动日志会打印 `ui.mode` 与 `ui_url`。
+### external 模式（生产部署建议）
+
+适用于已有前端网关或静态托管能力（Nginx/对象存储/CDN）：
+
+1) `gateway-server` 使用默认 `ui.mode: external` 启动，仅提供 API。
+2) `gateway-ui` 构建产物独立部署到静态服务。
+3) 将前端 API 基址指向 gateway-server 的 `/api`（可经反向代理暴露）。
+4) 关注启动日志中的 `startup summary` 与 external 提示行，确保运维明确“UI 由外部承载”。
 
 ### 最小验证
 
