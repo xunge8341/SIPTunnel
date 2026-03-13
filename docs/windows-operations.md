@@ -56,7 +56,36 @@ Set-Location C:\SIPTunnel
 .\gateway.exe --config .\configs\config.yaml
 ```
 
-若仍提示 SIP 端口占用，请改 `configs\config.yaml` 的 `sip.listen_port` 为其他空闲端口（如 `15060`），再重启。
+若仍提示 SIP 端口占用，请按下面“2.1 首启卡在 `sip.listen_port_occupancy`”处理（不要只看 `validate-config`）。
+
+### 2.1 首启卡在 `sip.listen_port_occupancy`（`validate-config` 通过但启动失败）
+
+这是 Windows 首启最常见的误区：
+
+- `init-config`：只负责生成配置文件。
+- `validate-config`：只做**静态配置合法性**检查（字段、格式、范围）。
+- `gateway.exe --config ...`：才会执行运行时环境自检（包括端口实际绑定检查）。
+
+因此出现“`validate-config` 通过，但启动报 `sip.listen_port_occupancy`”是预期行为，根因通常是目标 SIP 端口已被其他进程占用。
+
+建议按以下顺序处理（示例端口按你的日志 `59226`）：
+
+```powershell
+# 1) 定位占用该端口的 PID
+Get-NetTCPConnection -LocalPort 59226 | Select-Object LocalAddress,LocalPort,State,OwningProcess
+
+# 2) 查看进程详情
+Get-Process -Id <PID> | Format-Table Id,ProcessName,Path
+
+# 3) 先快速联调：改 sip.listen_port 为空闲端口（例如 51500）
+notepad .\configs\config.yaml
+
+# 4) 重新校验 + 重启
+.\gateway.exe validate-config -f .\configs\config.yaml
+.\gateway.exe --config .\configs\config.yaml
+```
+
+如果你是通过快捷方式启动，还要检查“起始位置（Start in）”是否为安装目录；否则会误读相对路径配置，导致排障混乱。
 
 ## 3. 配置修改
 
