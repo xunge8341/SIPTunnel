@@ -166,7 +166,13 @@ startup summary:
 1) 构建并同步 UI 静态产物到后端嵌入目录：
 
 ```bash
+# Linux / macOS
 ./scripts/embed-ui.sh
+```
+
+```powershell
+# Windows PowerShell
+./scripts/embed-ui.ps1
 ```
 
 2) 在 `gateway-server/configs/config.yaml` 中设置：

@@ -30,8 +30,8 @@ func TestEmbeddedUIFallbackServesIndexAndAssets(t *testing.T) {
 	if got := rr.Header().Get("Cache-Control"); got != "no-store" {
 		t.Fatalf("index cache-control=%q, want no-store", got)
 	}
-	if !strings.Contains(rr.Body.String(), "首次部署引导") {
-		t.Fatalf("index body should contain first-deploy hint, got=%q", rr.Body.String())
+	if !strings.Contains(rr.Body.String(), "<div id=\"app\"></div>") {
+		t.Fatalf("index body should contain Vue app mount node, got=%q", rr.Body.String())
 	}
 
 	req = httptest.NewRequest(http.MethodGet, "/api/ping", nil)
