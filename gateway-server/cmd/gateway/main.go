@@ -774,26 +774,30 @@ func pickFriendlyStartupPort(osName string) string {
 	if osName == "windows" {
 		candidates = []int{18180, 18080, 18081, 8080}
 	}
-	for _, port := range candidates {
-		if isPortAvailable(port) {
-			return strconv.Itoa(port)
-		}
-	}
-	return strconv.Itoa(candidates[0])
+	selected := pickFirstAvailablePort(candidates, func(port int) bool {
+		return isTCPAddrAvailable("127.0.0.1", port)
+	})
+	return strconv.Itoa(selected)
 }
 
 func pickFriendlySIPPort() int {
 	candidates := []int{5060, 15060, 25060, 35060}
+	return pickFirstAvailablePort(candidates, func(port int) bool {
+		return isTCPAddrAvailable("0.0.0.0", port)
+	})
+}
+
+func pickFirstAvailablePort(candidates []int, checker func(int) bool) int {
 	for _, port := range candidates {
-		if isPortAvailable(port) {
+		if checker(port) {
 			return port
 		}
 	}
 	return candidates[0]
 }
 
-func isPortAvailable(port int) bool {
-	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+func isTCPAddrAvailable(host string, port int) bool {
+	ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
 	if err != nil {
 		return false
 	}

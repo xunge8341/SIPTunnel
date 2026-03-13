@@ -270,6 +270,17 @@ func TestPickFriendlySIPPortSkipsOccupiedPort(t *testing.T) {
 	}
 }
 
+func TestPickFirstAvailablePort(t *testing.T) {
+	candidates := []int{5060, 15060, 25060}
+	used := map[int]bool{5060: true, 15060: false, 25060: true}
+	got := pickFirstAvailablePort(candidates, func(port int) bool {
+		return !used[port]
+	})
+	if got != 15060 {
+		t.Fatalf("pickFirstAvailablePort()=%d, want 15060", got)
+	}
+}
+
 func TestParseRuntimeConfigFromTopLevelYAML(t *testing.T) {
 	raw := []byte(`sip:
   listen_port: 16060
