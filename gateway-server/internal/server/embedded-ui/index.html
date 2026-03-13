@@ -1,26 +1,13 @@
 <!doctype html>
-<html>
+<html lang="zh-CN">
   <head>
-    <meta charset="utf-8" />
-    <title>SIPTunnel UI（首启引导）</title>
-    <link rel="icon" href="/favicon.svg" />
-    <style>
-      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 2rem; color: #0f172a; }
-      .card { max-width: 860px; padding: 1rem 1.25rem; border: 1px solid #cbd5e1; border-radius: 10px; background: #f8fafc; }
-      code { background: #e2e8f0; padding: .1rem .3rem; border-radius: 4px; }
-      li { margin: .35rem 0; }
-    </style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SIPTunnel Ops</title>
+    <script type="module" crossorigin src="/assets/index-lcM7jpJd.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CMY54pxs.css">
   </head>
   <body>
-    <div class="card">
-      <h2>SIPTunnel Embedded UI 首次部署引导</h2>
-      <p>当前正在使用内置占位 UI，说明前端构建产物尚未嵌入。网关 API 仍可正常联调与验收。</p>
-      <ol>
-        <li>在仓库根目录执行 <code>./scripts/embed-ui.sh</code> 嵌入 UI 产物。</li>
-        <li>执行 <code>./scripts/verify-embedded-ui.sh</code> 校验嵌入结果。</li>
-        <li>重新构建并启动网关，访问 <code>/</code> 或配置的 UI BasePath。</li>
-      </ol>
-      <p>Windows 打包环境可参考 <code>docs/windows-operations.md</code> 中的首启排障建议。</p>
-    </div>
+    <div id="app"></div>
   </body>
 </html>
