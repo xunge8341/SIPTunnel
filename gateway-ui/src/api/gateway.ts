@@ -11,7 +11,8 @@ import {
   exportConfigYamlMock,
   createDiagnosticExportMock,
   getDiagnosticExportMock,
-  retryDiagnosticExportMock
+  retryDiagnosticExportMock,
+  fetchDeploymentModeMock
 } from './mockGateway'
 import type {
   CommandTask,
@@ -30,7 +31,8 @@ import type {
   ConfigGovernancePayload,
   ConfigSnapshotFilters,
   DiagnosticExportCreatePayload,
-  DiagnosticExportJob
+  DiagnosticExportJob,
+  DeploymentModePayload
 } from '../types/gateway'
 
 const useMock = import.meta.env.VITE_API_MODE !== 'real'
@@ -250,6 +252,13 @@ export const gatewayApi = {
       request('/config-governance/export', { method: 'GET', params: { target } })
     )
     return result.content
+  },
+
+  async fetchDeploymentMode() {
+    if (useMock) {
+      return fetchDeploymentModeMock()
+    }
+    return unwrap(request<DeploymentModePayload>('/system/deployment-mode', { method: 'GET' }))
   },
 
   fetchLimits() {

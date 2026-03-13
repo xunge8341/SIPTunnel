@@ -4,7 +4,8 @@ import { gatewayApi } from '../../api/gateway'
 
 vi.mock('../../api/gateway', () => ({
   gatewayApi: {
-    fetchDashboard: vi.fn()
+    fetchDashboard: vi.fn(),
+    fetchDeploymentMode: vi.fn()
   }
 }))
 
@@ -33,14 +34,24 @@ describe('DashboardView', () => {
         { time: '10:05', total: 12, success: 12, failed: 0 }
       ]
     })
+    vi.mocked(gatewayApi.fetchDeploymentMode).mockResolvedValue({
+      uiMode: 'external',
+      uiUrl: 'https://ops.example.com',
+      apiUrl: 'https://api.example.com',
+      configPath: '/etc/siptunnel/config.yaml',
+      configSource: 'config-center'
+    })
 
     const wrapper = mount(DashboardView)
     await flushPromises()
 
     expect(gatewayApi.fetchDashboard).toHaveBeenCalledTimes(1)
+    expect(gatewayApi.fetchDeploymentMode).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).toContain('成功率')
     expect(wrapper.text()).toContain('当前 SIP transport')
     expect(wrapper.text()).toContain('最近 1h transport error')
+    expect(wrapper.text()).toContain('external mode')
+    expect(wrapper.text()).toContain('config-center')
     expect(wrapper.findAll('circle')).toHaveLength(2)
   })
 })

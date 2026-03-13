@@ -13,7 +13,8 @@ import type {
   ConfigSnapshotFilters,
   RuntimeGatewayConfig,
   DiagnosticExportJob,
-  DiagnosticExportCreatePayload
+  DiagnosticExportCreatePayload,
+  DeploymentModePayload
 } from '../types/gateway'
 
 const wait = (ms = 200) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -107,6 +108,18 @@ export async function fetchDashboardMock(): Promise<DashboardPayload> {
       { time: '14:00', total: 158, success: 155, failed: 3 },
       { time: '15:00', total: 171, success: 169, failed: 2 }
     ]
+  }
+}
+
+
+export async function fetchDeploymentModeMock(): Promise<DeploymentModePayload> {
+  await wait()
+  return {
+    uiMode: 'embedded',
+    uiUrl: 'http://127.0.0.1:8360/ui',
+    apiUrl: 'http://127.0.0.1:8360/api',
+    configPath: '/etc/siptunnel/config.yaml',
+    configSource: 'local-file'
   }
 }
 

@@ -7,7 +7,8 @@ import {
   retryDiagnosticExportMock,
   rollbackConfigMock,
   fetchDashboardMock,
-  fetchNetworkConfigMock
+  fetchNetworkConfigMock,
+  fetchDeploymentModeMock
 } from '../mockGateway'
 
 describe('config governance mock api', () => {
@@ -46,6 +47,15 @@ describe('config governance mock api', () => {
     expect(result.connectionErrors.length).toBeGreaterThan(0)
     expect(result.selfCheckItems.length).toBeGreaterThan(0)
     expect(result.linkTests.length).toBeGreaterThan(0)
+  })
+
+  it('provides deployment mode metadata for ui/api visibility', async () => {
+    const result = await fetchDeploymentModeMock()
+    expect(['embedded', 'external']).toContain(result.uiMode)
+    expect(result.uiUrl).toContain('http')
+    expect(result.apiUrl).toContain('http')
+    expect(result.configPath).toContain('/')
+    expect(result.configSource.length).toBeGreaterThan(0)
   })
 
   it('supports diagnostic export fail then retry success flow', async () => {
