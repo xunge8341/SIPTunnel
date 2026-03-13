@@ -335,6 +335,16 @@ func TestRunMainSkipsStartupWhenToolCommandAfterFlags(t *testing.T) {
 	}
 }
 
+func TestExtractToolCommandSupportsPastedNewlineEscapes(t *testing.T) {
+	cmd, _, ok := extractToolCommand([]string{"init-config\n2026/03/13 16:10:02 log line"})
+	if !ok {
+		t.Fatal("expected tool command to be detected")
+	}
+	if cmd != "init-config" {
+		t.Fatalf("cmd=%q, want init-config", cmd)
+	}
+}
+
 func TestHandleMissingConfigFile(t *testing.T) {
 	t.Run("dev mode auto generates", func(t *testing.T) {
 		t.Setenv("GATEWAY_MODE", "dev")

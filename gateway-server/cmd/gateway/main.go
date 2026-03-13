@@ -794,9 +794,11 @@ func extractToolCommand(args []string) (string, []string, bool) {
 	}
 	toolCommands := map[string]struct{}{"init-config": {}, "print-default-config": {}, "validate-config": {}}
 	for idx, arg := range args {
-		cmd := strings.ToLower(strings.TrimSpace(arg))
-		if _, ok := toolCommands[cmd]; ok {
-			return cmd, args[idx+1:], true
+		for _, token := range strings.Fields(strings.ToLower(strings.TrimSpace(strings.ReplaceAll(arg, `\\n`, "\n")))) {
+			token = strings.Trim(token, `"'`)
+			if _, ok := toolCommands[token]; ok {
+				return token, args[idx+1:], true
+			}
 		}
 	}
 	return "", nil, false
