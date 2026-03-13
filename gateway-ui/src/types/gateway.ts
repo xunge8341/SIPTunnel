@@ -52,6 +52,30 @@ export interface DeploymentModePayload {
   configSource: string
 }
 
+export interface BusinessExecutionStatus {
+  state: 'active' | 'protocol_only'
+  route_count: number
+  message: string
+  impact: string
+}
+
+export interface StartupSummaryPayload {
+  node_id: string
+  config_path: string
+  config_source: string
+  ui_mode: UiDeployMode
+  ui_url: string
+  api_url: string
+  business_execution: BusinessExecutionStatus
+  self_check_summary: {
+    generated_at: string
+    overall: 'info' | 'warn' | 'error'
+    info: number
+    warn: number
+    error: number
+  }
+}
+
 export interface TaskListFilters {
   status?: TaskStatus
   requestId?: string

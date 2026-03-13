@@ -58,6 +58,22 @@
       </a-descriptions>
     </a-card>
 
+
+    <a-card
+      v-if="startupSummary.business_execution.state === 'protocol_only'"
+      :bordered="false"
+    >
+      <a-alert
+        type="warning"
+        show-icon
+        message="当前未加载业务路由"
+        description="系统当前为“协议层可启动、业务执行层未激活”状态，因此不会执行 A 网 HTTP 落地。请加载最小 httpinvoke 路由配置后重启并复核。"
+      />
+      <a-typography-paragraph style="margin-top: 8px; margin-bottom: 0">
+        当前未加载业务路由，因此不会执行 A 网 HTTP 落地。
+      </a-typography-paragraph>
+    </a-card>
+
     <a-card title="最近任务趋势图">
       <div class="chart-wrap">
         <svg viewBox="0 0 760 220" role="img" aria-label="任务趋势图">
@@ -82,7 +98,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { gatewayApi } from '../api/gateway'
-import type { DashboardPayload, DeploymentModePayload } from '../types/gateway'
+import type { DashboardPayload, DeploymentModePayload, StartupSummaryPayload } from '../types/gateway'
 
 const deploymentMode = ref<DeploymentModePayload>({
   uiMode: 'embedded',
@@ -90,6 +106,29 @@ const deploymentMode = ref<DeploymentModePayload>({
   apiUrl: '-',
   configPath: '-',
   configSource: '-'
+})
+
+
+const startupSummary = ref<StartupSummaryPayload>({
+  node_id: '-',
+  config_path: '-',
+  config_source: '-',
+  ui_mode: 'embedded',
+  ui_url: '-',
+  api_url: '-',
+  business_execution: {
+    state: 'active',
+    route_count: 1,
+    message: '-',
+    impact: '-'
+  },
+  self_check_summary: {
+    generated_at: '-',
+    overall: 'info',
+    info: 0,
+    warn: 0,
+    error: 0
+  }
 })
 
 const dashboard = ref<DashboardPayload>({
@@ -114,12 +153,14 @@ const dashboard = ref<DashboardPayload>({
 })
 
 onMounted(async () => {
-  const [dashboardPayload, deploymentPayload] = await Promise.all([
+  const [dashboardPayload, deploymentPayload, startupPayload] = await Promise.all([
     gatewayApi.fetchDashboard(),
-    gatewayApi.fetchDeploymentMode()
+    gatewayApi.fetchDeploymentMode(),
+    gatewayApi.fetchStartupSummary()
   ])
   dashboard.value = dashboardPayload
   deploymentMode.value = deploymentPayload
+  startupSummary.value = startupPayload
 })
 
 const keyStatusCards = computed<Array<{ title: string; value: string | number; suffix?: string }>>(() => [

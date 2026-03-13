@@ -161,6 +161,9 @@ func TestDownstreamReachability_NoRoutesWarn(t *testing.T) {
 		if item.Name == "downstream.http_base_reachability" && strings.TrimSpace(item.DocLink) == "" {
 			t.Fatalf("expected doc_link for downstream item: %+v", item)
 		}
+		if item.Name == "downstream.http_base_reachability" && !strings.Contains(item.Message, "业务执行层未激活") {
+			t.Fatalf("expected downstream message to mention business execution status: %+v", item)
+		}
 	}
 }
 

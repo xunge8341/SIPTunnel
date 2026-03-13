@@ -8,7 +8,8 @@ import {
   rollbackConfigMock,
   fetchDashboardMock,
   fetchNetworkConfigMock,
-  fetchDeploymentModeMock
+  fetchDeploymentModeMock,
+  fetchStartupSummaryMock
 } from '../mockGateway'
 
 describe('config governance mock api', () => {
@@ -56,6 +57,14 @@ describe('config governance mock api', () => {
     expect(result.apiUrl).toContain('http')
     expect(result.configPath).toContain('/')
     expect(result.configSource.length).toBeGreaterThan(0)
+  })
+
+
+  it('provides startup summary business execution status', async () => {
+    const result = await fetchStartupSummaryMock()
+    expect(result.business_execution.state).toBe('protocol_only')
+    expect(result.business_execution.message).toContain('业务执行层未激活')
+    expect(result.self_check_summary.overall).toBe('warn')
   })
 
   it('supports diagnostic export fail then retry success flow', async () => {
