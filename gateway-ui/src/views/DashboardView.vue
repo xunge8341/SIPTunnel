@@ -32,6 +32,32 @@
       </a-col>
     </a-row>
 
+    <a-card :bordered="false">
+      <template #title>
+        <a-space>
+          <span>UI/API 部署模式</span>
+          <a-tooltip>
+            <template #title>
+              <div>embedded mode：UI 与 API 同进程部署，适用于内网一体化发布与低运维复杂度场景。</div>
+              <div>external mode：UI 独立部署并反向代理 API，适用于前后端独立扩缩容与跨域接入场景。</div>
+            </template>
+            <a-tag color="blue">模式说明</a-tag>
+          </a-tooltip>
+        </a-space>
+      </template>
+      <a-descriptions :column="1" size="small" bordered>
+        <a-descriptions-item label="ui.mode">
+          <a-tag :color="deploymentMode.uiMode === 'embedded' ? 'success' : 'processing'">
+            {{ deploymentMode.uiMode }} mode
+          </a-tag>
+        </a-descriptions-item>
+        <a-descriptions-item label="ui.url">{{ deploymentMode.uiUrl }}</a-descriptions-item>
+        <a-descriptions-item label="api.url">{{ deploymentMode.apiUrl }}</a-descriptions-item>
+        <a-descriptions-item label="config.path">{{ deploymentMode.configPath }}</a-descriptions-item>
+        <a-descriptions-item label="config.source">{{ deploymentMode.configSource }}</a-descriptions-item>
+      </a-descriptions>
+    </a-card>
+
     <a-card title="最近任务趋势图">
       <div class="chart-wrap">
         <svg viewBox="0 0 760 220" role="img" aria-label="任务趋势图">
@@ -56,7 +82,15 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { gatewayApi } from '../api/gateway'
-import type { DashboardPayload } from '../types/gateway'
+import type { DashboardPayload, DeploymentModePayload } from '../types/gateway'
+
+const deploymentMode = ref<DeploymentModePayload>({
+  uiMode: 'embedded',
+  uiUrl: '-',
+  apiUrl: '-',
+  configPath: '-',
+  configSource: '-'
+})
 
 const dashboard = ref<DashboardPayload>({
   metrics: {
@@ -80,7 +114,12 @@ const dashboard = ref<DashboardPayload>({
 })
 
 onMounted(async () => {
-  dashboard.value = await gatewayApi.fetchDashboard()
+  const [dashboardPayload, deploymentPayload] = await Promise.all([
+    gatewayApi.fetchDashboard(),
+    gatewayApi.fetchDeploymentMode()
+  ])
+  dashboard.value = dashboardPayload
+  deploymentMode.value = deploymentPayload
 })
 
 const keyStatusCards = computed<Array<{ title: string; value: string | number; suffix?: string }>>(() => [

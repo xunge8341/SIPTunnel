@@ -42,6 +42,16 @@ export interface DashboardPayload {
   recentTrends: TrendPoint[]
 }
 
+export type UiDeployMode = 'embedded' | 'external'
+
+export interface DeploymentModePayload {
+  uiMode: UiDeployMode
+  uiUrl: string
+  apiUrl: string
+  configPath: string
+  configSource: string
+}
+
 export interface TaskListFilters {
   status?: TaskStatus
   requestId?: string
