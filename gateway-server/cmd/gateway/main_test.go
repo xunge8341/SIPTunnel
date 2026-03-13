@@ -6,8 +6,10 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"siptunnel/internal/config"
+	"siptunnel/internal/selfcheck"
 )
 
 func TestReadPort(t *testing.T) {
@@ -40,13 +42,19 @@ func TestResolveHTTPListenAddr(t *testing.T) {
 
 func TestBuildStartupSummary(t *testing.T) {
 	summary := buildStartupSummary(
+		"gateway-a-01",
 		configLoadResult{Path: "./configs/config.yaml", Source: configSourceCLI},
 		config.UIConfig{Enabled: true, Mode: "embedded", ListenIP: "0.0.0.0", ListenPort: 18080, BasePath: "/ops"},
 		config.NetworkConfig{SIP: config.SIPConfig{Transport: "TCP", ListenIP: "0.0.0.0", ListenPort: 15060}, RTP: config.RTPConfig{ListenIP: "0.0.0.0", PortStart: 16000, PortEnd: 16020}},
+		config.StoragePaths{TempDir: "./data/temp", FinalDir: "./data/final", AuditDir: "./data/audit", LogDir: "./data/logs"},
 		"18080",
 		"udp",
+		selfCheckReportForTest(),
 	)
-	if summary.ConfigPath != "./configs/config.yaml" || summary.ConfigSource != configSourceCLI {
+	if summary.NodeID != "gateway-a-01" {
+		t.Fatalf("node_id=%q", summary.NodeID)
+	}
+	if summary.ConfigPath != "./configs/config.yaml" || summary.ConfigSource != string(configSourceCLI) {
 		t.Fatalf("config summary mismatch: %+v", summary)
 	}
 	if summary.UIURL != "http://127.0.0.1:18080/ops" {
@@ -55,15 +63,22 @@ func TestBuildStartupSummary(t *testing.T) {
 	if summary.APIURL != "http://127.0.0.1:18080/api" {
 		t.Fatalf("api_url=%q", summary.APIURL)
 	}
-	if summary.SIPListen != "tcp://0.0.0.0:15060" {
-		t.Fatalf("sip_listen=%q", summary.SIPListen)
+	if summary.SIPListen.Transport != "TCP" || summary.SIPListen.IP != "0.0.0.0" || summary.SIPListen.Port != 15060 {
+		t.Fatalf("sip_listen=%+v", summary.SIPListen)
 	}
-	if summary.RTPListenRange != "udp://0.0.0.0:16000-16020" {
-		t.Fatalf("rtp_listen_range=%q", summary.RTPListenRange)
+	if summary.RTPListen.Transport != "UDP" || summary.RTPListen.IP != "0.0.0.0" || summary.RTPListen.PortRange != "16000-16020" {
+		t.Fatalf("rtp_listen=%+v", summary.RTPListen)
 	}
-	if summary.CurrentTransport != "UDP" {
-		t.Fatalf("current_transport=%q", summary.CurrentTransport)
+	if summary.StorageDirs.TempDir != "./data/temp" {
+		t.Fatalf("storage=%+v", summary.StorageDirs)
 	}
+	if summary.SelfCheckSummary.Overall != "info" {
+		t.Fatalf("self_check_summary=%+v", summary.SelfCheckSummary)
+	}
+}
+
+func selfCheckReportForTest() selfcheck.Report {
+	return selfcheck.Report{GeneratedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC), Overall: selfcheck.LevelInfo, Summary: selfcheck.Summary{Info: 2, Warn: 0, Error: 0}}
 }
 
 func TestConfigCandidatesPriority(t *testing.T) {

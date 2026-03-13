@@ -28,6 +28,7 @@ import (
 	"siptunnel/internal/service/filetransfer"
 	"siptunnel/internal/service/httpinvoke"
 	"siptunnel/internal/service/siptcp"
+	"siptunnel/internal/startupsummary"
 )
 
 var (
@@ -98,6 +99,8 @@ func main() {
 	if selfCheckInput.NetworkConfig.SIP.UDPMessageSizeRisk() {
 		log.Printf("sip udp message size risk detected transport=%s max_message_bytes=%d recommended_max=%d", selfCheckInput.NetworkConfig.SIP.Transport, selfCheckInput.NetworkConfig.SIP.MaxMessageBytes, config.SIPUDPRecommendedMaxMessageBytes)
 	}
+	nodeID := resolveNodeID()
+	var unifiedSummary startupsummary.Summary
 	handler, closer, err := server.NewHandlerWithOptions(server.HandlerOptions{
 		LogDir:   paths.LogDir,
 		AuditDir: paths.AuditDir,
@@ -146,6 +149,9 @@ func main() {
 				RecentNetworkErrors: []string{},
 			}
 		},
+		StartupSummaryProvider: func(context.Context) startupsummary.Summary {
+			return unifiedSummary
+		},
 	})
 	if err != nil {
 		log.Fatalf("initialize handler failed: %v", err)
@@ -165,6 +171,7 @@ func main() {
 	if report.Overall == selfcheck.LevelError {
 		log.Fatal("environment self-check failed, please fix errors before startup")
 	}
+	unifiedSummary = buildStartupSummary(nodeID, cfgLoad, uiCfg, selfCheckInput.NetworkConfig, paths, defaultPort, rtpTransport.Mode(), report)
 
 	if closer != nil {
 		defer func() {
@@ -187,12 +194,10 @@ func main() {
 
 	go func() {
 		log.Printf("gateway server listening on %s (version=%s commit=%s build_time=%s)", httpServer.Addr, version, commit, buildTime)
-		summary := buildStartupSummary(cfgLoad, uiCfg, selfCheckInput.NetworkConfig, defaultPort, rtpTransport.Mode())
-		log.Printf("startup summary config_path=%q config_source=%s ui_url=%s api_url=%s sip_listen=%s rtp_listen_range=%s current_transport=%s", summary.ConfigPath, summary.ConfigSource, summary.UIURL, summary.APIURL, summary.SIPListen, summary.RTPListenRange, summary.CurrentTransport)
+		log.Print(unifiedSummary.ToLogText())
 		if uiCfg.Mode == "external" {
 			log.Printf("ui mode=external note=%q", "UI 由外部承载，请单独部署 gateway-ui 并将 API 指向 api_url")
 		}
-		log.Printf("storage paths temp_dir=%q final_dir=%q audit_dir=%q log_dir=%q", paths.TempDir, paths.FinalDir, paths.AuditDir, paths.LogDir)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server failed: %v", err)
 		}
@@ -242,17 +247,7 @@ func buildSelfCheckInput(paths config.StoragePaths, cliConfigPath string, defaul
 	return in, runtimeCfg.UI, cfgLoad
 }
 
-type startupSummary struct {
-	ConfigPath       string
-	ConfigSource     configSource
-	UIURL            string
-	APIURL           string
-	SIPListen        string
-	RTPListenRange   string
-	CurrentTransport string
-}
-
-func buildStartupSummary(cfgLoad configLoadResult, uiCfg config.UIConfig, networkCfg config.NetworkConfig, defaultPort string, currentTransport string) startupSummary {
+func buildStartupSummary(nodeID string, cfgLoad configLoadResult, uiCfg config.UIConfig, networkCfg config.NetworkConfig, storagePaths config.StoragePaths, defaultPort string, currentTransport string, report selfcheck.Report) startupsummary.Summary {
 	apiURL := fmt.Sprintf("http://127.0.0.1:%s/api", defaultPort)
 	uiURL := "disabled"
 	if uiCfg.Mode == "embedded" {
@@ -268,15 +263,45 @@ func buildStartupSummary(cfgLoad configLoadResult, uiCfg config.UIConfig, networ
 		uiURL = "external"
 	}
 
-	return startupSummary{
-		ConfigPath:       cfgLoad.Path,
-		ConfigSource:     cfgLoad.Source,
-		UIURL:            uiURL,
-		APIURL:           apiURL,
-		SIPListen:        fmt.Sprintf("%s://%s:%d", strings.ToLower(networkCfg.SIP.Transport), networkCfg.SIP.ListenIP, networkCfg.SIP.ListenPort),
-		RTPListenRange:   fmt.Sprintf("%s://%s:%d-%d", strings.ToLower(currentTransport), networkCfg.RTP.ListenIP, networkCfg.RTP.PortStart, networkCfg.RTP.PortEnd),
-		CurrentTransport: strings.ToUpper(currentTransport),
+	return startupsummary.Summary{
+		NodeID:       nodeID,
+		ConfigPath:   cfgLoad.Path,
+		ConfigSource: string(cfgLoad.Source),
+		UIMode:       uiCfg.Mode,
+		UIURL:        uiURL,
+		APIURL:       apiURL,
+		SIPListen: startupsummary.ListenEndpoint{
+			IP:        networkCfg.SIP.ListenIP,
+			Port:      networkCfg.SIP.ListenPort,
+			Transport: strings.ToUpper(networkCfg.SIP.Transport),
+		},
+		RTPListen: startupsummary.RTPListen{
+			IP:        networkCfg.RTP.ListenIP,
+			PortRange: fmt.Sprintf("%d-%d", networkCfg.RTP.PortStart, networkCfg.RTP.PortEnd),
+			Transport: strings.ToUpper(currentTransport),
+		},
+		StorageDirs: startupsummary.StorageDirs{
+			TempDir:  storagePaths.TempDir,
+			FinalDir: storagePaths.FinalDir,
+			AuditDir: storagePaths.AuditDir,
+			LogDir:   storagePaths.LogDir,
+		},
+		SelfCheckSummary: startupsummary.SelfCheckSummary{
+			GeneratedAt: report.GeneratedAt.UTC().Format(time.RFC3339),
+			Overall:     string(report.Overall),
+			Info:        report.Summary.Info,
+			Warn:        report.Summary.Warn,
+			Error:       report.Summary.Error,
+		},
 	}
+}
+
+func resolveNodeID() string {
+	nodeID := strings.TrimSpace(os.Getenv("GATEWAY_NODE_ID"))
+	if nodeID == "" {
+		return "gateway-a-01"
+	}
+	return nodeID
 }
 
 type configSource string

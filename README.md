@@ -100,7 +100,30 @@ VITE_API_MODE=real VITE_API_BASE_URL=http://127.0.0.1:18080/api npm run dev
 
 说明：
 - `gateway-server` 只承载 API（`/api/*`）；UI 由 Vite dev server 承载。
-- 启动日志会输出 `startup summary`，包含 config path/source、api url、sip/rtp 监听信息，便于运维核对。
+- 启动日志会输出统一 `startup summary`（结构化字段可复用到日志/API/UI/诊断导出），包含：
+  - `node_id`
+  - `config_path` / `config_source`
+  - `ui_mode` / `ui_url`
+  - `api_url`
+  - `sip_listen(ip/port/transport)`
+  - `rtp_listen(ip/port_range/transport)`
+  - `storage_dirs`
+  - `self_check_summary`
+- 可通过 `GET /api/startup-summary` 获取同一份摘要 JSON。
+
+示例输出：
+
+```text
+startup summary:
+- node_id: gateway-a-01
+- config: path=./configs/config.yaml source=cli
+- ui: mode=embedded url=http://127.0.0.1:18080/
+- api_url: http://127.0.0.1:18080/api
+- sip_listen: ip=0.0.0.0 port=5060 transport=TCP
+- rtp_listen: ip=0.0.0.0 port_range=20000-20100 transport=UDP
+- storage_dirs: temp=./data/temp final=./data/final audit=./data/audit log=./data/logs
+- self_check_summary: generated_at=2026-01-02T03:04:05Z overall=info info=7 warn=0 error=0
+```
 
 ### embedded 模式（单进程打包交付）
 
@@ -493,7 +516,7 @@ go run ./cmd/gatewayctl node inspect
 # 3) 按 request_id 查询任务（复用 /api/tasks 过滤）
 go run ./cmd/gatewayctl task query --request-id req-20260312-001
 
-# 4) 导出诊断快照（聚合 healthz/selfcheck/node/limits/routes）
+# 4) 导出诊断快照（聚合 startup-summary/healthz/selfcheck/node/limits/routes）
 go run ./cmd/gatewayctl diag export --out ./diagnostics.json
 
 # 5) JSON 输出（机器可解析）
