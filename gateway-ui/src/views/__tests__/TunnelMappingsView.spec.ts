@@ -21,7 +21,7 @@ const stubs = {
   'a-space': { template: '<div><slot /></div>' },
   'a-card': { template: '<section><slot /></section>' },
   'a-form': { template: '<form><slot /></form>' },
-  'a-form-item': { template: '<div><slot /></div>' },
+  'a-form-item': { props: ['label', 'extra'], template: '<div class="stub-form-item"><label v-if="label">{{ label }}</label><small v-if="extra">{{ extra }}</small><slot /></div>' },
   'a-input': { template: '<input />' },
   'a-button': { template: '<button @click="$emit(`click`)"><slot /></button>' },
   'a-descriptions': { template: '<div><slot /></div>' },
@@ -35,8 +35,8 @@ const stubs = {
   'a-tag': { template: '<span><slot /></span>' },
   'a-popconfirm': { template: '<div><slot /></div>' },
   'a-drawer': { template: '<div><slot /><slot name="footer" /></div>' },
-  'a-row': { template: '<div><slot /></div>' },
-  'a-col': { template: '<div><slot /></div>' },
+  'a-row': { template: '<div class="stub-row"><slot /></div>' },
+  'a-col': { template: '<div class="stub-col"><slot /></div>' },
   'a-input-number': { template: '<input type="number" />' },
   'a-textarea': { template: '<textarea />' }
 }
@@ -52,7 +52,7 @@ const startupSummaryPayload = {
 }
 
 describe('TunnelMappingsView', () => {
-  it('renders slim fields and sequence column', async () => {
+  it('renders single-column editor fields in ops-friendly order', async () => {
     vi.mocked(gatewayApi.fetchMappings).mockResolvedValue({
       items: [
         {
@@ -78,6 +78,38 @@ describe('TunnelMappingsView', () => {
     expect(wrapper.text()).not.toContain('对端节点')
     expect(wrapper.text()).not.toContain('方法白名单')
     expect(wrapper.text()).toContain('peer-b')
+
+    const text = wrapper.text()
+    expect(text).toContain('本端入口 IP')
+    expect(text).toContain('本端入口端口')
+    expect(text).toContain('对端目标 IP')
+    expect(text).toContain('对端目标端口')
+    expect(text).toContain('系统按动作类型自动选择命令或文件传输链路。')
+    expect(text).toContain('备注')
+
+    const indexLocalIp = text.indexOf('本端入口 IP')
+    const indexLocalPort = text.indexOf('本端入口端口')
+    const indexRemoteIp = text.indexOf('对端目标 IP')
+    const indexRemotePort = text.indexOf('对端目标端口')
+    const indexReqTimeout = text.indexOf('请求超时（毫秒）')
+    const indexRespTimeout = text.indexOf('响应超时（毫秒）')
+    const indexReqLimit = text.indexOf('请求体大小上限（字节）')
+    const indexRespLimit = text.indexOf('响应体大小上限（字节）')
+    const indexEnabled = text.indexOf('启用状态')
+    const indexRemark = text.indexOf('备注')
+
+    expect(indexLocalIp).toBeGreaterThan(-1)
+    expect(indexLocalPort).toBeGreaterThan(indexLocalIp)
+    expect(indexRemoteIp).toBeGreaterThan(indexLocalPort)
+    expect(indexRemotePort).toBeGreaterThan(indexRemoteIp)
+    expect(indexReqTimeout).toBeGreaterThan(indexRemotePort)
+    expect(indexRespTimeout).toBeGreaterThan(indexReqTimeout)
+    expect(indexReqLimit).toBeGreaterThan(indexRespTimeout)
+    expect(indexRespLimit).toBeGreaterThan(indexReqLimit)
+    expect(indexEnabled).toBeGreaterThan(indexRespLimit)
+    expect(indexRemark).toBeGreaterThan(indexEnabled)
+
+    expect(wrapper.find('.stub-row').exists()).toBe(false)
   })
 
   it('uses default allowed_methods on save', async () => {
