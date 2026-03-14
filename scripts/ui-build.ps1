@@ -1,5 +1,6 @@
 param(
-  [string]$BuildNonce = [guid]::NewGuid().ToString()
+  [string]$BuildNonce = [guid]::NewGuid().ToString(),
+  [switch]$CheckOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -8,6 +9,36 @@ $RootDir = Split-Path -Parent $PSScriptRoot
 $UiDir = Join-Path $RootDir 'gateway-ui'
 $DistDir = Join-Path $UiDir 'dist'
 $PackageJsonPath = Join-Path $UiDir 'package.json'
+
+function Restore-PackageManifestFromGit {
+  param(
+    [string]$RepositoryRoot,
+    [string]$RelativeManifestPath,
+    [string]$ManifestPath
+  )
+
+  if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    return $false
+  }
+
+  git -C $RepositoryRoot rev-parse --is-inside-work-tree *> $null
+  if ($LASTEXITCODE -ne 0) {
+    return $false
+  }
+
+  git -C $RepositoryRoot ls-files --error-unmatch $RelativeManifestPath *> $null
+  if ($LASTEXITCODE -ne 0) {
+    return $false
+  }
+
+  Write-Host "[ui-build] package.json missing, restoring from git index: $RelativeManifestPath"
+  git -C $RepositoryRoot checkout -- $RelativeManifestPath
+  if ($LASTEXITCODE -ne 0) {
+    throw "Failed to restore $RelativeManifestPath from git"
+  }
+
+  return (Test-Path $ManifestPath)
+}
 
 if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
   throw 'npm not found in PATH'
@@ -18,7 +49,15 @@ if (-not (Test-Path $UiDir)) {
 }
 
 if (-not (Test-Path $PackageJsonPath)) {
-  throw "UI package manifest missing: $PackageJsonPath. Please restore gateway-ui/package.json before running UI build."
+  $restored = Restore-PackageManifestFromGit -RepositoryRoot $RootDir -RelativeManifestPath 'gateway-ui/package.json' -ManifestPath $PackageJsonPath
+  if (-not $restored) {
+    throw "UI package manifest missing: $PackageJsonPath. Please restore gateway-ui/package.json before running UI build (for git repos you can run: git checkout -- gateway-ui/package.json)."
+  }
+}
+
+if ($CheckOnly) {
+  Write-Host '[ui-build] check-only mode completed; manifest and toolchain validation passed'
+  exit 0
 }
 
 Push-Location $UiDir
