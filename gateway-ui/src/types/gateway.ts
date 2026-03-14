@@ -72,6 +72,9 @@ export interface TunnelTransportPlan {
 
 export interface StartupSummaryPayload {
   node_id: string
+  network_mode: string
+  capability: Capability
+  capability_summary: CapabilitySummary
   config_path: string
   config_source: string
   ui_mode: UiDeployMode
@@ -86,6 +89,27 @@ export interface StartupSummaryPayload {
     warn: number
     error: number
   }
+}
+
+export interface Capability {
+  supports_large_request_body: boolean
+  supports_large_response_body: boolean
+  supports_streaming_response: boolean
+  supports_bidirectional_http_tunnel: boolean
+  supports_transparent_proxy: boolean
+}
+
+export interface CapabilitySummary {
+  supported: string[]
+  unsupported: string[]
+  items: CapabilityItem[]
+}
+
+export interface CapabilityItem {
+  key: string
+  label: string
+  supported: boolean
+  note: string
 }
 
 export interface TaskListFilters {
@@ -196,6 +220,37 @@ export interface OpsRoute {
   http_method: string
   http_path: string
   enabled: boolean
+}
+
+export interface TunnelMapping {
+  mapping_id: string
+  name: string
+  enabled: boolean
+  peer_node_id: string
+  local_bind_ip: string
+  local_bind_port: number
+  local_base_path: string
+  remote_target_ip: string
+  remote_target_port: number
+  remote_base_path: string
+  allowed_methods: string[]
+  connect_timeout_ms: number
+  request_timeout_ms: number
+  response_timeout_ms: number
+  max_request_body_bytes: number
+  max_response_body_bytes: number
+  require_streaming_response: boolean
+  description: string
+}
+
+export interface TunnelMappingListPayload {
+  items: TunnelMapping[]
+  warnings?: string[]
+}
+
+export interface TunnelMappingSavePayload {
+  mapping: TunnelMapping
+  warnings?: string[]
 }
 
 export interface OpsNode {

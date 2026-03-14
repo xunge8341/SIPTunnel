@@ -45,6 +45,19 @@ describe('DashboardView', () => {
 
     vi.mocked(gatewayApi.fetchStartupSummary).mockResolvedValue({
       node_id: 'gateway-a-01',
+      network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+      capability: {
+        supports_large_request_body: false,
+        supports_large_response_body: true,
+        supports_streaming_response: false,
+        supports_bidirectional_http_tunnel: false,
+        supports_transparent_proxy: false
+      },
+      capability_summary: {
+        supported: ['small_request', 'large_response'],
+        unsupported: ['large_request'],
+        items: []
+      },
       config_path: '/etc/siptunnel/config.yaml',
       config_source: 'config-center',
       ui_mode: 'external',

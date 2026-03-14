@@ -13,7 +13,11 @@ import {
   getDiagnosticExportMock,
   retryDiagnosticExportMock,
   fetchDeploymentModeMock,
-  fetchStartupSummaryMock
+  fetchStartupSummaryMock,
+  fetchMappingsMock,
+  createMappingMock,
+  updateMappingMock,
+  deleteMappingMock
 } from './mockGateway'
 import type {
   CommandTask,
@@ -23,6 +27,9 @@ import type {
   OpsLimits,
   OpsNode,
   OpsRoute,
+  TunnelMapping,
+  TunnelMappingListPayload,
+  TunnelMappingSavePayload,
   NetworkConfigPayload,
   UpdateNetworkConfigPayload,
   TaskDetail,
@@ -285,6 +292,30 @@ export const gatewayApi = {
   async updateRoutes(routes: OpsRoute[]) {
     const result = await unwrap<{ items: OpsRoute[] }>(request('/routes', { method: 'PUT', body: { routes } }))
     return result.items
+  },
+  async fetchMappings() {
+    if (useMock) {
+      return fetchMappingsMock()
+    }
+    return unwrap<TunnelMappingListPayload>(request('/mappings', { method: 'GET' }))
+  },
+  async createMapping(payload: TunnelMapping) {
+    if (useMock) {
+      return createMappingMock(payload)
+    }
+    return unwrap<TunnelMappingSavePayload>(request('/mappings', { method: 'POST', body: payload }))
+  },
+  async updateMapping(id: string, payload: TunnelMapping) {
+    if (useMock) {
+      return updateMappingMock(id, payload)
+    }
+    return unwrap<TunnelMappingSavePayload>(request(`/mappings/${id}`, { method: 'PUT', body: payload }))
+  },
+  async deleteMapping(id: string) {
+    if (useMock) {
+      return deleteMappingMock(id)
+    }
+    await unwrap<Record<string, never>>(request(`/mappings/${id}`, { method: 'DELETE' }))
   },
   async fetchNodes() {
     const result = await unwrap<{ items: OpsNode[] }>(request('/nodes', { method: 'GET' }))

@@ -9,7 +9,11 @@ import {
   fetchDashboardMock,
   fetchNetworkConfigMock,
   fetchDeploymentModeMock,
-  fetchStartupSummaryMock
+  fetchStartupSummaryMock,
+  fetchMappingsMock,
+  createMappingMock,
+  updateMappingMock,
+  deleteMappingMock
 } from '../mockGateway'
 
 describe('config governance mock api', () => {
@@ -84,4 +88,40 @@ describe('config governance mock api', () => {
     expect(status.status).toBe('succeeded')
     expect(status.downloadUrl).toContain('data:application/zip;base64')
   })
+
+  it('supports tunnel mapping CRUD in mock mode', async () => {
+    const before = await fetchMappingsMock()
+    const mapping = {
+      mapping_id: 'map-test',
+      name: '测试映射',
+      enabled: true,
+      peer_node_id: 'peer-x',
+      local_bind_ip: '127.0.0.1',
+      local_bind_port: 18082,
+      local_base_path: '/local',
+      remote_target_ip: '127.0.0.2',
+      remote_target_port: 8082,
+      remote_base_path: '/remote',
+      allowed_methods: ['POST'],
+      connect_timeout_ms: 500,
+      request_timeout_ms: 3000,
+      response_timeout_ms: 3000,
+      max_request_body_bytes: 1024,
+      max_response_body_bytes: 2048,
+      require_streaming_response: false,
+      description: 'desc'
+    }
+    await createMappingMock(mapping)
+    let listed = await fetchMappingsMock()
+    expect(listed.items.length).toBe(before.items.length + 1)
+
+    await updateMappingMock('map-test', { ...mapping, name: '测试映射-更新' })
+    listed = await fetchMappingsMock()
+    expect(listed.items.find((item) => item.mapping_id === 'map-test')?.name).toBe('测试映射-更新')
+
+    await deleteMappingMock('map-test')
+    listed = await fetchMappingsMock()
+    expect(listed.items.find((item) => item.mapping_id === 'map-test')).toBeUndefined()
+  })
+
 })

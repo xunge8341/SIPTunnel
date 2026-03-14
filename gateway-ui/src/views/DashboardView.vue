@@ -135,6 +135,19 @@ const deploymentMode = ref<DeploymentModePayload>({
 
 const startupSummary = ref<StartupSummaryPayload>({
   node_id: '-',
+  network_mode: '-',
+  capability: {
+    supports_large_request_body: false,
+    supports_large_response_body: false,
+    supports_streaming_response: false,
+    supports_bidirectional_http_tunnel: false,
+    supports_transparent_proxy: false
+  },
+  capability_summary: {
+    supported: [],
+    unsupported: [],
+    items: []
+  },
   config_path: '-',
   config_source: '-',
   ui_mode: 'embedded',
