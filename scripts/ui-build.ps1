@@ -7,9 +7,18 @@ $ErrorActionPreference = 'Stop'
 $RootDir = Split-Path -Parent $PSScriptRoot
 $UiDir = Join-Path $RootDir 'gateway-ui'
 $DistDir = Join-Path $UiDir 'dist'
+$PackageJsonPath = Join-Path $UiDir 'package.json'
 
 if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
   throw 'npm not found in PATH'
+}
+
+if (-not (Test-Path $UiDir)) {
+  throw "UI directory not found: $UiDir"
+}
+
+if (-not (Test-Path $PackageJsonPath)) {
+  throw "UI package manifest missing: $PackageJsonPath. Please restore gateway-ui/package.json before running UI build."
 }
 
 Push-Location $UiDir
