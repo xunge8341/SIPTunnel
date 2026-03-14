@@ -68,7 +68,7 @@ describe('TunnelMappingsView', () => {
       bound_peer: { peer_node_id: 'peer-b', peer_name: 'Peer B', peer_signaling_ip: '10.20.0.20', peer_signaling_port: 5060 }
     })
     vi.mocked(gatewayApi.fetchStartupSummary).mockResolvedValue(startupSummaryPayload as never)
-    vi.mocked(gatewayApi.testMapping).mockResolvedValue({ signaling_request: '成功', response_channel: '异常', registration_status: '正常', failure_reason: '响应通道异常', suggested_action: '检查 RTP 端口池' })
+    vi.mocked(gatewayApi.testMapping).mockResolvedValue({ passed: false, status: 'failed', failure_stage: '对端可达', stages: [{ key: 'local_listening', name: '本地监听可用', status: 'passed', passed: true, detail: 'ok' }, { key: 'registration', name: '注册状态正常', status: 'passed', passed: true, detail: 'ok' }, { key: 'heartbeat', name: '心跳状态正常', status: 'passed', passed: true, detail: 'ok' }, { key: 'peer_reachability', name: '对端可达', status: 'failed', passed: false, detail: 'TCP 探测失败', blocking_reason: 'timeout', suggested_action: '检查 ACL' }, { key: 'session_ready', name: '会话已准备', status: 'blocked', passed: false, detail: 'blocked', blocking_reason: '对端不可达' }, { key: 'mapping_forward', name: '映射转发准备就绪', status: 'blocked', passed: false, detail: 'blocked' }], signaling_request: '成功', response_channel: '正常', registration_status: '正常', failure_reason: 'timeout', suggested_action: '检查 ACL' })
     vi.mocked(gatewayApi.fetchSystemStatus).mockResolvedValue({
       tunnel_status: 'degraded',
       connection_reason: '对端不可达',

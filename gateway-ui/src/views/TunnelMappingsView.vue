@@ -72,9 +72,27 @@
         v-if="mappingTestResult"
         :type="mappingTestPassed ? 'success' : 'error'"
         show-icon
-        :message="`映射测试：信令请求 ${mappingTestResult.signaling_request}，响应通道 ${mappingTestResult.response_channel}，注册状态 ${mappingTestResult.registration_status}`"
+        :message="mappingTestSummary"
+        :description="mappingTestResult.failure_reason ? `阻塞原因：${mappingTestResult.failure_reason}` : undefined"
         style="margin-bottom: 12px"
       />
+      <a-table
+        v-if="mappingTestResult"
+        size="small"
+        :pagination="false"
+        :columns="mappingTestColumns"
+        :data-source="mappingTestResult.stages"
+        row-key="key"
+        style="margin-bottom: 12px"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'status'">
+            <a-tag :color="mappingStageColor(record.status)">{{ mappingStageLabel(record.status) }}</a-tag>
+          </template>
+          <template v-else-if="column.key === 'blocking_reason'">{{ record.blocking_reason || '-' }}</template>
+          <template v-else-if="column.key === 'suggested_action'">{{ record.suggested_action || '-' }}</template>
+        </template>
+      </a-table>
       <a-alert v-if="warnings.length" type="warning" show-icon :message="warnings.join('；')" style="margin-bottom: 12px" />
       <a-table :columns="columns" :data-source="filteredMappings" row-key="mapping_id" :pagination="false">
         <template #bodyCell="{ column, record, index }">
@@ -249,10 +267,36 @@ const boundPeerEndpoint = computed(() => {
 const editorBlockingIssues = computed(() => editorCapabilityEvaluation.value.blockingIssues)
 const editorAdvisoryWarnings = computed(() => editorCapabilityEvaluation.value.advisoryWarnings)
 
-const mappingTestPassed = computed(() => {
-  if (!mappingTestResult.value) return false
-  return mappingTestResult.value.signaling_request === '成功' && mappingTestResult.value.response_channel === '正常' && mappingTestResult.value.registration_status === '正常'
+const mappingTestPassed = computed(() => mappingTestResult.value?.passed ?? false)
+
+const mappingTestSummary = computed(() => {
+  if (!mappingTestResult.value) return ''
+  const failed = mappingTestResult.value.stages.find((item) => !item.passed)
+  if (!failed) {
+    return '映射联调测试通过：本地监听、注册、心跳、对端可达、会话准备和映射转发均已就绪。'
+  }
+  return `映射联调测试未通过：卡在“${failed.name}”阶段。`
 })
+
+const mappingTestColumns = [
+  { title: '阶段', dataIndex: 'name', key: 'name' },
+  { title: '结果', key: 'status' },
+  { title: '详情', dataIndex: 'detail', key: 'detail' },
+  { title: '阻塞原因', key: 'blocking_reason' },
+  { title: '建议动作', key: 'suggested_action' }
+]
+
+const mappingStageLabel = (status: 'passed' | 'failed' | 'blocked') => {
+  if (status === 'passed') return '通过'
+  if (status === 'blocked') return '阻塞'
+  return '失败'
+}
+
+const mappingStageColor = (status: 'passed' | 'failed' | 'blocked') => {
+  if (status === 'passed') return 'success'
+  if (status === 'blocked') return 'warning'
+  return 'error'
+}
 
 const columns = [
   { title: '序号', key: 'index' },
@@ -370,9 +414,9 @@ const runMappingTest = async () => {
   try {
     mappingTestResult.value = await gatewayApi.testMapping()
     if (mappingTestPassed.value) {
-      message.success('隧道映射测试通过，链路状态正常')
+      message.success('隧道映射联调测试通过，链路阶段全部就绪')
     } else {
-      message.warning('隧道映射测试未通过，请根据异常原因与建议动作排查')
+      message.warning(`隧道映射联调测试未通过，阻塞阶段：${mappingTestResult.value.failure_stage || '未知'}`)
     }
   } finally {
     testingMapping.value = false

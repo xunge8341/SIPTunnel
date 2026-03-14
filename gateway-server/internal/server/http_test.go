@@ -252,8 +252,17 @@ func TestMappingTestEndpoint(t *testing.T) {
 	if payload.Data.RegistrationStatus != "未注册" && payload.Data.RegistrationStatus != "正常" {
 		t.Fatalf("unexpected registration_status=%s", payload.Data.RegistrationStatus)
 	}
-	if payload.Data.FailureReason == "" || payload.Data.SuggestedAction == "" {
-		t.Fatalf("expected failure diagnostics, got %+v", payload.Data)
+	if len(payload.Data.Stages) != 6 {
+		t.Fatalf("expected 6 staged checks, got %d", len(payload.Data.Stages))
+	}
+	if payload.Data.Stages[0].Key != "local_listening" || payload.Data.Stages[3].Key != "peer_reachability" || payload.Data.Stages[5].Key != "mapping_forward" {
+		t.Fatalf("unexpected stage sequence: %+v", payload.Data.Stages)
+	}
+	if payload.Data.Passed {
+		t.Fatalf("expected test environment staged test to fail")
+	}
+	if payload.Data.FailureStage == "" || payload.Data.FailureReason == "" || payload.Data.SuggestedAction == "" {
+		t.Fatalf("expected stage diagnostics, got %+v", payload.Data)
 	}
 }
 

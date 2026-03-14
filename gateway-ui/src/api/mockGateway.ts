@@ -435,11 +435,22 @@ export async function deleteMappingMock(id: string): Promise<void> {
 export async function testMappingMock(): Promise<MappingTestPayload> {
   await wait()
   return {
+    passed: false,
+    status: 'failed',
+    failure_stage: '对端可达',
+    stages: [
+      { key: 'local_listening', name: '本地监听可用', status: 'passed', passed: true, detail: 'SIP 监听正常；RTP 端口池可用。' },
+      { key: 'registration', name: '注册状态正常', status: 'passed', passed: true, detail: '当前注册状态：registered' },
+      { key: 'heartbeat', name: '心跳状态正常', status: 'passed', passed: true, detail: '当前心跳状态：healthy' },
+      { key: 'peer_reachability', name: '对端可达', status: 'failed', passed: false, detail: 'TCP 探测 10.20.0.20:5060 失败', blocking_reason: 'i/o timeout', suggested_action: '检查对端进程、ACL 与路由。' },
+      { key: 'session_ready', name: '会话已准备', status: 'blocked', passed: false, detail: '会话准备要求：注册正常 + 心跳正常 + 对端可达。', blocking_reason: '对端不可达', suggested_action: '按前置阶段提示恢复会话条件后重试。' },
+      { key: 'mapping_forward', name: '映射转发准备就绪', status: 'blocked', passed: false, detail: '会话尚未准备完成，暂不执行转发准备判定', blocking_reason: '依赖阶段“会话已准备”未通过', suggested_action: '先恢复注册/心跳/对端可达后重试。' }
+    ],
     signaling_request: '成功',
-    response_channel: '异常',
+    response_channel: '正常',
     registration_status: '正常',
-    failure_reason: '响应通道异常，RTP 端口池可用性不足。',
-    suggested_action: '检查 RTP 端口池占用并确认对端媒体可达。'
+    failure_reason: 'i/o timeout',
+    suggested_action: '检查对端进程、ACL 与路由。'
   }
 }
 
