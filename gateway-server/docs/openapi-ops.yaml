@@ -65,6 +65,35 @@ paths:
           schema: { type: string }
       responses:
         '200': { description: OK }
+
+  /api/node:
+    get: { summary: Get local node config, responses: { '200': { description: OK } } }
+    put: { summary: Update local node config, responses: { '200': { description: OK }, '400': { description: Invalid argument } } }
+  /api/peers:
+    get: { summary: List peer node configs, responses: { '200': { description: OK } } }
+    post: { summary: Create peer node config, responses: { '201': { description: Created }, '400': { description: Invalid argument }, '409': { description: Peer already exists } } }
+  /api/peers/{peer_node_id}:
+    put:
+      summary: Update peer node config
+      parameters:
+        - in: path
+          name: peer_node_id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+        '400': { description: Invalid argument }
+        '404': { description: Peer not found }
+    delete:
+      summary: Delete peer node config
+      parameters:
+        - in: path
+          name: peer_node_id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+        '404': { description: Peer not found }
   /api/node/network-status:
     get:
       summary: Get current node network configuration and runtime status
