@@ -9,7 +9,8 @@ vi.mock('../../api/gateway', () => ({
     updateMapping: vi.fn(),
     deleteMapping: vi.fn(),
     fetchStartupSummary: vi.fn(),
-    testMapping: vi.fn()
+    testMapping: vi.fn(),
+    fetchSystemStatus: vi.fn()
   }
 }))
 
@@ -60,7 +61,7 @@ describe('TunnelMappingsView', () => {
           local_bind_ip: '10.0.0.1', local_bind_port: 18080, local_base_path: '/a',
           remote_target_ip: '10.0.0.2', remote_target_port: 8080, remote_base_path: '/b',
           allowed_methods: ['*'], connect_timeout_ms: 500, request_timeout_ms: 1000, response_timeout_ms: 2000,
-          max_request_body_bytes: 1024, max_response_body_bytes: 2048, require_streaming_response: false, description: '', updated_at: '2026-03-14T09:00:00Z'
+          max_request_body_bytes: 1024, max_response_body_bytes: 2048, require_streaming_response: false, description: '', updated_at: '2026-03-14T09:00:00Z', link_status: 'degraded', status_reason: '心跳超时'
         }
       ],
       warnings: [],
@@ -68,11 +69,27 @@ describe('TunnelMappingsView', () => {
     })
     vi.mocked(gatewayApi.fetchStartupSummary).mockResolvedValue(startupSummaryPayload as never)
     vi.mocked(gatewayApi.testMapping).mockResolvedValue({ sip_request: 'success', rtp_channel: 'fail' })
+    vi.mocked(gatewayApi.fetchSystemStatus).mockResolvedValue({
+      tunnel_status: 'degraded',
+      connection_reason: '对端不可达',
+      network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+      registration_status: 'registered',
+      heartbeat_status: 'timeout',
+      capability: {
+        supports_small_request_body: true,
+        supports_large_response_body: true,
+        supports_streaming_response: false,
+        supports_large_file_upload: false,
+        supports_bidirectional_http_tunnel: false
+      }
+    })
 
     const wrapper = mount(TunnelMappingsView, { global: { stubs } })
     await flushPromises()
 
     expect(wrapper.text()).toContain('序号')
+    expect(wrapper.text()).toContain('映射链路状态')
+    expect(wrapper.text()).toContain('状态原因')
     expect(wrapper.text()).toContain('更新时间')
     expect(wrapper.text()).not.toContain('名称')
     expect(wrapper.text()).not.toContain('对端节点')
@@ -116,6 +133,20 @@ describe('TunnelMappingsView', () => {
     vi.mocked(gatewayApi.fetchMappings).mockResolvedValue({ items: [], warnings: [], binding_error: "multiple enabled peer nodes configured" })
     vi.mocked(gatewayApi.fetchStartupSummary).mockResolvedValue(startupSummaryPayload as never)
     vi.mocked(gatewayApi.createMapping).mockResolvedValue({ mapping: {} as never, warnings: [] })
+    vi.mocked(gatewayApi.fetchSystemStatus).mockResolvedValue({
+      tunnel_status: 'connected',
+      connection_reason: '正常',
+      network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+      registration_status: 'registered',
+      heartbeat_status: 'healthy',
+      capability: {
+        supports_small_request_body: true,
+        supports_large_response_body: true,
+        supports_streaming_response: false,
+        supports_large_file_upload: false,
+        supports_bidirectional_http_tunnel: false
+      }
+    })
 
     const wrapper = mount(TunnelMappingsView, { global: { stubs } })
     await flushPromises()

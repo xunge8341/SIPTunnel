@@ -8,7 +8,9 @@ vi.mock('../../api/gateway', () => ({
     fetchDiagnosticExport: vi.fn(),
     retryDiagnosticExport: vi.fn(),
     runLinkTest: vi.fn(),
-    fetchLatestLinkTest: vi.fn()
+    fetchLatestLinkTest: vi.fn(),
+    fetchSystemStatus: vi.fn(),
+    fetchMappings: vi.fn()
   }
 }))
 
@@ -21,8 +23,8 @@ const stubs = {
   'a-descriptions-item': { template: '<div><slot /></div>' },
   'a-typography-text': { template: '<span><slot /></span>' },
   'a-progress': { template: '<div />' },
-  'a-statistic': { template: '<div />' },
-  'a-alert': { template: '<div><slot /></div>' },
+  'a-statistic': { props: ['title', 'value'], template: '<div>{{ title }}{{ value }}</div>' },
+  'a-alert': { props: ['message', 'description'], template: '<div>{{ message }}{{ description }}<slot /></div>' },
   'a-select': { template: '<select><slot /></select>' },
   'a-select-option': { template: '<option><slot /></option>' },
   'a-empty': { template: '<div />' },
@@ -39,6 +41,31 @@ const stubs = {
 describe('NodeStatusView', () => {
   it('can create and render a diagnostic export job', async () => {
     vi.mocked(gatewayApi.fetchLatestLinkTest).mockRejectedValue(new Error('no report'))
+    vi.mocked(gatewayApi.fetchSystemStatus).mockResolvedValue({
+      tunnel_status: 'connected',
+      connection_reason: '链路稳定',
+      network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+      registration_status: 'registered',
+      heartbeat_status: 'healthy',
+      last_register_time: '2026-03-12T08:00:00Z',
+      last_heartbeat_time: '2026-03-12T08:00:30Z',
+      mapping_total: 2,
+      mapping_abnormal_total: 1,
+      latest_mapping_error_reason: 'map-2：心跳超时',
+      capability: {
+        supports_small_request_body: true,
+        supports_large_response_body: true,
+        supports_streaming_response: false,
+        supports_large_file_upload: false,
+        supports_bidirectional_http_tunnel: false
+      }
+    })
+    vi.mocked(gatewayApi.fetchMappings).mockResolvedValue({
+      items: [
+        { mapping_id: 'map-1', enabled: true, local_bind_ip: '1.1.1.1', local_bind_port: 80, local_base_path: '/', remote_target_ip: '2.2.2.2', remote_target_port: 80, remote_base_path: '/', connect_timeout_ms: 100, request_timeout_ms: 100, response_timeout_ms: 100, max_request_body_bytes: 1024, max_response_body_bytes: 1024, require_streaming_response: false, description: '', link_status: 'connected', status_reason: '正常' },
+        { mapping_id: 'map-2', enabled: true, local_bind_ip: '1.1.1.2', local_bind_port: 81, local_base_path: '/', remote_target_ip: '2.2.2.3', remote_target_port: 81, remote_base_path: '/', connect_timeout_ms: 100, request_timeout_ms: 100, response_timeout_ms: 100, max_request_body_bytes: 1024, max_response_body_bytes: 1024, require_streaming_response: false, description: '', link_status: 'degraded', status_reason: '心跳超时' }
+      ]
+    })
     vi.mocked(gatewayApi.createDiagnosticExport).mockResolvedValue({
       jobId: 'diag-001',
       nodeId: 'gateway-a-01',
@@ -87,5 +114,7 @@ describe('NodeStatusView', () => {
     expect(wrapper.text()).toContain('diag-001')
     expect(wrapper.text()).toContain('正在采集信息')
     expect(wrapper.text()).toContain('自检通过')
+    expect(wrapper.text()).toContain('注册状态')
+    expect(wrapper.text()).toContain('map-2：心跳超时')
   })
 })

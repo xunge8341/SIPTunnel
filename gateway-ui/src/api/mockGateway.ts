@@ -77,7 +77,9 @@ let mappingState: TunnelMapping[] = [
     max_response_body_bytes: 10485760,
     require_streaming_response: false,
     description: '用于订单写入与状态更新。',
-    updated_at: '2026-03-14T09:00:00Z'
+    updated_at: '2026-03-14T09:00:00Z',
+    link_status: 'connected',
+    status_reason: 'GB/T 28181 注册正常，心跳稳定，响应通道已建立。'
   },
   {
     mapping_id: 'map-query',
@@ -98,7 +100,9 @@ let mappingState: TunnelMapping[] = [
     max_response_body_bytes: 5242880,
     require_streaming_response: false,
     description: '用于只读查询。',
-    updated_at: '2026-03-14T09:10:00Z'
+    updated_at: '2026-03-14T09:10:00Z',
+    link_status: 'degraded',
+    status_reason: '对端节点瞬时不可达，最近一次健康探测失败。'
   }
 ]
 
@@ -296,6 +300,13 @@ export async function fetchSystemStatusMock(): Promise<SystemStatusPayload> {
     tunnel_status: 'connected',
     connection_reason: 'SIP 控制面握手成功，RTP 回传链路可用',
     network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+    registration_status: 'registered',
+    heartbeat_status: 'healthy',
+    last_register_time: '2026-03-14T10:00:00Z',
+    last_heartbeat_time: '2026-03-14T10:00:30Z',
+    mapping_total: 2,
+    mapping_abnormal_total: 1,
+    latest_mapping_error_reason: 'map-query：对端不可达，等待下一次心跳恢复。',
     capability: {
       supports_small_request_body: true,
       supports_large_response_body: true,

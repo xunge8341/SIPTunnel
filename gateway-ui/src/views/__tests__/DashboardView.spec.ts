@@ -94,6 +94,13 @@ describe('DashboardView', () => {
       tunnel_status: 'connected',
       connection_reason: 'SIP 控制面与 RTP 文件面链路正常',
       network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+      registration_status: 'registered',
+      heartbeat_status: 'healthy',
+      last_register_time: '2026-03-14T10:00:00Z',
+      last_heartbeat_time: '2026-03-14T10:00:30Z',
+      mapping_total: 5,
+      mapping_abnormal_total: 2,
+      latest_mapping_error_reason: 'map-query：对端不可达',
       capability: {
         supports_small_request_body: true,
         supports_large_response_body: true,
@@ -119,8 +126,11 @@ describe('DashboardView', () => {
     expect(wrapper.text()).toContain('不会执行 A 网 HTTP 落地')
     expect(wrapper.text()).toContain('sip_body_only')
     expect(wrapper.text()).toContain('rtp_stream')
-    expect(wrapper.text()).toContain('隧道连接状态')
-    expect(wrapper.text()).toContain('连接原因')
+    expect(wrapper.text()).toContain('隧道链路状态')
+    expect(wrapper.text()).toContain('注册状态')
+    expect(wrapper.text()).toContain('心跳状态')
+    expect(wrapper.text()).toContain('最近注册时间')
+    expect(wrapper.text()).toContain('映射规则总数 / 异常数')
     expect(wrapper.text()).toContain('能力矩阵')
     expect(wrapper.findAll('circle')).toHaveLength(2)
   })

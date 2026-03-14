@@ -113,6 +113,13 @@ export interface SystemStatusPayload {
   tunnel_status: 'connected' | 'disconnected' | 'degraded'
   connection_reason: string
   network_mode: string
+  registration_status?: 'registered' | 'unregistered' | 'degraded'
+  heartbeat_status?: 'healthy' | 'timeout' | 'unknown'
+  last_register_time?: string
+  last_heartbeat_time?: string
+  mapping_total?: number
+  mapping_abnormal_total?: number
+  latest_mapping_error_reason?: string
   bound_peer?: PeerBinding
   peer_binding_error?: string
   capability: SystemStatusCapability
@@ -269,6 +276,8 @@ export interface TunnelMapping {
   require_streaming_response: boolean
   description: string
   updated_at?: string
+  link_status?: 'connected' | 'disconnected' | 'degraded'
+  status_reason?: string
 }
 
 export interface TunnelMappingListPayload {

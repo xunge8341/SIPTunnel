@@ -161,12 +161,19 @@ type SystemStatusCapability struct {
 }
 
 type SystemStatusResponse struct {
-	TunnelStatus     string                 `json:"tunnel_status"`
-	ConnectionReason string                 `json:"connection_reason"`
-	NetworkMode      config.NetworkMode     `json:"network_mode"`
-	BoundPeer        *PeerBinding           `json:"bound_peer,omitempty"`
-	PeerBindingError string                 `json:"peer_binding_error,omitempty"`
-	Capability       SystemStatusCapability `json:"capability"`
+	TunnelStatus             string                 `json:"tunnel_status"`
+	ConnectionReason         string                 `json:"connection_reason"`
+	NetworkMode              config.NetworkMode     `json:"network_mode"`
+	RegistrationStatus       string                 `json:"registration_status,omitempty"`
+	HeartbeatStatus          string                 `json:"heartbeat_status,omitempty"`
+	LastRegisterTime         string                 `json:"last_register_time,omitempty"`
+	LastHeartbeatTime        string                 `json:"last_heartbeat_time,omitempty"`
+	MappingTotal             int                    `json:"mapping_total"`
+	MappingAbnormalTotal     int                    `json:"mapping_abnormal_total"`
+	LatestMappingErrorReason string                 `json:"latest_mapping_error_reason,omitempty"`
+	BoundPeer                *PeerBinding           `json:"bound_peer,omitempty"`
+	PeerBindingError         string                 `json:"peer_binding_error,omitempty"`
+	Capability               SystemStatusCapability `json:"capability"`
 }
 
 type NodeDetailResponse struct {
@@ -1825,12 +1832,29 @@ func (d handlerDeps) handleSystemStatus(w http.ResponseWriter, r *http.Request) 
 	}
 	status := d.networkStatusFunc(r.Context())
 	tunnelStatus, reason := deriveTunnelStatus(status)
+	mappingTotal := len(d.mappings.List())
+	mappingAbnormalTotal := 0
+	latestMappingErrorReason := ""
+	if status.PeerBindingError != "" {
+		mappingAbnormalTotal = mappingTotal
+		latestMappingErrorReason = status.PeerBindingError
+	} else if tunnelStatus != "connected" {
+		mappingAbnormalTotal = mappingTotal
+		latestMappingErrorReason = reason
+	}
 	resp := SystemStatusResponse{
-		TunnelStatus:     tunnelStatus,
-		ConnectionReason: reason,
-		NetworkMode:      status.NetworkMode,
-		BoundPeer:        status.BoundPeer,
-		PeerBindingError: status.PeerBindingError,
+		TunnelStatus:             tunnelStatus,
+		ConnectionReason:         reason,
+		NetworkMode:              status.NetworkMode,
+		RegistrationStatus:       d.tunnelConfig.RegistrationStatus,
+		HeartbeatStatus:          d.tunnelConfig.HeartbeatStatus,
+		LastRegisterTime:         d.tunnelConfig.LastRegisterTime,
+		LastHeartbeatTime:        d.tunnelConfig.LastHeartbeatTime,
+		MappingTotal:             mappingTotal,
+		MappingAbnormalTotal:     mappingAbnormalTotal,
+		LatestMappingErrorReason: latestMappingErrorReason,
+		BoundPeer:                status.BoundPeer,
+		PeerBindingError:         status.PeerBindingError,
 		Capability: SystemStatusCapability{
 			SupportsSmallRequestBody:        status.Capability.SupportsSmallRequestBody,
 			SupportsLargeResponseBody:       status.Capability.SupportsLargeResponseBody,

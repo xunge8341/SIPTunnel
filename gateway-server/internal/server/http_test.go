@@ -749,6 +749,18 @@ func TestSystemStatusEndpoint(t *testing.T) {
 	if !payload.Data.Capability.SupportsSmallRequestBody || !payload.Data.Capability.SupportsLargeResponseBody || payload.Data.Capability.SupportsLargeFileUpload {
 		t.Fatalf("unexpected capability matrix: %+v", payload.Data.Capability)
 	}
+	if payload.Data.RegistrationStatus != "" && payload.Data.RegistrationStatus != "unregistered" {
+		t.Fatalf("unexpected registration status: %s", payload.Data.RegistrationStatus)
+	}
+	if payload.Data.HeartbeatStatus != "" && payload.Data.HeartbeatStatus != "unknown" {
+		t.Fatalf("unexpected heartbeat status: %s", payload.Data.HeartbeatStatus)
+	}
+	if payload.Data.MappingTotal <= 0 || payload.Data.MappingAbnormalTotal != payload.Data.MappingTotal {
+		t.Fatalf("unexpected mapping stats: total=%d abnormal=%d", payload.Data.MappingTotal, payload.Data.MappingAbnormalTotal)
+	}
+	if strings.TrimSpace(payload.Data.LatestMappingErrorReason) == "" {
+		t.Fatalf("expected latest mapping error reason")
+	}
 
 	events, err := audit.List(t.Context(), observability.AuditQuery{Who: "ops-system", Limit: 10})
 	if err != nil {
