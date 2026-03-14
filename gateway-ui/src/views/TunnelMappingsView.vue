@@ -6,7 +6,10 @@
           <a-input v-model:value="keyword" allow-clear placeholder="输入名称或 mapping_id" />
         </a-form-item>
         <a-form-item>
-          <a-button type="primary" @click="openCreate">新建映射</a-button>
+          <a-space>
+            <a-button type="primary" @click="openCreate">新建映射</a-button>
+            <a-button :loading="testingMapping" @click="runMappingTest">测试映射规则</a-button>
+          </a-space>
         </a-form-item>
       </a-form>
     </a-card>
@@ -45,6 +48,13 @@
     </a-card>
 
     <a-card title="隧道映射列表">
+      <a-alert
+        v-if="mappingTestResult"
+        :type="mappingTestPassed ? 'success' : 'error'"
+        show-icon
+        :message="`映射规则测试：SIP 请求 ${mappingTestResult.sip_request}，RTP 通道 ${mappingTestResult.rtp_channel}`"
+        style="margin-bottom: 12px"
+      />
       <a-alert v-if="warnings.length" type="warning" show-icon :message="warnings.join('；')" style="margin-bottom: 12px" />
       <a-table :columns="columns" :data-source="filteredMappings" row-key="mapping_id" :pagination="false">
         <template #bodyCell="{ column, record }">
@@ -146,7 +156,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { gatewayApi } from '../api/gateway'
-import type { CapabilityItem, StartupSummaryPayload, TunnelMapping } from '../types/gateway'
+import type { CapabilityItem, MappingTestPayload, StartupSummaryPayload, TunnelMapping } from '../types/gateway'
 import { buildCapabilityMatrix, evaluateMappingCapability } from '../utils/capability'
 
 const keyword = ref('')
@@ -155,6 +165,8 @@ const editingMode = ref<'create' | 'edit'>('create')
 const mappings = ref<TunnelMapping[]>([])
 const warnings = ref<string[]>([])
 const startupSummary = ref<StartupSummaryPayload>()
+const testingMapping = ref(false)
+const mappingTestResult = ref<MappingTestPayload>()
 
 const emptyMapping = (): TunnelMapping => ({
   mapping_id: '',
@@ -210,6 +222,12 @@ const editorCapabilityEvaluation = computed(() => evaluateMappingCapability(edit
 const editorBlockingIssues = computed(() => editorCapabilityEvaluation.value.blockingIssues)
 const editorAdvisoryWarnings = computed(() => editorCapabilityEvaluation.value.advisoryWarnings)
 
+
+const mappingTestPassed = computed(() => {
+  if (!mappingTestResult.value) return false
+  return mappingTestResult.value.sip_request === 'success' && mappingTestResult.value.rtp_channel === 'success'
+})
+
 const columns = [
   { title: '名称', dataIndex: 'name', key: 'name' },
   { title: '启用', key: 'enabled' },
@@ -251,6 +269,21 @@ const loadMappings = async () => {
 
 const loadReadonlyContext = async () => {
   startupSummary.value = await gatewayApi.fetchStartupSummary()
+}
+
+
+const runMappingTest = async () => {
+  testingMapping.value = true
+  try {
+    mappingTestResult.value = await gatewayApi.testMapping()
+    if (mappingTestPassed.value) {
+      message.success('映射规则测试通过，隧道可用')
+    } else {
+      message.warning('映射规则测试未通过，请检查 SIP/RTP 链路')
+    }
+  } finally {
+    testingMapping.value = false
+  }
 }
 
 const save = async () => {

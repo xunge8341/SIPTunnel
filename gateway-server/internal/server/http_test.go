@@ -122,6 +122,33 @@ func TestMappingsCRUD(t *testing.T) {
 	}
 }
 
+func TestMappingTestEndpoint(t *testing.T) {
+	h, _, _ := buildTestHandler(t)
+	req := httptest.NewRequest(http.MethodPost, "/api/mapping/test", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("POST /api/mapping/test expected 200 got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var payload struct {
+		Code string              `json:"code"`
+		Data MappingTestResponse `json:"data"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal response failed: %v", err)
+	}
+	if payload.Code != "OK" {
+		t.Fatalf("unexpected code: %s", payload.Code)
+	}
+	if payload.Data.SIPRequest != "fail" {
+		t.Fatalf("expected sip_request fail in test environment, got %s", payload.Data.SIPRequest)
+	}
+	if payload.Data.RTPChannel != "success" {
+		t.Fatalf("expected rtp_channel success, got %s", payload.Data.RTPChannel)
+	}
+}
+
 func TestRoutesDeprecatedCompatibility(t *testing.T) {
 	h, _, _ := buildTestHandler(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/routes", nil)

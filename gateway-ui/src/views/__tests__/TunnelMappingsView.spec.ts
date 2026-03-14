@@ -8,7 +8,8 @@ vi.mock('../../api/gateway', () => ({
     createMapping: vi.fn(),
     updateMapping: vi.fn(),
     deleteMapping: vi.fn(),
-    fetchStartupSummary: vi.fn()
+    fetchStartupSummary: vi.fn(),
+    testMapping: vi.fn()
   }
 }))
 
@@ -55,6 +56,7 @@ describe('TunnelMappingsView', () => {
       ],
       warnings: ['warning-1']
     })
+    vi.mocked(gatewayApi.testMapping).mockResolvedValue({ sip_request: 'success', rtp_channel: 'fail' })
     vi.mocked(gatewayApi.fetchStartupSummary).mockResolvedValue({
       node_id: 'node', network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
       capability: { supports_large_request_body: false, supports_large_response_body: true, supports_streaming_response: false, supports_bidirectional_http_tunnel: false, supports_transparent_proxy: false },
@@ -73,5 +75,6 @@ describe('TunnelMappingsView', () => {
     expect(wrapper.text()).toContain('A_TO_B_SIP__B_TO_A_RTP')
     expect(wrapper.text()).toContain('warning-1')
     expect(wrapper.text()).toContain('小请求体')
+    expect(wrapper.text()).toContain('测试映射规则')
   })
 })
