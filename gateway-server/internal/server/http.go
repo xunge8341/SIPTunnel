@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -98,8 +99,9 @@ type TunnelMapping = tunnelmapping.TunnelMapping
 type MappingCapabilityValidation = tunnelmapping.CapabilityValidationResult
 
 type MappingWithWarnings struct {
-	Mapping  TunnelMapping `json:"mapping"`
-	Warnings []string      `json:"warnings,omitempty"`
+	Mapping   TunnelMapping `json:"mapping"`
+	BoundPeer *PeerBinding  `json:"bound_peer,omitempty"`
+	Warnings  []string      `json:"warnings,omitempty"`
 }
 
 type MappingTestResponse struct {
@@ -108,8 +110,17 @@ type MappingTestResponse struct {
 }
 
 type mappingListResponse struct {
-	Items    []TunnelMapping `json:"items"`
-	Warnings []string        `json:"warnings,omitempty"`
+	Items        []TunnelMapping `json:"items"`
+	BoundPeer    *PeerBinding    `json:"bound_peer,omitempty"`
+	BindingError string          `json:"binding_error,omitempty"`
+	Warnings     []string        `json:"warnings,omitempty"`
+}
+
+type PeerBinding struct {
+	PeerNodeID        string `json:"peer_node_id"`
+	PeerName          string `json:"peer_name"`
+	PeerSignalingIP   string `json:"peer_signaling_ip"`
+	PeerSignalingPort int    `json:"peer_signaling_port"`
 }
 
 type OpsNode struct {
@@ -133,6 +144,8 @@ type NodeNetworkStatus struct {
 	CompatibilityStatus nodeconfig.CheckResult           `json:"compatibility_status"`
 	CapabilitySummary   startupsummary.CapabilitySummary `json:"capability_summary"`
 	TransportPlan       config.TunnelTransportPlan       `json:"transport_plan"`
+	BoundPeer           *PeerBinding                     `json:"bound_peer,omitempty"`
+	PeerBindingError    string                           `json:"peer_binding_error,omitempty"`
 	SIP                 SIPNetworkStatus                 `json:"sip"`
 	RTP                 RTPNetworkStatus                 `json:"rtp"`
 	RecentBindErrors    []string                         `json:"recent_bind_errors"`
@@ -151,6 +164,8 @@ type SystemStatusResponse struct {
 	TunnelStatus     string                 `json:"tunnel_status"`
 	ConnectionReason string                 `json:"connection_reason"`
 	NetworkMode      config.NetworkMode     `json:"network_mode"`
+	BoundPeer        *PeerBinding           `json:"bound_peer,omitempty"`
+	PeerBindingError string                 `json:"peer_binding_error,omitempty"`
 	Capability       SystemStatusCapability `json:"capability"`
 }
 
@@ -883,7 +898,12 @@ func (d handlerDeps) handleMappings(w http.ResponseWriter, r *http.Request) {
 		}
 		items := d.mappings.List()
 		validation := d.validateMappingsAgainstCapability(items)
-		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: mappingListResponse{Items: items, Warnings: validation.Warnings}})
+		binding, bindErr := d.currentPeerBinding()
+		resp := mappingListResponse{Items: items, BoundPeer: binding, Warnings: validation.Warnings}
+		if bindErr != nil {
+			resp.BindingError = bindErr.Error()
+		}
+		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: resp})
 	case http.MethodPost:
 		if id != "" {
 			writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
@@ -895,6 +915,10 @@ func (d handlerDeps) handleMappings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		req.Normalize()
+		if err := d.enforceCurrentPeerBinding(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "PEER_BINDING_INVALID", err.Error())
+			return
+		}
 		validation := d.validateMappingAgainstCapability(req)
 		if validation.HasErrors() {
 			writeError(w, http.StatusBadRequest, "MAPPING_CAPABILITY_INVALID", strings.Join(validation.Errors, "; "))
@@ -912,7 +936,7 @@ func (d handlerDeps) handleMappings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		d.recordOpsAudit(r, readOperator(r), "CREATE_MAPPING", map[string]any{"mapping_id": created.MappingID})
-		writeJSON(w, http.StatusCreated, responseEnvelope{Code: "OK", Message: "success", Data: MappingWithWarnings{Mapping: created, Warnings: validation.Warnings}})
+		writeJSON(w, http.StatusCreated, responseEnvelope{Code: "OK", Message: "success", Data: MappingWithWarnings{Mapping: created, BoundPeer: bindingFromMapping(created), Warnings: validation.Warnings}})
 	case http.MethodPut:
 		if id == "" {
 			writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", "mapping id is required in path")
@@ -924,6 +948,10 @@ func (d handlerDeps) handleMappings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		req.Normalize()
+		if err := d.enforceCurrentPeerBinding(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "PEER_BINDING_INVALID", err.Error())
+			return
+		}
 		validation := d.validateMappingAgainstCapability(req)
 		if validation.HasErrors() {
 			writeError(w, http.StatusBadRequest, "MAPPING_CAPABILITY_INVALID", strings.Join(validation.Errors, "; "))
@@ -941,7 +969,7 @@ func (d handlerDeps) handleMappings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		d.recordOpsAudit(r, readOperator(r), "UPDATE_MAPPING", map[string]any{"mapping_id": updated.MappingID})
-		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: MappingWithWarnings{Mapping: updated, Warnings: validation.Warnings}})
+		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: MappingWithWarnings{Mapping: updated, BoundPeer: bindingFromMapping(updated), Warnings: validation.Warnings}})
 	case http.MethodDelete:
 		if id == "" {
 			writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", "mapping id is required in path")
@@ -1039,6 +1067,54 @@ func (d handlerDeps) handleCapacityRecommendation(w http.ResponseWriter, r *http
 	}
 	d.recordOpsAudit(r, readOperator(r), "QUERY_CAPACITY_RECOMMENDATION", map[string]any{"summary_file": req.SummaryFile})
 	writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: response})
+}
+
+func resolveSinglePeerBinding(peers []nodeconfig.PeerNodeConfig) (*PeerBinding, error) {
+	enabled := make([]nodeconfig.PeerNodeConfig, 0, len(peers))
+	for _, peer := range peers {
+		if peer.Enabled {
+			enabled = append(enabled, peer)
+		}
+	}
+	if len(enabled) == 0 {
+		return nil, fmt.Errorf("no enabled peer node configured; configure exactly one peer node in /api/peers")
+	}
+	if len(enabled) > 1 {
+		ids := make([]string, 0, len(enabled))
+		for _, peer := range enabled {
+			ids = append(ids, peer.PeerNodeID)
+		}
+		sort.Strings(ids)
+		return nil, fmt.Errorf("multiple enabled peer nodes configured (%s); current single-binding mode requires exactly one", strings.Join(ids, ","))
+	}
+	peer := enabled[0]
+	return &PeerBinding{PeerNodeID: peer.PeerNodeID, PeerName: peer.PeerName, PeerSignalingIP: peer.PeerSignalingIP, PeerSignalingPort: peer.PeerSignalingPort}, nil
+}
+
+func (d handlerDeps) currentPeerBinding() (*PeerBinding, error) {
+	if d.nodeStore == nil {
+		return nil, fmt.Errorf("node config store not configured")
+	}
+	return resolveSinglePeerBinding(d.nodeStore.ListPeers())
+}
+
+func (d handlerDeps) enforceCurrentPeerBinding(mapping *TunnelMapping) error {
+	if mapping == nil {
+		return fmt.Errorf("mapping is required")
+	}
+	binding, err := d.currentPeerBinding()
+	if err != nil {
+		return err
+	}
+	mapping.PeerNodeID = binding.PeerNodeID
+	return nil
+}
+
+func bindingFromMapping(mapping TunnelMapping) *PeerBinding {
+	if strings.TrimSpace(mapping.PeerNodeID) == "" {
+		return nil
+	}
+	return &PeerBinding{PeerNodeID: mapping.PeerNodeID}
 }
 
 func fallbackPositive(v int, fallback int) int {
@@ -1522,6 +1598,13 @@ func (d handlerDeps) handleSelfCheck(w http.ResponseWriter, r *http.Request) {
 	}
 	report.Items = append(report.Items, selfcheck.Item{Name: "mappings_capability_validation", Level: mappingLevel, Message: mappingMessage, Suggestion: mappingSuggestion, ActionHint: mappingHint})
 	if d.nodeStore != nil {
+		if binding, err := d.currentPeerBinding(); err != nil {
+			report.Items = append(report.Items, selfcheck.Item{Name: "mapping_peer_binding", Level: selfcheck.LevelError, Message: err.Error(), Suggestion: "在 peer 配置页保持仅一个启用的对端节点", ActionHint: "新增/禁用 peer 后重新执行 /api/selfcheck。"})
+		} else {
+			report.Items = append(report.Items, selfcheck.Item{Name: "mapping_peer_binding", Level: selfcheck.LevelInfo, Message: fmt.Sprintf("mappings are bound to peer %s (%s:%d)", binding.PeerNodeID, binding.PeerSignalingIP, binding.PeerSignalingPort), Suggestion: "映射规则默认绑定该对端节点（只读）", ActionHint: "如需切换，请先在 peer 配置页调整唯一启用对端。"})
+		}
+	}
+	if d.nodeStore != nil {
 		report.Overall, report.Summary = summarizeSelfCheckItems(report.Items)
 	}
 	if level := strings.TrimSpace(r.URL.Query().Get("level")); level != "" {
@@ -1582,6 +1665,11 @@ func (d handlerDeps) handleNodeNetworkStatus(w http.ResponseWriter, r *http.Requ
 		status.CurrentNetworkMode = compat.CurrentNetworkMode
 		status.CurrentCapability = compat.CurrentCapability
 		status.CompatibilityStatus = compat.CompatibilityCheck
+		binding, bindErr := d.currentPeerBinding()
+		status.BoundPeer = binding
+		if bindErr != nil {
+			status.PeerBindingError = bindErr.Error()
+		}
 	}
 	d.recordOpsAudit(r, readOperator(r), "QUERY_NODE_NETWORK_STATUS", map[string]any{"path": r.URL.Path})
 	writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: status})
@@ -1625,6 +1713,13 @@ func (d handlerDeps) handleStartupSummary(w http.ResponseWriter, r *http.Request
 		summary.CurrentNetworkMode = compat.CurrentNetworkMode
 		summary.CurrentCapability = compat.CurrentCapability
 		summary.CompatibilityStatus = compat.CompatibilityCheck
+		binding, bindErr := d.currentPeerBinding()
+		if binding != nil {
+			summary.BoundPeer = &startupsummary.PeerBinding{PeerNodeID: binding.PeerNodeID, PeerName: binding.PeerName, PeerSignalingIP: binding.PeerSignalingIP, PeerSignalingPort: binding.PeerSignalingPort}
+		}
+		if bindErr != nil {
+			summary.PeerBindingError = bindErr.Error()
+		}
 	}
 	writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: summary})
 }
@@ -1653,6 +1748,8 @@ func (d handlerDeps) handleSystemStatus(w http.ResponseWriter, r *http.Request) 
 		TunnelStatus:     tunnelStatus,
 		ConnectionReason: reason,
 		NetworkMode:      status.NetworkMode,
+		BoundPeer:        status.BoundPeer,
+		PeerBindingError: status.PeerBindingError,
 		Capability: SystemStatusCapability{
 			SupportsSmallRequestBody:        status.Capability.SupportsSmallRequestBody,
 			SupportsLargeResponseBody:       status.Capability.SupportsLargeResponseBody,

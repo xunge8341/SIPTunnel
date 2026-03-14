@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"siptunnel/internal/config"
+	"siptunnel/internal/nodeconfig"
 	"siptunnel/internal/observability"
 	"siptunnel/internal/repository"
 	filerepo "siptunnel/internal/repository/file"
@@ -29,6 +30,9 @@ func buildTestHandler(t *testing.T) (http.Handler, repository.TaskRepository, ob
 	nodeStore, err := filerepo.NewNodeConfigStore(t.TempDir() + "/node_config.json")
 	if err != nil {
 		t.Fatalf("new node config store failed: %v", err)
+	}
+	if _, err := nodeStore.CreatePeer(nodeconfig.PeerNodeConfig{PeerNodeID: "peer-b", PeerName: "Peer B", PeerSignalingIP: "10.20.0.20", PeerSignalingPort: 5060, PeerMediaIP: "10.20.0.20", PeerMediaPortStart: 32000, PeerMediaPortEnd: 32100, SupportedNetworkMode: config.NetworkModeAToBSIPBToARTP, Enabled: true}); err != nil {
+		t.Fatalf("seed peer failed: %v", err)
 	}
 	mappingStore, err := filerepo.NewTunnelMappingStore(t.TempDir() + "/tunnel_mappings.json")
 	if err != nil {
@@ -91,7 +95,7 @@ func TestNodeConfigEndpointSaveAndLoad(t *testing.T) {
 
 func TestMappingsCRUD(t *testing.T) {
 	h, _, _ := buildTestHandler(t)
-	body := `{"mapping_id":"map-2","name":"orders","enabled":true,"peer_node_id":"peer-b","local_bind_ip":"127.0.0.1","local_bind_port":18090,"local_base_path":"/orders","remote_target_ip":"10.0.0.2","remote_target_port":8090,"remote_base_path":"/api/orders","allowed_methods":["GET","POST"],"connect_timeout_ms":500,"request_timeout_ms":3000,"response_timeout_ms":3000,"max_request_body_bytes":1048576,"max_response_body_bytes":1048576,"description":"orders mapping"}`
+	body := `{"mapping_id":"map-2","name":"orders","enabled":true,"local_bind_ip":"127.0.0.1","local_bind_port":18090,"local_base_path":"/orders","remote_target_ip":"10.0.0.2","remote_target_port":8090,"remote_base_path":"/api/orders","allowed_methods":["GET","POST"],"connect_timeout_ms":500,"request_timeout_ms":3000,"response_timeout_ms":3000,"max_request_body_bytes":1048576,"max_response_body_bytes":1048576,"description":"orders mapping"}`
 
 	createReq := httptest.NewRequest(http.MethodPost, "/api/mappings", bytes.NewBufferString(body))
 	createRR := httptest.NewRecorder()
@@ -667,7 +671,7 @@ func TestNodesReadFromNodeStoreNotHardcoded(t *testing.T) {
 
 func TestMappingsCapabilityValidationErrorOnCreate(t *testing.T) {
 	h, _, _ := buildTestHandler(t)
-	body := `{"mapping_id":"map-large","name":"orders","enabled":true,"peer_node_id":"peer-b","local_bind_ip":"127.0.0.1","local_bind_port":18090,"local_base_path":"/orders","remote_target_ip":"10.0.0.2","remote_target_port":8090,"remote_base_path":"/api/orders","allowed_methods":["POST"],"connect_timeout_ms":500,"request_timeout_ms":3000,"response_timeout_ms":3000,"max_request_body_bytes":2097152,"max_response_body_bytes":1048576,"description":"orders mapping"}`
+	body := `{"mapping_id":"map-large","name":"orders","enabled":true,"local_bind_ip":"127.0.0.1","local_bind_port":18090,"local_base_path":"/orders","remote_target_ip":"10.0.0.2","remote_target_port":8090,"remote_base_path":"/api/orders","allowed_methods":["POST"],"connect_timeout_ms":500,"request_timeout_ms":3000,"response_timeout_ms":3000,"max_request_body_bytes":2097152,"max_response_body_bytes":1048576,"description":"orders mapping"}`
 
 	req := httptest.NewRequest(http.MethodPost, "/api/mappings", bytes.NewBufferString(body))
 	rr := httptest.NewRecorder()
@@ -682,7 +686,7 @@ func TestMappingsCapabilityValidationErrorOnCreate(t *testing.T) {
 
 func TestMappingsCapabilityWarningsInAPIAndSelfCheck(t *testing.T) {
 	h, _, _ := buildTestHandler(t)
-	body := `{"mapping_id":"map-warn","name":"orders","enabled":true,"peer_node_id":"peer-b","local_bind_ip":"127.0.0.1","local_bind_port":18090,"local_base_path":"/orders","remote_target_ip":"10.0.0.2","remote_target_port":8090,"remote_base_path":"/api/orders","allowed_methods":["PUT"],"connect_timeout_ms":500,"request_timeout_ms":3000,"response_timeout_ms":3000,"max_request_body_bytes":1048576,"max_response_body_bytes":1048576,"description":"orders mapping"}`
+	body := `{"mapping_id":"map-warn","name":"orders","enabled":true,"local_bind_ip":"127.0.0.1","local_bind_port":18090,"local_base_path":"/orders","remote_target_ip":"10.0.0.2","remote_target_port":8090,"remote_base_path":"/api/orders","allowed_methods":["PUT"],"connect_timeout_ms":500,"request_timeout_ms":3000,"response_timeout_ms":3000,"max_request_body_bytes":1048576,"max_response_body_bytes":1048576,"description":"orders mapping"}`
 
 	createReq := httptest.NewRequest(http.MethodPost, "/api/mappings", bytes.NewBufferString(body))
 	createRR := httptest.NewRecorder()
@@ -781,5 +785,72 @@ func TestTunnelConfigEndpointGetAndPost(t *testing.T) {
 	h.ServeHTTP(getAfterRR, getAfterReq)
 	if getAfterRR.Code != http.StatusOK || !strings.Contains(getAfterRR.Body.String(), "A_B_BIDIR_SIP__BIDIR_RTP") {
 		t.Fatalf("GET after POST /api/tunnel/config failed code=%d body=%s", getAfterRR.Code, getAfterRR.Body.String())
+	}
+}
+
+func TestMappingsRejectWhenNoEnabledPeerConfigured(t *testing.T) {
+	repo := memrepo.NewTaskRepository()
+	audit := observability.NewInMemoryAuditStore()
+	nodeStore, err := filerepo.NewNodeConfigStore(t.TempDir() + "/node_config.json")
+	if err != nil {
+		t.Fatalf("new node config store failed: %v", err)
+	}
+	mappingStore, err := filerepo.NewTunnelMappingStore(t.TempDir() + "/tunnel_mappings.json")
+	if err != nil {
+		t.Fatalf("new mapping store failed: %v", err)
+	}
+	h := newMux(handlerDeps{
+		logger:    observability.NewStructuredLogger(nil),
+		audit:     audit,
+		repo:      repo,
+		engine:    taskengine.NewEngine(repo, service.RetryPolicy{MaxAttempts: 3, BaseBackoff: time.Second}),
+		mappings:  mappingStore,
+		nodeStore: nodeStore,
+		networkStatusFunc: func(_ context.Context) NodeNetworkStatus {
+			capability := config.DeriveCapability(config.NetworkModeAToBSIPBToARTP)
+			return NodeNetworkStatus{NetworkMode: config.NetworkModeAToBSIPBToARTP, Capability: capability}
+		},
+	})
+
+	body := `{"mapping_id":"map-np","enabled":true,"local_bind_ip":"127.0.0.1","local_bind_port":18090,"local_base_path":"/orders","remote_target_ip":"10.0.0.2","remote_target_port":8090,"remote_base_path":"/api/orders","allowed_methods":["GET"],"connect_timeout_ms":500,"request_timeout_ms":3000,"response_timeout_ms":3000,"max_request_body_bytes":1024,"max_response_body_bytes":1024,"description":"orders mapping"}`
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/mappings", bytes.NewBufferString(body)))
+	if rr.Code != http.StatusBadRequest || !strings.Contains(rr.Body.String(), "PEER_BINDING_INVALID") {
+		t.Fatalf("expected peer binding error, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestMappingsRejectWhenMultipleEnabledPeersConfigured(t *testing.T) {
+	h, _, _ := buildTestHandler(t)
+	createPeerBody := `{"peer_node_id":"peer-b-02","peer_name":"Peer B2","peer_signaling_ip":"10.20.0.21","peer_signaling_port":5060,"peer_media_ip":"10.20.0.21","peer_media_port_start":32000,"peer_media_port_end":32100,"supported_network_mode":"A_TO_B_SIP__B_TO_A_RTP","enabled":true}`
+	createPeer := httptest.NewRequest(http.MethodPost, "/api/peers", bytes.NewBufferString(createPeerBody))
+	createPeerRR := httptest.NewRecorder()
+	h.ServeHTTP(createPeerRR, createPeer)
+	if createPeerRR.Code != http.StatusCreated {
+		t.Fatalf("POST /api/peers expected 201 got %d body=%s", createPeerRR.Code, createPeerRR.Body.String())
+	}
+
+	body := `{"mapping_id":"map-multi","enabled":true,"local_bind_ip":"127.0.0.1","local_bind_port":18090,"local_base_path":"/orders","remote_target_ip":"10.0.0.2","remote_target_port":8090,"remote_base_path":"/api/orders","allowed_methods":["GET"],"connect_timeout_ms":500,"request_timeout_ms":3000,"response_timeout_ms":3000,"max_request_body_bytes":1024,"max_response_body_bytes":1024,"description":"orders mapping"}`
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/mappings", bytes.NewBufferString(body)))
+	if rr.Code != http.StatusBadRequest || !strings.Contains(rr.Body.String(), "PEER_BINDING_INVALID") {
+		t.Fatalf("expected peer binding error, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestMappingsListIncludesBoundPeerAndBindingErrors(t *testing.T) {
+	h, _, _ := buildTestHandler(t)
+	listRR := httptest.NewRecorder()
+	h.ServeHTTP(listRR, httptest.NewRequest(http.MethodGet, "/api/mappings", nil))
+	if listRR.Code != http.StatusOK || !strings.Contains(listRR.Body.String(), "bound_peer") || !strings.Contains(listRR.Body.String(), "peer-b") {
+		t.Fatalf("expected bound peer in list, got %d body=%s", listRR.Code, listRR.Body.String())
+	}
+
+	createPeerBody := `{"peer_node_id":"peer-b-03","peer_name":"Peer B3","peer_signaling_ip":"10.20.0.22","peer_signaling_port":5060,"peer_media_ip":"10.20.0.22","peer_media_port_start":32000,"peer_media_port_end":32100,"supported_network_mode":"A_TO_B_SIP__B_TO_A_RTP","enabled":true}`
+	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/peers", bytes.NewBufferString(createPeerBody)))
+	listConflictRR := httptest.NewRecorder()
+	h.ServeHTTP(listConflictRR, httptest.NewRequest(http.MethodGet, "/api/mappings", nil))
+	if listConflictRR.Code != http.StatusOK || !strings.Contains(listConflictRR.Body.String(), "binding_error") {
+		t.Fatalf("expected binding_error in list, got %d body=%s", listConflictRR.Code, listConflictRR.Body.String())
 	}
 }

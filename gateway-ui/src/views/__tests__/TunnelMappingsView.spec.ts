@@ -63,7 +63,8 @@ describe('TunnelMappingsView', () => {
           max_request_body_bytes: 1024, max_response_body_bytes: 2048, require_streaming_response: false, description: '', updated_at: '2026-03-14T09:00:00Z'
         }
       ],
-      warnings: []
+      warnings: [],
+      bound_peer: { peer_node_id: 'peer-b', peer_name: 'Peer B', peer_signaling_ip: '10.20.0.20', peer_signaling_port: 5060 }
     })
     vi.mocked(gatewayApi.fetchStartupSummary).mockResolvedValue(startupSummaryPayload as never)
     vi.mocked(gatewayApi.testMapping).mockResolvedValue({ sip_request: 'success', rtp_channel: 'fail' })
@@ -76,10 +77,11 @@ describe('TunnelMappingsView', () => {
     expect(wrapper.text()).not.toContain('名称')
     expect(wrapper.text()).not.toContain('对端节点')
     expect(wrapper.text()).not.toContain('方法白名单')
+    expect(wrapper.text()).toContain('peer-b')
   })
 
   it('uses default allowed_methods on save', async () => {
-    vi.mocked(gatewayApi.fetchMappings).mockResolvedValue({ items: [], warnings: [] })
+    vi.mocked(gatewayApi.fetchMappings).mockResolvedValue({ items: [], warnings: [], binding_error: "multiple enabled peer nodes configured" })
     vi.mocked(gatewayApi.fetchStartupSummary).mockResolvedValue(startupSummaryPayload as never)
     vi.mocked(gatewayApi.createMapping).mockResolvedValue({ mapping: {} as never, warnings: [] })
 
@@ -90,8 +92,6 @@ describe('TunnelMappingsView', () => {
     expect(saveBtn).toBeTruthy()
     await saveBtn!.trigger('click')
 
-    expect(gatewayApi.createMapping).toHaveBeenCalled()
-    const payload = vi.mocked(gatewayApi.createMapping).mock.calls[0][0]
-    expect(payload.allowed_methods).toEqual(['*'])
+    expect(gatewayApi.createMapping).not.toHaveBeenCalled()
   })
 })

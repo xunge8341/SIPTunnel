@@ -82,4 +82,4 @@
   - `GET/PUT /api/node`
   - `GET/POST /api/peers`
   - `PUT/DELETE /api/peers/{peer_node_id}`
-- `TunnelMapping` 后续应保存 `peer_node_id` 并引用该配置，而不是重复存放地址/端口字段，实现“节点信息”与“映射关系”解耦。
+- `TunnelMapping` 在当前主流程按单对单模型运行：映射编辑不暴露 `peer_node_id`，运行时由后端绑定唯一启用 peer（内部仍保留 `peer_node_id` 字段以兼容未来多对端扩展）。

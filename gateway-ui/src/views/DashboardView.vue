@@ -44,6 +44,17 @@
           <a-statistic title="网络模式" :value="systemStatus.network_mode" />
         </a-col>
       </a-row>
+      <a-alert
+        v-if="systemStatus.peer_binding_error"
+        type="error"
+        show-icon
+        :message="systemStatus.peer_binding_error"
+        style="margin-top: 12px"
+      />
+      <a-descriptions bordered size="small" :column="2" style="margin-top: 12px">
+        <a-descriptions-item label="peer_node_id">{{ systemStatus.bound_peer?.peer_node_id ?? '-' }}</a-descriptions-item>
+        <a-descriptions-item label="peer_name">{{ systemStatus.bound_peer?.peer_name ?? '-' }}</a-descriptions-item>
+      </a-descriptions>
       <a-typography-title :level="5" style="margin-top: 12px">能力矩阵</a-typography-title>
       <a-descriptions :column="1" size="small" bordered>
         <a-descriptions-item label="支持小请求">{{ yesNo(systemStatus.capability.supports_small_request_body) }}</a-descriptions-item>
@@ -158,6 +169,8 @@ const deploymentMode = ref<DeploymentModePayload>({
 const startupSummary = ref<StartupSummaryPayload>({
   node_id: '-',
   network_mode: '-',
+  bound_peer: undefined,
+  peer_binding_error: '',
   capability: {
     supports_large_request_body: false,
     supports_large_response_body: false,
@@ -205,6 +218,8 @@ const systemStatus = ref<SystemStatusPayload>({
   tunnel_status: 'disconnected',
   connection_reason: '-',
   network_mode: '-',
+  bound_peer: undefined,
+  peer_binding_error: '',
   capability: {
     supports_small_request_body: false,
     supports_large_response_body: false,
