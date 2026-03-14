@@ -1,8 +1,8 @@
-$ErrorActionPreference = 'Stop'
-
 param(
   [string]$BuildNonce = [guid]::NewGuid().ToString()
 )
+
+$ErrorActionPreference = 'Stop'
 
 $RootDir = Split-Path -Parent $PSScriptRoot
 $UiDir = Join-Path $RootDir 'gateway-ui'
