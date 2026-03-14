@@ -32,7 +32,7 @@
       </a-col>
     </a-row>
 
-    <a-card title="系统状态" :bordered="false">
+    <a-card title="系统状态（HTTP 映射隧道）" :bordered="false">
       <a-row :gutter="[12, 12]">
         <a-col :xs="24" :sm="12" :lg="6">
           <a-statistic title="隧道链路状态" :value="tunnelStatusText(systemStatus.tunnel_status)" />
@@ -44,7 +44,7 @@
           <a-statistic title="心跳状态" :value="heartbeatStatusText(systemStatus.heartbeat_status)" />
         </a-col>
         <a-col :xs="24" :sm="12" :lg="6">
-          <a-statistic title="网络模式" :value="networkModeProfile?.shortLabel ?? systemStatus.network_mode" />
+          <a-statistic title="网络模式（全局）" :value="networkModeProfile?.shortLabel ?? systemStatus.network_mode" />
         </a-col>
       </a-row>
       <a-row :gutter="[12, 12]" style="margin-top: 8px">
@@ -55,7 +55,7 @@
           <a-statistic title="最近心跳时间" :value="formatDateTime(systemStatus.last_heartbeat_time)" />
         </a-col>
         <a-col :xs="24" :sm="12" :lg="6">
-          <a-statistic title="映射规则总数 / 异常数" :value="mappingCountText" />
+          <a-statistic title="隧道映射总数 / 异常数" :value="mappingCountText" />
         </a-col>
       </a-row>
       <a-alert
@@ -75,9 +75,15 @@
       <a-descriptions bordered size="small" :column="2" style="margin-top: 12px">
         <a-descriptions-item label="peer_node_id">{{ systemStatus.bound_peer?.peer_node_id ?? '-' }}</a-descriptions-item>
         <a-descriptions-item label="peer_name">{{ systemStatus.bound_peer?.peer_name ?? '-' }}</a-descriptions-item>
-        <a-descriptions-item label="发送端 / 接收端" :span="2">{{ networkModeProfile?.flowLabel ?? '-' }}</a-descriptions-item>
+        <a-descriptions-item label="本端 / 对端角色" :span="2">{{ networkModeProfile?.flowLabel ?? '-' }}</a-descriptions-item>
       </a-descriptions>
-      <a-typography-title :level="5" style="margin-top: 12px">能力矩阵</a-typography-title>
+      <a-space style="margin-top: 12px">
+        <a-typography-title :level="5" style="margin: 0">能力矩阵</a-typography-title>
+        <a-tooltip>
+          <template #title>能力矩阵由网络模式全局决定，用于约束本端入口与对端目标的可用 HTTP 映射能力。</template>
+          <a-typography-text type="secondary">ⓘ</a-typography-text>
+        </a-tooltip>
+      </a-space>
       <a-descriptions :column="1" size="small" bordered>
         <a-descriptions-item label="支持小请求">{{ yesNo(systemStatus.capability.supports_small_request_body) }}</a-descriptions-item>
         <a-descriptions-item label="支持大响应">{{ yesNo(systemStatus.capability.supports_large_response_body) }}</a-descriptions-item>
@@ -115,12 +121,21 @@
 
 
 
-    <a-card title="全局传输策略（只读）" :bordered="false">
+    <a-card :bordered="false">
+      <template #title>
+        <a-space>
+          <span>全局传输策略（只读）</span>
+          <a-tooltip>
+            <template #title>transport 来源于网络模式全局推导；不是逐条隧道映射可编辑项。旧 route/api_code 文案仅作兼容提示。</template>
+            <a-typography-text type="secondary">ⓘ</a-typography-text>
+          </a-tooltip>
+        </a-space>
+      </template>
       <a-descriptions :column="1" size="small" bordered>
-        <a-descriptions-item label="request_meta_transport">{{ startupSummary.transport_plan.request_meta_transport }}</a-descriptions-item>
-        <a-descriptions-item label="request_body_transport">{{ startupSummary.transport_plan.request_body_transport }}</a-descriptions-item>
-        <a-descriptions-item label="response_meta_transport">{{ startupSummary.transport_plan.response_meta_transport }}</a-descriptions-item>
-        <a-descriptions-item label="response_body_transport">{{ startupSummary.transport_plan.response_body_transport }}</a-descriptions-item>
+        <a-descriptions-item label="请求元数据 transport（全局推导）">{{ startupSummary.transport_plan.request_meta_transport }}</a-descriptions-item>
+        <a-descriptions-item label="请求体 transport（全局推导）">{{ startupSummary.transport_plan.request_body_transport }}</a-descriptions-item>
+        <a-descriptions-item label="响应元数据 transport（全局推导）">{{ startupSummary.transport_plan.response_meta_transport }}</a-descriptions-item>
+        <a-descriptions-item label="响应体 transport（全局推导）">{{ startupSummary.transport_plan.response_body_transport }}</a-descriptions-item>
         <a-descriptions-item label="request_body_size_limit">{{ startupSummary.transport_plan.request_body_size_limit }}</a-descriptions-item>
         <a-descriptions-item label="response_body_size_limit">{{ startupSummary.transport_plan.response_body_size_limit }}</a-descriptions-item>
       </a-descriptions>
