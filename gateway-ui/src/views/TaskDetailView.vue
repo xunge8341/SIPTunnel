@@ -36,7 +36,7 @@
 
     <a-card title="HTTP 执行结果">
       <a-descriptions :column="2" bordered size="small">
-        <a-descriptions-item label="api_code">{{ detail.httpResult.apiCode }}</a-descriptions-item>
+        <a-descriptions-item label="api_code（兼容索引）">{{ detail.httpResult.apiCode }}</a-descriptions-item>
         <a-descriptions-item label="URL">{{ detail.httpResult.url }}</a-descriptions-item>
         <a-descriptions-item label="Method">{{ detail.httpResult.method }}</a-descriptions-item>
         <a-descriptions-item label="状态码">{{ detail.httpResult.statusCode }}</a-descriptions-item>

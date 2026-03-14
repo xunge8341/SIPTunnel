@@ -70,13 +70,13 @@ describe('DashboardView', () => {
         response_body_transport: 'rtp_stream',
         request_body_size_limit: 65535,
         response_body_size_limit: -1,
-        notes: ['transport 决策由全局 network.mode 推导，禁止在单条映射上覆盖。'],
+        notes: ['transport 决策由全局网络模式推导，禁止在单条隧道映射上覆盖。'],
         warnings: ['不支持大请求体上传；超过 SIP 限制的请求体将被拒绝。']
       },
       business_execution: {
         state: 'protocol_only',
         route_count: 0,
-        message: '协议层可启动，业务执行层未激活（未加载下游 HTTP 路由）',
+        message: '协议层可启动，业务执行层未激活（未加载下游 HTTP 隧道映射）',
         impact: '仅完成 SIP/RTP 协议交互，不会执行 A 网 HTTP 落地'
       },
       self_check_summary: {
@@ -99,7 +99,7 @@ describe('DashboardView', () => {
     expect(wrapper.text()).toContain('最近 1h transport error')
     expect(wrapper.text()).toContain('external mode')
     expect(wrapper.text()).toContain('config-center')
-    expect(wrapper.text()).toContain('当前未加载业务路由')
+    expect(wrapper.text()).toContain('当前未加载 HTTP 隧道映射')
     expect(wrapper.text()).toContain('不会执行 A 网 HTTP 落地')
     expect(wrapper.text()).toContain('sip_body_only')
     expect(wrapper.text()).toContain('rtp_stream')

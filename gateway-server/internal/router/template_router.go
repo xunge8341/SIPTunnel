@@ -12,6 +12,8 @@ type RouteTemplate struct {
 	Path   string
 }
 
+// TemplateRouter 为历史 route/api_code/template 模型的兼容层。
+// HTTP 映射隧道模式主线请优先使用 TunnelMapping（本端入口 -> 对端目标）语义。
 type TemplateRouter struct {
 	baseURL string
 	routes  map[string]RouteTemplate

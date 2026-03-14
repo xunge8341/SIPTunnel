@@ -3,9 +3,20 @@
 SIPTunnel 是跨安全边界业务交换网关，当前仓库为 monorepo 结构：
 
 - `gateway-server/`：Go 网关服务（SIP/RTP/签名验签/防重放/任务状态机/HTTP 映射/审计与可观测）
-- `gateway-ui/`：Vue3 运维前端（Dashboard、任务、网络配置、本端节点配置、对端节点配置、配置治理、路由、限流、审计）
+- `gateway-ui/`：Vue3 运维前端（Dashboard、任务、网络配置、本端节点配置、对端节点配置、配置治理、隧道映射、限流、审计）
 - `deploy/`：部署相关脚本与清单（预留）
 - `scripts/`：仓库级开发脚本（启动/测试/格式化/lint）
+
+## 产品模式与术语基线（主线）
+
+SIPTunnel 同时支持两种产品模式，文档与 UI 必须明确区分：
+
+1. **命令网关模式**：以 SIP 控制命令分发与状态同步为核心。
+2. **HTTP 映射隧道模式（当前主线）**：以“受全局网络模式约束的 HTTP 映射转发”为核心。
+
+当前主线统一术语：**本端节点 / 对端节点 / 网络模式 / 能力矩阵 / 隧道映射 / 本端入口 / 对端目标**。
+
+> 兼容说明：`route` / `api_code` / `template` 属于历史模型（兼容术语），仅在迁移或兼容接口（如 `/api/routes`）中出现，不再作为默认产品术语。
 
 ## 关键能力与约束落实
 
@@ -13,7 +24,7 @@ SIPTunnel 是跨安全边界业务交换网关，当前仓库为 monorepo 结构
 - RTP 文件面：固定主头 + TLV 扩展协议结构在后端独立模块实现，业务代码不拼裸字节。
 - 签名验签：通过 `Signer` 接口注入，当前 HMAC-SHA256，保留 `SM3_HMAC` 升级位。
 - 防重放：基于 `request_id + nonce` 的接收防重放窗口。
-- HTTP 执行：仅支持 `api_code -> route template` 受控映射，不支持任意透传。
+- HTTP 执行：主模型为“隧道映射（本端入口 -> 对端目标）”；`api_code -> route template` 仅保留为历史兼容术语，不支持任意透传。
 - 生产基线：限流、审计日志、trace 字段透传和结构化日志。
 - 网络模式能力矩阵：`NetworkMode -> Capability` 由后端统一推导，覆盖系统信息 API、启动摘要与诊断导出（见 `docs/README.md#网络模式与能力矩阵`）。
 - 映射能力联动校验：`TunnelMapping` 保存/更新会按当前 `NetworkMode/Capability` 校验 `max_request_body_bytes`、`max_response_body_bytes`、`allowed_methods` 与 `require_streaming_response`，并在 API/selfcheck/诊断暴露 warnings 或 errors。
@@ -227,7 +238,7 @@ startup summary:
 - sip_listen: ip=0.0.0.0 port=5060 transport=TCP
 - rtp_listen: ip=0.0.0.0 port_range=20000-20100 transport=UDP
 - storage_dirs: temp=./data/temp final=./data/final audit=./data/audit log=./data/logs
-- business_execution: state=protocol_only route_count=0 message=协议层可启动，业务执行层未激活（未加载下游 HTTP 路由） impact=仅完成 SIP/RTP 协议交互，不会执行 A 网 HTTP 落地
+- business_execution: state=protocol_only route_count=0 message=协议层可启动，业务执行层未激活（未加载下游 HTTP 隧道映射） impact=仅完成 SIP/RTP 协议交互，不会执行 A 网 HTTP 落地
 - self_check_summary: generated_at=2026-01-02T03:04:05Z overall=warn info=7 warn=1 error=0
 ```
 

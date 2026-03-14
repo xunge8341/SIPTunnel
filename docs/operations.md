@@ -214,7 +214,7 @@ systemctl restart siptunnel-gateway.service
 - `auto_generated_config`（是否首启自动生成配置）
 - `config_candidates`（配置自动发现顺序，便于定位来源）
 
-- `GATEWAY_HTTPINVOKE_CONFIG`：下游路由配置（YAML，含 routes 列表）。
+- `GATEWAY_HTTPINVOKE_CONFIG`：下游隧道映射兼容配置（历史 YAML，含 routes 列表，仅迁移/兼容场景使用）。
 
 示例（Linux）：
 
@@ -263,8 +263,8 @@ curl -fsS 'http://127.0.0.1:18080/api/selfcheck?level=warn,error'
    - 立即动作：确认这是临时联调还是生产配置。
    - 建议动作：生产建议替换为明确网卡 IP，避免错误网段接入。
 3. **`downstream.http_base_reachability`（下游 HTTP 未配置或不可达，warn/error）**
-   - 立即动作：核对 `httpinvoke` 路由配置是否有 `target_host/target_port`。
-   - 建议动作：补齐 `api_code -> 下游地址` 映射并在网关主机发起连通性验证（`curl`/`telnet`）。
+   - 立即动作：核对 `httpinvoke` 兼容配置（旧 route 模型）是否有 `target_host/target_port`。
+   - 建议动作：补齐“本端入口 -> 对端目标”隧道映射（旧 `api_code` 映射仅兼容）并在网关主机发起连通性验证（`curl`/`telnet`）。
 4. **`storage.*_dir_writable`（目录不可写，error）**
    - 立即动作：以服务用户执行 `touch` 验证写权限。
    - 建议动作：修复目录属主/权限并检查磁盘容量、inode 后重启服务。
