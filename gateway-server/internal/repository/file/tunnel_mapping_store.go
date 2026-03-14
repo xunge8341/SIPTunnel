@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -19,9 +21,10 @@ var (
 )
 
 type TunnelMappingStore struct {
-	path string
-	mu   sync.RWMutex
-	data map[string]tunnelmapping.TunnelMapping
+	path   string
+	mu     sync.RWMutex
+	data   map[string]tunnelmapping.TunnelMapping
+	cursor int64
 }
 
 func NewTunnelMappingStore(path string) (*TunnelMappingStore, error) {
@@ -45,6 +48,9 @@ func (s *TunnelMappingStore) List() []tunnelmapping.TunnelMapping {
 
 func (s *TunnelMappingStore) Create(m tunnelmapping.TunnelMapping) (tunnelmapping.TunnelMapping, error) {
 	m.Normalize()
+	if strings.TrimSpace(m.MappingID) == "" {
+		m.MappingID = strconv.FormatInt(s.nextID(), 10)
+	}
 	m.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	if err := m.Validate(); err != nil {
 		return tunnelmapping.TunnelMapping{}, err
@@ -106,9 +112,12 @@ func (s *TunnelMappingStore) load() error {
 	if len(buf) == 0 {
 		return nil
 	}
-	items, migrated, err := decodeMappingPayload(buf)
+	items, cursor, migrated, err := decodeMappingPayload(buf)
 	if err != nil {
 		return fmt.Errorf("decode mapping store: %w", err)
+	}
+	if cursor > s.cursor {
+		s.cursor = cursor
 	}
 	for _, item := range items {
 		item.Normalize()
@@ -116,6 +125,9 @@ func (s *TunnelMappingStore) load() error {
 			item.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 		}
 		s.data[item.MappingID] = item
+		if idNum, parseErr := strconv.ParseInt(item.MappingID, 10, 64); parseErr == nil && idNum > s.cursor {
+			s.cursor = idNum
+		}
 	}
 	if migrated {
 		return s.persistLocked()
@@ -123,13 +135,14 @@ func (s *TunnelMappingStore) load() error {
 	return nil
 }
 
-func decodeMappingPayload(buf []byte) ([]tunnelmapping.TunnelMapping, bool, error) {
+func decodeMappingPayload(buf []byte) ([]tunnelmapping.TunnelMapping, int64, bool, error) {
 	var latest struct {
-		Items []tunnelmapping.TunnelMapping `json:"items"`
+		Items  []tunnelmapping.TunnelMapping `json:"items"`
+		Cursor int64                         `json:"cursor,omitempty"`
 	}
 	if err := json.Unmarshal(buf, &latest); err == nil {
-		if len(latest.Items) > 0 {
-			return latest.Items, false, nil
+		if len(latest.Items) > 0 || latest.Cursor > 0 {
+			return latest.Items, latest.Cursor, false, nil
 		}
 		// 如果是空 payload，继续探测旧模型。
 	}
@@ -139,12 +152,14 @@ func decodeMappingPayload(buf []byte) ([]tunnelmapping.TunnelMapping, bool, erro
 			Routes []tunnelmapping.LegacyRouteConfig `json:"routes"`
 		}{}
 		if err := json.Unmarshal(buf, &legacyRouteConfig); err == nil && len(legacyRouteConfig.Routes) > 0 {
-			return convertLegacyRouteConfigs(legacyRouteConfig.Routes)
+			items, migrated, err := convertLegacyRouteConfigs(legacyRouteConfig.Routes)
+			return items, 0, migrated, err
 		}
 
 		var routeArray []tunnelmapping.LegacyRouteConfig
 		if err := json.Unmarshal(buf, &routeArray); err == nil && len(routeArray) > 0 {
-			return convertLegacyRouteConfigs(routeArray)
+			items, migrated, err := convertLegacyRouteConfigs(routeArray)
+			return items, 0, migrated, err
 		}
 	}
 
@@ -158,14 +173,15 @@ func decodeMappingPayload(buf []byte) ([]tunnelmapping.TunnelMapping, bool, erro
 			routes = legacyOps.Routes
 		}
 		if len(routes) > 0 {
-			return convertLegacyOpsRoutes(routes)
+			items, migrated, err := convertLegacyOpsRoutes(routes)
+			return items, 0, migrated, err
 		}
 	}
 
 	if len(latest.Items) == 0 {
-		return []tunnelmapping.TunnelMapping{}, false, nil
+		return []tunnelmapping.TunnelMapping{}, latest.Cursor, false, nil
 	}
-	return latest.Items, false, nil
+	return latest.Items, latest.Cursor, false, nil
 }
 
 func hasLegacyRouteConfigShape(buf []byte) bool {
@@ -235,10 +251,18 @@ func (s *TunnelMappingStore) persistLocked() error {
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].MappingID < items[j].MappingID })
 	payload, err := json.MarshalIndent(struct {
-		Items []tunnelmapping.TunnelMapping `json:"items"`
-	}{Items: items}, "", "  ")
+		Items  []tunnelmapping.TunnelMapping `json:"items"`
+		Cursor int64                         `json:"cursor"`
+	}{Items: items, Cursor: s.cursor}, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal mapping store: %w", err)
 	}
 	return os.WriteFile(s.path, payload, 0o644)
+}
+
+func (s *TunnelMappingStore) nextID() int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cursor++
+	return s.cursor
 }

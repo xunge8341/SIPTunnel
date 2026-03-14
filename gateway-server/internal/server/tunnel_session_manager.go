@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"log"
 	"net"
 	"strings"
 	"sync"
@@ -98,6 +99,7 @@ type tunnelSessionManager struct {
 	registerAttempts       int
 	authenticatedChallenge bool
 	nextHeartbeatDue       time.Time
+	sessionID              string
 	closed                 chan struct{}
 	wake                   chan struct{}
 }
@@ -110,6 +112,7 @@ func newTunnelSessionManager(registrar tunnelRegistrar, cfg TunnelConfigPayload)
 		registerRetryInterval: time.Duration(maxInt(1, cfg.RegisterRetryIntervalSec)) * time.Second,
 		registrationStatus:    "unregistered",
 		heartbeatStatus:       "unknown",
+		sessionID:             fmt.Sprintf("sess-%d", time.Now().UTC().UnixNano()),
 		closed:                make(chan struct{}),
 		wake:                  make(chan struct{}, 1),
 	}
@@ -228,11 +231,13 @@ func (m *tunnelSessionManager) registerOnce() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 	defer cancel()
+	start := time.Now()
 	code, reason, err := m.registrar.Register(ctx, auth)
 	now := time.Now().UTC()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if err != nil {
+		log.Printf("sip event=REGISTER session_id=%s status=error duration_ms=%d reason=%v", m.sessionID, time.Since(start).Milliseconds(), err)
 		m.registrationStatus = "failed"
 		m.registerAttempts++
 		m.lastFailureReason = err.Error()
@@ -242,18 +247,23 @@ func (m *tunnelSessionManager) registerOnce() {
 		return
 	}
 	if code == 401 {
+		log.Printf("sip event=REGISTER session_id=%s status=401 duration_ms=%d reason=%s", m.sessionID, time.Since(start).Milliseconds(), reason)
 		m.authenticatedChallenge = true
 		m.lastFailureReason = reason
 		m.nextRetryAt = now
 		return
 	}
 	if code != 200 {
+		log.Printf("sip event=REGISTER session_id=%s status=%d duration_ms=%d reason=%s", m.sessionID, code, time.Since(start).Milliseconds(), reason)
 		m.registrationStatus = "failed"
 		m.lastFailureReason = fmt.Sprintf("unexpected register response code=%d", code)
 		m.nextRetryAt = now.Add(m.registerRetryInterval)
 		return
 	}
+	log.Printf("sip event=REGISTER session_id=%s status=200 duration_ms=%d", m.sessionID, time.Since(start).Milliseconds())
 	m.registrationStatus = "registered"
+	log.Printf("sip event=MESSAGE session_id=%s status=ok duration_ms=%d", m.sessionID, time.Since(start).Milliseconds())
+	log.Printf("sip event=MESSAGE session_id=%s status=ok duration_ms=%d", m.sessionID, time.Since(start).Milliseconds())
 	m.heartbeatStatus = "healthy"
 	m.lastRegisterTime = now
 	m.lastFailureReason = ""
@@ -265,11 +275,13 @@ func (m *tunnelSessionManager) registerOnce() {
 func (m *tunnelSessionManager) heartbeatOnce() {
 	ctx, cancel := context.WithTimeout(context.Background(), 1200*time.Millisecond)
 	defer cancel()
+	start := time.Now()
 	err := m.registrar.Heartbeat(ctx)
 	now := time.Now().UTC()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if err != nil {
+		log.Printf("sip event=MESSAGE session_id=%s status=timeout duration_ms=%d reason=%v", m.sessionID, time.Since(start).Milliseconds(), err)
 		m.heartbeatStatus = "timeout"
 		m.consecutiveHBTimeouts++
 		m.lastFailureReason = err.Error()

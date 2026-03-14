@@ -2,8 +2,8 @@
   <a-space direction="vertical" size="middle" style="width: 100%">
     <a-card title="HTTP 映射隧道查询">
       <a-form layout="inline">
-        <a-form-item label="映射ID">
-          <a-input v-model:value="keyword" allow-clear placeholder="输入映射ID" />
+        <a-form-item label="关键字">
+          <a-input v-model:value="keyword" allow-clear placeholder="输入名称/地址" />
         </a-form-item>
         <a-form-item>
           <a-space>
@@ -143,9 +143,6 @@
         v-if="editorAdvisoryWarnings.length"
       />
       <a-form layout="vertical">
-        <a-form-item label="映射ID（兼容旧 route/api_code 标识）">
-          <a-input v-model:value="editing.mapping_id" :disabled="editingMode === 'edit'" />
-        </a-form-item>
         <a-form-item extra="填写本端节点对外暴露的 HTTP 入口地址。">
           <template #label>
             <a-space size="small">
@@ -360,7 +357,7 @@ const mappingActionText = (action?: string) => {
 const filteredMappings = computed(() => {
   const k = keyword.value.trim().toLowerCase()
   if (!k) return mappings.value
-  return mappings.value.filter((item) => item.mapping_id.toLowerCase().includes(k))
+  return mappings.value.filter((item) => item.mapping_id.toLowerCase().includes(k) || (item.name ?? "").toLowerCase().includes(k) || item.local_bind_ip.toLowerCase().includes(k) || item.remote_target_ip.toLowerCase().includes(k))
 })
 
 const drawerTitle = computed(() => (editingMode.value === 'create' ? '新建隧道映射' : '编辑隧道映射'))
@@ -452,6 +449,7 @@ const save = async () => {
   }
   const payload: TunnelMapping = {
     ...JSON.parse(JSON.stringify(editing)),
+    mapping_id: editingMode.value === 'create' ? '' : editing.mapping_id,
     allowed_methods: ['*']
   }
   if (editingMode.value === 'create') {
