@@ -825,12 +825,13 @@ cd gateway-ui && npm run test -- --run
 
 ## 运维页面覆盖
 
-- 首页：成功率/失败率/并发等指标总览（值班动作见 `docs/oncall-handbook.md`）
+- 首页：突出展示注册状态、心跳状态、最近注册/心跳时间、映射规则总数/异常数与最近异常原因，异常可直接定位到原因（值班动作见 `docs/oncall-handbook.md`）。
 - 命令任务与文件任务：过滤、分页、详情跳转（故障处置见 `docs/runbook.md`）
 - 任务详情：基础信息、状态流转、SIP/RTP/HTTP执行结果（诊断导出见 `gatewayctl diag export`）
 - 限流策略：在线查看/更新全局限流（变更前后请执行 `docs/runbook.md` 的链路自检）
-- 映射规则：按 TunnelMapping 编辑核心业务映射（不在页面逐条编辑 transport，发布/回滚流程见 `docs/operations.md`）
+- 映射规则：按 TunnelMapping 编辑核心业务映射，并展示每条映射的“映射链路状态 + 状态原因”（如未注册、心跳超时、对端不可达、未建立响应通道），不再直出英文状态字段（发布/回滚流程见 `docs/operations.md`）。
 - 本端节点配置：集中维护 `node_id/node_name/node_role/network_mode` 与 SIP/RTP 监听参数，并展示当前 NetworkMode/Capability 摘要。
+- 节点状态页：统一使用中文状态标签（正常/异常/已连接/未连接），并补充注册状态、心跳状态、最近时间和异常原因，便于值班快速定位。
 - 通道配置：以 GB/T 28181 注册与心跳为核心，维护连接发起方、设备编号、心跳间隔、注册重试策略，并只读展示当前注册/心跳状态与最近时间。
 - 对端节点配置：维护 peer signaling/media 地址范围、`supported_network_mode` 与启停状态，支持增删改查。
 - 审计日志：查询与详情查看（升级研发前需附带审计与诊断信息）

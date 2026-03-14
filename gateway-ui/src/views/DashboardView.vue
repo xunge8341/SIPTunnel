@@ -35,15 +35,36 @@
     <a-card title="系统状态" :bordered="false">
       <a-row :gutter="[12, 12]">
         <a-col :xs="24" :sm="12" :lg="6">
-          <a-statistic title="隧道连接状态" :value="tunnelStatusText(systemStatus.tunnel_status)" />
+          <a-statistic title="隧道链路状态" :value="tunnelStatusText(systemStatus.tunnel_status)" />
         </a-col>
         <a-col :xs="24" :sm="12" :lg="6">
-          <a-statistic title="连接原因" :value="systemStatus.connection_reason" />
+          <a-statistic title="注册状态" :value="registrationStatusText(systemStatus.registration_status)" />
+        </a-col>
+        <a-col :xs="24" :sm="12" :lg="6">
+          <a-statistic title="心跳状态" :value="heartbeatStatusText(systemStatus.heartbeat_status)" />
         </a-col>
         <a-col :xs="24" :sm="12" :lg="6">
           <a-statistic title="网络模式" :value="systemStatus.network_mode" />
         </a-col>
       </a-row>
+      <a-row :gutter="[12, 12]" style="margin-top: 8px">
+        <a-col :xs="24" :sm="12" :lg="6">
+          <a-statistic title="最近注册时间" :value="formatDateTime(systemStatus.last_register_time)" />
+        </a-col>
+        <a-col :xs="24" :sm="12" :lg="6">
+          <a-statistic title="最近心跳时间" :value="formatDateTime(systemStatus.last_heartbeat_time)" />
+        </a-col>
+        <a-col :xs="24" :sm="12" :lg="6">
+          <a-statistic title="映射规则总数 / 异常数" :value="mappingCountText" />
+        </a-col>
+      </a-row>
+      <a-alert
+        type="error"
+        show-icon
+        style="margin-top: 12px"
+        message="最近异常原因"
+        :description="latestAbnormalReason"
+      />
       <a-alert
         v-if="systemStatus.peer_binding_error"
         type="error"
@@ -218,6 +239,13 @@ const systemStatus = ref<SystemStatusPayload>({
   tunnel_status: 'disconnected',
   connection_reason: '-',
   network_mode: '-',
+  registration_status: 'unregistered',
+  heartbeat_status: 'unknown',
+  last_register_time: '',
+  last_heartbeat_time: '',
+  mapping_total: 0,
+  mapping_abnormal_total: 0,
+  latest_mapping_error_reason: '',
   bound_peer: undefined,
   peer_binding_error: '',
   capability: {
@@ -230,11 +258,36 @@ const systemStatus = ref<SystemStatusPayload>({
 })
 
 const yesNo = (v: boolean) => (v ? '是' : '否')
+const formatDateTime = (value?: string) => {
+  if (!value) return '-'
+  return value.replace('T', ' ').replace('Z', '')
+}
 const tunnelStatusText = (status: string) => {
   if (status === 'connected') return '已连接'
   if (status === 'disconnected') return '未连接'
   return '异常'
 }
+const registrationStatusText = (status?: string) => {
+  if (status === 'registered') return '正常'
+  return '异常'
+}
+const heartbeatStatusText = (status?: string) => {
+  if (status === 'healthy') return '正常'
+  return '异常'
+}
+
+const mappingCountText = computed(() => {
+  const total = systemStatus.value.mapping_total ?? 0
+  const abnormal = systemStatus.value.mapping_abnormal_total ?? 0
+  return `${total} / ${abnormal}`
+})
+
+const latestAbnormalReason = computed(() => {
+  if (systemStatus.value.latest_mapping_error_reason) return systemStatus.value.latest_mapping_error_reason
+  if (systemStatus.value.peer_binding_error) return systemStatus.value.peer_binding_error
+  if (systemStatus.value.connection_reason) return systemStatus.value.connection_reason
+  return '当前未发现异常原因'
+})
 
 const loadSystemStatus = async () => {
   systemStatus.value = await gatewayApi.fetchSystemStatus()

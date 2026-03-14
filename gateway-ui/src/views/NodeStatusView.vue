@@ -13,6 +13,18 @@
     </a-card>
 
     <a-row :gutter="[16, 16]">
+      <a-col :span="24">
+        <a-card title="注册与链路状态总览">
+          <a-row :gutter="[16, 16]">
+            <a-col :xs="24" :sm="12" :lg="4"><a-statistic title="注册状态" :value="registrationLabel" /></a-col>
+            <a-col :xs="24" :sm="12" :lg="4"><a-statistic title="心跳状态" :value="heartbeatLabel" /></a-col>
+            <a-col :xs="24" :sm="12" :lg="6"><a-statistic title="最近注册时间" :value="formatTime(systemStatus.last_register_time)" /></a-col>
+            <a-col :xs="24" :sm="12" :lg="6"><a-statistic title="最近心跳时间" :value="formatTime(systemStatus.last_heartbeat_time)" /></a-col>
+            <a-col :xs="24" :sm="12" :lg="4"><a-statistic title="映射规则总数 / 异常数" :value="mappingStats" /></a-col>
+          </a-row>
+          <a-alert type="error" show-icon style="margin-top: 12px" message="异常原因" :description="latestReason" />
+        </a-card>
+      </a-col>
       <a-col v-for="node in nodes" :key="node.id" :xs="24" :xl="12">
         <a-card :title="node.id" :class="{ 'node-selected': node.id === selectedNodeId }">
           <a-descriptions :column="2" size="small">
@@ -185,10 +197,10 @@
 
 <script setup lang="ts">
 import { message } from 'ant-design-vue'
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { gatewayApi } from '../api/gateway'
 import StatusPill from '../components/StatusPill.vue'
-import type { DiagnosticExportJob, NodeOpsSnapshot, OpsLinkTestReport } from '../types/gateway'
+import type { DiagnosticExportJob, NodeOpsSnapshot, OpsLinkTestReport, SystemStatusPayload } from '../types/gateway'
 
 const nodes = ref<NodeOpsSnapshot[]>([
   {
@@ -261,8 +273,31 @@ const runningLinkTest = ref(false)
 const latestLinkTest = ref<OpsLinkTestReport | null>(null)
 const polling = ref(false)
 const pollTimer = ref<number | null>(null)
+const systemStatus = ref<SystemStatusPayload>({
+  tunnel_status: 'disconnected',
+  connection_reason: '-',
+  network_mode: '-',
+  registration_status: 'unregistered',
+  heartbeat_status: 'unknown',
+  last_register_time: '',
+  last_heartbeat_time: '',
+  mapping_total: 0,
+  mapping_abnormal_total: 0,
+  latest_mapping_error_reason: '',
+  capability: {
+    supports_small_request_body: false,
+    supports_large_response_body: false,
+    supports_streaming_response: false,
+    supports_large_file_upload: false,
+    supports_bidirectional_http_tunnel: false
+  }
+})
 
 const selectedNode = computed(() => nodes.value.find((item) => item.id === selectedNodeId.value) ?? null)
+const registrationLabel = computed(() => (systemStatus.value.registration_status === 'registered' ? '正常' : '异常'))
+const heartbeatLabel = computed(() => (systemStatus.value.heartbeat_status === 'healthy' ? '正常' : '异常'))
+const mappingStats = computed(() => `${systemStatus.value.mapping_total ?? 0} / ${systemStatus.value.mapping_abnormal_total ?? 0}`)
+const latestReason = computed(() => systemStatus.value.latest_mapping_error_reason || systemStatus.value.connection_reason || '当前未发现异常原因')
 const linkTestTagColor = computed(() => {
   if (!latestLinkTest.value) return 'default'
   return latestLinkTest.value.passed ? 'success' : 'error'
@@ -310,6 +345,32 @@ const refresh = () => {
     backlog: Math.max(0, node.backlog + (Math.random() > 0.5 ? 8 : -6)),
     concurrency: Math.max(0, node.concurrency + (Math.random() > 0.5 ? 5 : -4))
   }))
+}
+
+const formatTime = (value?: string) => {
+  if (!value) return '-'
+  return value.replace('T', ' ').replace('Z', '')
+}
+
+const loadOpsSummary = async () => {
+  try {
+    const [status, mappings] = await Promise.all([gatewayApi.fetchSystemStatus(), gatewayApi.fetchMappings()])
+    const abnormalMappings = mappings.items.filter((item) => item.link_status !== 'connected').length
+    systemStatus.value = {
+      ...status,
+      mapping_total: status.mapping_total ?? mappings.items.length,
+      mapping_abnormal_total: status.mapping_abnormal_total ?? abnormalMappings,
+      latest_mapping_error_reason:
+        status.latest_mapping_error_reason ??
+        mappings.items.find((item) => item.link_status !== 'connected')?.status_reason ??
+        status.connection_reason
+    }
+  } catch {
+    systemStatus.value = {
+      ...systemStatus.value,
+      latest_mapping_error_reason: '状态拉取失败，请检查后端服务连通性。'
+    }
+  }
 }
 
 const runLinkTest = async () => {
@@ -407,6 +468,10 @@ const downloadResult = () => {
 
 onBeforeUnmount(() => {
   stopPolling()
+})
+
+onMounted(() => {
+  void loadOpsSummary()
 })
 
 void loadLatestLinkTest()

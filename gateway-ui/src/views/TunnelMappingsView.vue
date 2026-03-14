@@ -86,6 +86,10 @@
           <template v-else-if="column.key === 'status'">
             <a-tag :color="record.enabled ? 'green' : 'default'">{{ record.enabled ? '已启用' : '未启用' }}</a-tag>
           </template>
+          <template v-else-if="column.key === 'link_status'">
+            <a-tag :color="mappingLinkColor(record.link_status)">{{ mappingLinkText(record.link_status) }}</a-tag>
+          </template>
+          <template v-else-if="column.key === 'status_reason'">{{ mappingReasonText(record.status_reason) }}</template>
           <template v-else-if="column.key === 'updated_at'">{{ record.updated_at || '-' }}</template>
           <template v-else-if="column.key === 'action'">
             <a-space>
@@ -249,9 +253,28 @@ const columns = [
   { title: '对端目标', key: 'remote' },
   { title: '协议', key: 'protocol' },
   { title: '状态', key: 'status' },
+  { title: '映射链路状态', key: 'link_status' },
+  { title: '状态原因', key: 'status_reason' },
   { title: '更新时间', key: 'updated_at' },
   { title: '操作', key: 'action' }
 ]
+
+const mappingLinkText = (status?: TunnelMapping['link_status']) => {
+  if (status === 'connected') return '正常'
+  if (status === 'disconnected') return '未连接'
+  return '异常'
+}
+
+const mappingLinkColor = (status?: TunnelMapping['link_status']) => {
+  if (status === 'connected') return 'success'
+  if (status === 'disconnected') return 'default'
+  return 'error'
+}
+
+const mappingReasonText = (reason?: string) => {
+  if (reason && reason.trim()) return reason
+  return '未上报原因，请优先检查注册状态、心跳状态和对端可达性。'
+}
 
 const filteredMappings = computed(() => {
   const k = keyword.value.trim().toLowerCase()
@@ -260,6 +283,34 @@ const filteredMappings = computed(() => {
 })
 
 const drawerTitle = computed(() => (editingMode.value === 'create' ? '新建映射规则' : '编辑映射规则'))
+
+const inferMappingRuntimeStatus = (
+  item: TunnelMapping,
+  systemStatus?: { tunnel_status: string; registration_status?: string; heartbeat_status?: string; connection_reason?: string; peer_binding_error?: string }
+): Pick<TunnelMapping, 'link_status' | 'status_reason'> => {
+  if (!item.enabled) {
+    return { link_status: 'disconnected', status_reason: '规则未启用。' }
+  }
+  if (item.link_status && item.status_reason) {
+    return { link_status: item.link_status, status_reason: item.status_reason }
+  }
+  if (!systemStatus) {
+    return { link_status: 'degraded', status_reason: '未获取到系统状态。' }
+  }
+  if (systemStatus.peer_binding_error) {
+    return { link_status: 'degraded', status_reason: '未建立响应通道：' + systemStatus.peer_binding_error }
+  }
+  if (systemStatus.registration_status !== 'registered') {
+    return { link_status: 'degraded', status_reason: '未注册，GB/T 28181 注册尚未完成。' }
+  }
+  if (systemStatus.heartbeat_status !== 'healthy') {
+    return { link_status: 'degraded', status_reason: '心跳超时，等待下一次心跳恢复。' }
+  }
+  if (systemStatus.tunnel_status !== 'connected') {
+    return { link_status: 'degraded', status_reason: systemStatus.connection_reason || '对端不可达。' }
+  }
+  return { link_status: 'connected', status_reason: '链路正常。' }
+}
 
 const openCreate = () => {
   editingMode.value = 'create'
@@ -274,8 +325,11 @@ const openEditor = (item: TunnelMapping) => {
 }
 
 const loadMappings = async () => {
-  const result = await gatewayApi.fetchMappings()
-  mappings.value = result.items
+  const [result, systemStatus] = await Promise.all([gatewayApi.fetchMappings(), gatewayApi.fetchSystemStatus()])
+  mappings.value = result.items.map((item) => ({
+    ...item,
+    ...inferMappingRuntimeStatus(item, systemStatus)
+  }))
   warnings.value = result.warnings ?? []
   boundPeer.value = result.bound_peer
   mappingBindingError.value = result.binding_error ?? ''
