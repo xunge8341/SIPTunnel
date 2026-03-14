@@ -113,6 +113,7 @@ go run ./cmd/gateway
 ```
 
 > 前端 TypeScript 修复需保持类型安全，禁止使用 `any`/`as any`/`// @ts-ignore` 压制类型错误。
+> 若 `gateway-ui/package.json` 被误删，`ui-build.ps1/.sh` 会优先尝试从当前 Git 仓库自动恢复；不在 Git 仓库或文件未纳管时会给出明确恢复指引。
 
 ```powershell
 .\scripts\ui-build.ps1
@@ -296,6 +297,7 @@ startup summary:
 > 失败即中止：`embed-ui.ps1/.sh` 会先清理旧 `dist`，并在 `npm run build` 成功后写入本次构建 nonce。
 > 嵌入阶段会校验 nonce 一致性，并生成 `gateway-server/internal/server/embedded-ui/.siptunnel-ui-embed.json` 元数据（包含 `embedded_at_utc`、内容哈希、UI 源文件最新时间）。
 > 如果构建失败或标记不一致，脚本立即退出，不会继续复制旧资源。
+> 若检测到 `gateway-ui/package.json` 缺失，构建阶段会先尝试自动从 Git 恢复再继续。
 
 2) 在 `gateway-server/configs/config.yaml` 中设置：
 
