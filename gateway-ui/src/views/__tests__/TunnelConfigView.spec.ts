@@ -72,8 +72,9 @@ describe('TunnelConfigView', () => {
       channel_protocol: 'GB/T 28181',
       connection_initiator: 'LOCAL',
       heartbeat_interval_sec: 60,
-      request_channel: 'SIP',
-      response_channel: 'RTP'
+      register_retry_count: 3
     })
+    expect(calls[calls.length - 1][0]).not.toHaveProperty('local_device_id')
+    expect(calls[calls.length - 1][0]).not.toHaveProperty('peer_device_id')
   })
 })

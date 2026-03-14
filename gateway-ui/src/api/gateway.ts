@@ -67,6 +67,7 @@ import type {
   SystemStatusPayload,
   NodeConfigPayload,
   TunnelConfigPayload,
+  TunnelConfigUpdatePayload,
   ConfigTransferPayload,
   ConfigTransferImportResult,
   MappingTestPayload
@@ -321,7 +322,7 @@ export const gatewayApi = {
     return unwrap(request<TunnelConfigPayload>('/tunnel/config', { method: 'GET' }))
   },
 
-  async saveTunnelConfig(payload: TunnelConfigPayload) {
+  async saveTunnelConfig(payload: TunnelConfigUpdatePayload) {
     if (useMockMode()) {
       return saveTunnelConfigMock(payload)
     }

@@ -374,6 +374,19 @@ export interface TunnelConfigPayload {
   capability_items: TunnelConfigCapabilityItem[]
 }
 
+export interface TunnelConfigUpdatePayload {
+  channel_protocol: string
+  connection_initiator: 'LOCAL' | 'PEER'
+  heartbeat_interval_sec: number
+  register_retry_count: number
+  register_retry_interval_sec: number
+  registration_status: string
+  last_register_time: string
+  last_heartbeat_time: string
+  heartbeat_status: string
+  network_mode: string
+}
+
 export interface NodeConfigEndpoint {
   node_ip: string
   signaling_port: number

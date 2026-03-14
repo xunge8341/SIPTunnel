@@ -674,7 +674,7 @@ func TestNodeAndPeerEndpoints(t *testing.T) {
 	listPeers := httptest.NewRequest(http.MethodGet, "/api/peers", nil)
 	listPeersRR := httptest.NewRecorder()
 	h.ServeHTTP(listPeersRR, listPeers)
-	if listPeersRR.Code != http.StatusOK || !strings.Contains(listPeersRR.Body.String(), "peer-b-01") {
+	if listPeersRR.Code != http.StatusOK || !strings.Contains(listPeersRR.Body.String(), "peer-b") {
 		t.Fatalf("GET /api/peers failed code=%d body=%s", listPeersRR.Code, listPeersRR.Body.String())
 	}
 
@@ -885,7 +885,7 @@ func TestTunnelConfigEndpointGetAndPost(t *testing.T) {
 		t.Fatalf("GET /api/tunnel/config failed code=%d body=%s", getRR.Code, getRR.Body.String())
 	}
 
-	postBody := `{"channel_protocol":"GB/T 28181","connection_initiator":"LOCAL","local_device_id":"gateway-a-001","peer_device_id":"gateway-b-001","heartbeat_interval_sec":30,"register_retry_count":5,"register_retry_interval_sec":10,"registration_status":"registered","last_register_time":"2026-01-01T10:00:00Z","last_heartbeat_time":"2026-01-01T10:00:30Z","heartbeat_status":"healthy","network_mode":"A_B_BIDIR_SIP__BIDIR_RTP"}`
+	postBody := `{"channel_protocol":"GB/T 28181","connection_initiator":"LOCAL","heartbeat_interval_sec":30,"register_retry_count":5,"register_retry_interval_sec":10,"registration_status":"registered","last_register_time":"2026-01-01T10:00:00Z","last_heartbeat_time":"2026-01-01T10:00:30Z","heartbeat_status":"healthy","network_mode":"A_B_BIDIR_SIP__BIDIR_RTP"}`
 	postReq := httptest.NewRequest(http.MethodPost, "/api/tunnel/config", bytes.NewBufferString(postBody))
 	postRR := httptest.NewRecorder()
 	h.ServeHTTP(postRR, postReq)
@@ -898,6 +898,12 @@ func TestTunnelConfigEndpointGetAndPost(t *testing.T) {
 	h.ServeHTTP(getAfterRR, getAfterReq)
 	if getAfterRR.Code != http.StatusOK || !strings.Contains(getAfterRR.Body.String(), "A_B_BIDIR_SIP__BIDIR_RTP") {
 		t.Fatalf("GET after POST /api/tunnel/config failed code=%d body=%s", getAfterRR.Code, getAfterRR.Body.String())
+	}
+	if !strings.Contains(getAfterRR.Body.String(), "\"local_device_id\":\"gateway-a-01\"") {
+		t.Fatalf("expected local_device_id derived from node config, body=%s", getAfterRR.Body.String())
+	}
+	if !strings.Contains(getAfterRR.Body.String(), "\"peer_device_id\":\"peer-b\"") {
+		t.Fatalf("expected peer_device_id derived from node config, body=%s", getAfterRR.Body.String())
 	}
 }
 
