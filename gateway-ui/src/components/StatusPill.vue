@@ -31,9 +31,9 @@ const severityMap: Record<string, { label: string; color: string }> = {
 }
 
 const onlineMap: Record<string, { label: string; color: string }> = {
-  online: { label: '在线', color: 'success' },
-  offline: { label: '离线', color: 'default' },
-  degraded: { label: '降级', color: 'warning' }
+  online: { label: '已连接', color: 'success' },
+  offline: { label: '未连接', color: 'default' },
+  degraded: { label: '异常', color: 'warning' }
 }
 
 const currentMap = computed(() => {

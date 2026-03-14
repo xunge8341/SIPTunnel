@@ -2,7 +2,10 @@
   <a-app>
     <a-layout class="layout-shell">
       <a-layout-sider v-model:collapsed="appStore.collapsed" collapsible :trigger="null">
-        <div class="logo">SIPTunnel</div>
+        <div class="logo">
+          <span class="logo-icon" aria-hidden="true">◉</span>
+          <span class="logo-text">隧道网关</span>
+        </div>
         <a-menu
           theme="dark"
           mode="inline"
@@ -43,7 +46,7 @@ const router = useRouter()
 const appStore = useAppStore()
 
 const activeMenuKey = computed(() => route.name?.toString() ?? 'dashboard')
-const currentTitle = computed(() => (route.meta.title as string) ?? 'Dashboard')
+const currentTitle = computed(() => (route.meta.title as string) ?? '首页')
 
 const menuItems = computed(() =>
   appStore.navigation.map((item) => ({
@@ -70,13 +73,30 @@ const handleMenuClick = ({ key }: { key: string }) => {
   color: #fff;
   height: 48px;
   margin: 16px;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 600;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   background: rgba(255, 255, 255, 0.15);
   border-radius: 6px;
+}
+
+.logo-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #5ea0ff 0%, #8cc8ff 100%);
+  color: #0a2a5e;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+}
+
+.logo-text {
+  line-height: 1;
 }
 
 .layout-header {

@@ -1,6 +1,6 @@
 <template>
   <a-layout style="min-height: 100vh; padding: 24px">
-    <a-typography-title :level="3">SIPTunnel 运维后台</a-typography-title>
+    <a-typography-title :level="3">隧道网关运维后台</a-typography-title>
     <a-row :gutter="16">
       <a-col :span="8" v-for="item in cards" :key="item.title">
         <a-card>

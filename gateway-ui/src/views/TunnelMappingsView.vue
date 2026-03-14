@@ -1,14 +1,14 @@
 <template>
   <a-space direction="vertical" size="middle" style="width: 100%">
-    <a-card title="隧道映射查询">
+    <a-card title="映射规则查询">
       <a-form layout="inline">
-        <a-form-item label="名称 / mapping_id">
-          <a-input v-model:value="keyword" allow-clear placeholder="输入名称或 mapping_id" />
+        <a-form-item label="名称 / 规则ID">
+          <a-input v-model:value="keyword" allow-clear placeholder="输入名称或规则ID" />
         </a-form-item>
         <a-form-item>
           <a-space>
-            <a-button type="primary" @click="openCreate">新建映射</a-button>
-            <a-button :loading="testingMapping" @click="runMappingTest">测试映射规则</a-button>
+            <a-button type="primary" @click="openCreate">新建规则</a-button>
+            <a-button :loading="testingMapping" @click="runMappingTest">测试规则</a-button>
           </a-space>
         </a-form-item>
       </a-form>
@@ -19,12 +19,12 @@
         type="info"
         show-icon
         message="能力矩阵由后端实时返回（网络模式全局约束）"
-        description="用于指导隧道映射配置：超出当前网络模式能力的配置会提示告警并在保存时拦截。"
+        description="用于指导映射规则配置：超出当前网络模式能力的配置会提示告警并在保存时拦截。"
         style="margin-bottom: 12px"
       />
       <a-descriptions bordered :column="2" size="small">
-        <a-descriptions-item label="NetworkMode">{{ startupSummary?.network_mode ?? '-' }}</a-descriptions-item>
-        <a-descriptions-item label="Capability 摘要">{{ capabilitySummaryText }}</a-descriptions-item>
+        <a-descriptions-item label="网络模式">{{ startupSummary?.network_mode ?? '-' }}</a-descriptions-item>
+        <a-descriptions-item label="能力摘要">{{ capabilitySummaryText }}</a-descriptions-item>
         <a-descriptions-item label="request_meta_transport">{{ startupSummary?.transport_plan.request_meta_transport ?? '-' }}</a-descriptions-item>
         <a-descriptions-item label="request_body_transport">{{ startupSummary?.transport_plan.request_body_transport ?? '-' }}</a-descriptions-item>
         <a-descriptions-item label="response_meta_transport">{{ startupSummary?.transport_plan.response_meta_transport ?? '-' }}</a-descriptions-item>
@@ -47,12 +47,12 @@
       </a-table>
     </a-card>
 
-    <a-card title="隧道映射列表">
+    <a-card title="映射规则列表">
       <a-alert
         v-if="mappingTestResult"
         :type="mappingTestPassed ? 'success' : 'error'"
         show-icon
-        :message="`映射规则测试：SIP 请求 ${mappingTestResult.sip_request}，RTP 通道 ${mappingTestResult.rtp_channel}`"
+        :message="`规则测试：SIP 请求 ${mappingTestResult.sip_request}，RTP 通道 ${mappingTestResult.rtp_channel}`"
         style="margin-bottom: 12px"
       />
       <a-alert v-if="warnings.length" type="warning" show-icon :message="warnings.join('；')" style="margin-bottom: 12px" />
@@ -77,7 +77,7 @@
             req {{ record.max_request_body_bytes }} / resp {{ record.max_response_body_bytes }}
           </template>
           <template v-if="column.key === 'linkStatus'">
-            <a-tag :color="record.enabled ? 'green' : 'default'">{{ record.enabled ? 'active' : 'disabled' }}</a-tag>
+            <a-tag :color="record.enabled ? 'green' : 'default'">{{ record.enabled ? '已启用' : '未启用' }}</a-tag>
           </template>
           <template v-if="column.key === 'action'">
             <a-space>
@@ -95,7 +95,7 @@
       <a-alert
         type="warning"
         show-icon
-        message="当前隧道映射配置超出网络模式能力"
+        message="当前映射规则配置超出网络模式能力"
         :description="editorBlockingIssues.join('；')"
         style="margin-bottom: 12px"
         v-if="editorBlockingIssues.length"
@@ -109,7 +109,7 @@
         v-if="editorAdvisoryWarnings.length"
       />
       <a-form layout="vertical">
-        <a-form-item label="mapping_id">
+        <a-form-item label="规则ID">
           <a-input v-model:value="editing.mapping_id" :disabled="editingMode === 'edit'" />
         </a-form-item>
         <a-form-item label="名称"><a-input v-model:value="editing.name" /></a-form-item>
@@ -117,22 +117,22 @@
         <a-form-item label="对端节点"><a-input v-model:value="editing.peer_node_id" /></a-form-item>
         <a-row :gutter="12">
           <a-col :span="8"><a-form-item label="本端 IP"><a-input v-model:value="editing.local_bind_ip" /></a-form-item></a-col>
-          <a-col :span="8"><a-form-item label="本端 Port"><a-input-number v-model:value="editing.local_bind_port" :min="1" :max="65535" style="width: 100%" /></a-form-item></a-col>
-          <a-col :span="8"><a-form-item label="本端 basePath"><a-input v-model:value="editing.local_base_path" /></a-form-item></a-col>
+          <a-col :span="8"><a-form-item label="本端端口"><a-input-number v-model:value="editing.local_bind_port" :min="1" :max="65535" style="width: 100%" /></a-form-item></a-col>
+          <a-col :span="8"><a-form-item label="本端路径"><a-input v-model:value="editing.local_base_path" /></a-form-item></a-col>
         </a-row>
         <a-row :gutter="12">
           <a-col :span="8"><a-form-item label="对端 IP"><a-input v-model:value="editing.remote_target_ip" /></a-form-item></a-col>
-          <a-col :span="8"><a-form-item label="对端 Port"><a-input-number v-model:value="editing.remote_target_port" :min="1" :max="65535" style="width: 100%" /></a-form-item></a-col>
-          <a-col :span="8"><a-form-item label="对端 basePath"><a-input v-model:value="editing.remote_base_path" /></a-form-item></a-col>
+          <a-col :span="8"><a-form-item label="对端端口"><a-input-number v-model:value="editing.remote_target_port" :min="1" :max="65535" style="width: 100%" /></a-form-item></a-col>
+          <a-col :span="8"><a-form-item label="对端路径"><a-input v-model:value="editing.remote_base_path" /></a-form-item></a-col>
         </a-row>
         <a-form-item label="方法白名单（逗号分隔）"><a-input v-model:value="allowedMethodsText" /></a-form-item>
         <a-row :gutter="12">
-          <a-col :span="12"><a-form-item label="request timeout (ms)"><a-input-number v-model:value="editing.request_timeout_ms" :min="1" style="width: 100%" /></a-form-item></a-col>
-          <a-col :span="12"><a-form-item label="response timeout (ms)"><a-input-number v-model:value="editing.response_timeout_ms" :min="1" style="width: 100%" /></a-form-item></a-col>
+          <a-col :span="12"><a-form-item label="请求超时（毫秒）"><a-input-number v-model:value="editing.request_timeout_ms" :min="1" style="width: 100%" /></a-form-item></a-col>
+          <a-col :span="12"><a-form-item label="响应超时（毫秒）"><a-input-number v-model:value="editing.response_timeout_ms" :min="1" style="width: 100%" /></a-form-item></a-col>
         </a-row>
         <a-row :gutter="12">
-          <a-col :span="12"><a-form-item label="max_request_body_bytes"><a-input-number v-model:value="editing.max_request_body_bytes" :min="1" style="width: 100%" /></a-form-item></a-col>
-          <a-col :span="12"><a-form-item label="max_response_body_bytes"><a-input-number v-model:value="editing.max_response_body_bytes" :min="1" style="width: 100%" /></a-form-item></a-col>
+          <a-col :span="12"><a-form-item label="请求体大小上限（字节）"><a-input-number v-model:value="editing.max_request_body_bytes" :min="1" style="width: 100%" /></a-form-item></a-col>
+          <a-col :span="12"><a-form-item label="响应体大小上限（字节）"><a-input-number v-model:value="editing.max_response_body_bytes" :min="1" style="width: 100%" /></a-form-item></a-col>
         </a-row>
         <a-form-item>
           <template #label>
@@ -140,7 +140,7 @@
           </template>
           <a-switch v-model:checked="editing.require_streaming_response" />
         </a-form-item>
-        <a-form-item label="description"><a-textarea v-model:value="editing.description" :rows="3" /></a-form-item>
+        <a-form-item label="说明"><a-textarea v-model:value="editing.description" :rows="3" /></a-form-item>
       </a-form>
       <template #footer>
         <a-space style="width: 100%; justify-content: flex-end">
@@ -237,7 +237,7 @@ const columns = [
   { title: '方法白名单', key: 'methods' },
   { title: '请求/响应超时', key: 'timeouts' },
   { title: '请求/响应体大小限制', key: 'bodyLimits' },
-  { title: '链路状态', key: 'linkStatus' },
+  { title: '连接状态', key: 'linkStatus' },
   { title: '操作', key: 'action' }
 ]
 
@@ -247,7 +247,7 @@ const filteredMappings = computed(() => {
   return mappings.value.filter((item) => item.name.toLowerCase().includes(k) || item.mapping_id.toLowerCase().includes(k))
 })
 
-const drawerTitle = computed(() => (editingMode.value === 'create' ? '新建隧道映射' : '编辑隧道映射'))
+const drawerTitle = computed(() => (editingMode.value === 'create' ? '新建映射规则' : '编辑映射规则'))
 
 const openCreate = () => {
   editingMode.value = 'create'
@@ -277,7 +277,7 @@ const runMappingTest = async () => {
   try {
     mappingTestResult.value = await gatewayApi.testMapping()
     if (mappingTestPassed.value) {
-      message.success('映射规则测试通过，隧道可用')
+      message.success('映射规则测试通过，通道可用')
     } else {
       message.warning('映射规则测试未通过，请检查 SIP/RTP 链路')
     }
@@ -293,13 +293,13 @@ const save = async () => {
   }
   if (editingMode.value === 'create') {
     const result = await gatewayApi.createMapping(JSON.parse(JSON.stringify(editing)))
-    message.success('隧道映射已创建')
+    message.success('映射规则已创建')
     if (result.warnings?.length) {
       message.warning(`后端提示：${result.warnings.join('；')}`)
     }
   } else {
     const result = await gatewayApi.updateMapping(editing.mapping_id, JSON.parse(JSON.stringify(editing)))
-    message.success('隧道映射已更新')
+    message.success('映射规则已更新')
     if (result.warnings?.length) {
       message.warning(`后端提示：${result.warnings.join('；')}`)
     }
@@ -310,7 +310,7 @@ const save = async () => {
 
 const removeMapping = async (id: string) => {
   await gatewayApi.deleteMapping(id)
-  message.success('隧道映射已删除')
+  message.success('映射规则已删除')
   await loadMappings()
 }
 

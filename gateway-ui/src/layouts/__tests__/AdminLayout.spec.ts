@@ -6,7 +6,7 @@ import { useAppStore } from '../../stores/app'
 const pushMock = vi.fn()
 
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ name: 'dashboard', meta: { title: 'Dashboard' } }),
+  useRoute: () => ({ name: 'dashboard', meta: { title: '首页' } }),
   useRouter: () => ({ push: pushMock })
 }))
 
@@ -33,21 +33,18 @@ describe('AdminLayout', () => {
     expect(appStore.collapsed).toBe(true)
   })
 
-  it('navigates to target path on menu click event', async () => {
+  it('renders brand and keeps delivery navigation config', () => {
     const wrapper = mount(AdminLayout, {
       global: {
         stubs: {
           'router-view': true,
-          'global-message-host': true,
-          'a-menu': {
-            emits: ['click'],
-            template: '<button class="menu-trigger" @click="$emit(\'click\', { key: \'file-task\' })">menu</button>'
-          }
+          'global-message-host': true
         }
       }
     })
 
-    await wrapper.find('.menu-trigger').trigger('click')
-    expect(pushMock).toHaveBeenCalledWith('/file-tasks')
+    const appStore = useAppStore()
+    expect(wrapper.text()).toContain('隧道网关')
+    expect(appStore.navigation.map((item) => item.label)).toEqual(['首页', '节点配置', '通道配置', '映射规则', '日志', '运维工具'])
   })
 })

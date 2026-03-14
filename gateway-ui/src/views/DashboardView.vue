@@ -35,7 +35,7 @@
     <a-card title="系统状态" :bordered="false">
       <a-row :gutter="[12, 12]">
         <a-col :xs="24" :sm="12" :lg="6">
-          <a-statistic title="隧道连接状态" :value="systemStatus.tunnel_status" />
+          <a-statistic title="隧道连接状态" :value="tunnelStatusText(systemStatus.tunnel_status)" />
         </a-col>
         <a-col :xs="24" :sm="12" :lg="6">
           <a-statistic title="连接原因" :value="systemStatus.connection_reason" />
@@ -57,32 +57,32 @@
     <a-card :bordered="false">
       <template #title>
         <a-space>
-          <span>UI/API 部署模式</span>
+          <span>界面与服务部署模式</span>
           <a-tooltip>
             <template #title>
-              <div>embedded mode：UI 与 API 同进程部署，适用于内网一体化发布与低运维复杂度场景。</div>
-              <div>external mode：UI 独立部署并反向代理 API，适用于前后端独立扩缩容与跨域接入场景。</div>
+              <div>嵌入式模式：界面与服务同进程部署，适用于内网一体化发布与低运维复杂度场景。</div>
+              <div>独立模式：界面独立部署并反向代理服务，适用于前后端独立扩缩容与跨域接入场景。</div>
             </template>
-            <a-tag color="blue">模式说明</a-tag>
+            <a-tag color="blue">说明</a-tag>
           </a-tooltip>
         </a-space>
       </template>
       <a-descriptions :column="1" size="small" bordered>
-        <a-descriptions-item label="ui.mode">
+        <a-descriptions-item label="界面部署方式">
           <a-tag :color="deploymentMode.uiMode === 'embedded' ? 'success' : 'processing'">
-            {{ deploymentMode.uiMode }} mode
+            {{ deploymentMode.uiMode === 'embedded' ? '嵌入式' : '独立式' }}
           </a-tag>
         </a-descriptions-item>
-        <a-descriptions-item label="ui.url">{{ deploymentMode.uiUrl }}</a-descriptions-item>
-        <a-descriptions-item label="api.url">{{ deploymentMode.apiUrl }}</a-descriptions-item>
-        <a-descriptions-item label="config.path">{{ deploymentMode.configPath }}</a-descriptions-item>
-        <a-descriptions-item label="config.source">{{ deploymentMode.configSource }}</a-descriptions-item>
+        <a-descriptions-item label="界面地址">{{ deploymentMode.uiUrl }}</a-descriptions-item>
+        <a-descriptions-item label="服务地址">{{ deploymentMode.apiUrl }}</a-descriptions-item>
+        <a-descriptions-item label="配置文件路径">{{ deploymentMode.configPath }}</a-descriptions-item>
+        <a-descriptions-item label="配置来源">{{ deploymentMode.configSource }}</a-descriptions-item>
       </a-descriptions>
     </a-card>
 
 
 
-    <a-card title="全局传输策略（TunnelTransportPlan，只读）" :bordered="false">
+    <a-card title="全局传输策略（只读）" :bordered="false">
       <a-descriptions :column="1" size="small" bordered>
         <a-descriptions-item label="request_meta_transport">{{ startupSummary.transport_plan.request_meta_transport }}</a-descriptions-item>
         <a-descriptions-item label="request_body_transport">{{ startupSummary.transport_plan.request_body_transport }}</a-descriptions-item>
@@ -91,13 +91,13 @@
         <a-descriptions-item label="request_body_size_limit">{{ startupSummary.transport_plan.request_body_size_limit }}</a-descriptions-item>
         <a-descriptions-item label="response_body_size_limit">{{ startupSummary.transport_plan.response_body_size_limit }}</a-descriptions-item>
       </a-descriptions>
-      <a-typography-title :level="5" style="margin-top: 12px">notes</a-typography-title>
+      <a-typography-title :level="5" style="margin-top: 12px">说明</a-typography-title>
       <a-list size="small" bordered :data-source="startupSummary.transport_plan.notes">
         <template #renderItem="{ item }">
           <a-list-item>{{ item }}</a-list-item>
         </template>
       </a-list>
-      <a-typography-title :level="5" style="margin-top: 12px">warnings</a-typography-title>
+      <a-typography-title :level="5" style="margin-top: 12px">告警</a-typography-title>
       <a-list size="small" bordered :data-source="startupSummary.transport_plan.warnings">
         <template #renderItem="{ item }">
           <a-list-item>{{ item }}</a-list-item>
@@ -215,6 +215,11 @@ const systemStatus = ref<SystemStatusPayload>({
 })
 
 const yesNo = (v: boolean) => (v ? '是' : '否')
+const tunnelStatusText = (status: string) => {
+  if (status === 'connected') return '已连接'
+  if (status === 'disconnected') return '未连接'
+  return '异常'
+}
 
 const loadSystemStatus = async () => {
   systemStatus.value = await gatewayApi.fetchSystemStatus()
@@ -265,12 +270,12 @@ onUnmounted(() => {
 })
 
 const keyStatusCards = computed<Array<{ title: string; value: string | number; suffix?: string }>>(() => [
-  { title: '当前 SIP transport', value: dashboard.value.metrics.sipProtocol },
-  { title: '当前 RTP transport', value: dashboard.value.metrics.rtpProtocol },
+  { title: '当前 SIP 协议', value: dashboard.value.metrics.sipProtocol },
+  { title: '当前 RTP 协议', value: dashboard.value.metrics.rtpProtocol },
   { title: '当前连接数', value: dashboard.value.metrics.currentConnections },
   { title: '当前活跃传输数', value: dashboard.value.metrics.activeTransfers },
   { title: '最近 1h 失败任务', value: dashboard.value.metrics.failedTasks1h },
-  { title: '最近 1h transport error', value: dashboard.value.metrics.transportErrors1h },
+  { title: '最近 1 小时传输异常', value: dashboard.value.metrics.transportErrors1h },
   { title: '最近 1h 限流命中', value: dashboard.value.metrics.rateLimitHits1h },
   { title: 'RTP 端口范围', value: dashboard.value.metrics.rtpPortRange }
 ])

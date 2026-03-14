@@ -3,7 +3,7 @@
     <a-card>
       <a-space style="width: 100%; justify-content: space-between" align="start">
         <a-space direction="vertical" size="small">
-          <a-typography-title :level="5" style="margin: 0">M37 配置导入导出</a-typography-title>
+          <a-typography-title :level="5" style="margin: 0">配置导入导出</a-typography-title>
           <a-typography-text type="secondary">支持配置导出 JSON、导入 JSON 与模板下载。</a-typography-text>
         </a-space>
       </a-space>

@@ -75,6 +75,6 @@ describe('TunnelMappingsView', () => {
     expect(wrapper.text()).toContain('A_TO_B_SIP__B_TO_A_RTP')
     expect(wrapper.text()).toContain('warning-1')
     expect(wrapper.text()).toContain('小请求体')
-    expect(wrapper.text()).toContain('测试映射规则')
+    expect(wrapper.text()).toContain('测试规则')
   })
 })

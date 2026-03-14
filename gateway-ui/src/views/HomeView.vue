@@ -1,6 +1,6 @@
 <template>
   <a-layout style="min-height: 100vh; padding: 24px">
-    <a-card title="SIPTunnel Gateway UI" style="max-width: 720px; margin: 0 auto">
+    <a-card title="隧道网关管理界面" style="max-width: 720px; margin: 0 auto">
       <a-typography-paragraph>
         Monorepo 初始化完成，前端与后端均可独立启动。
       </a-typography-paragraph>
