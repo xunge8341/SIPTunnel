@@ -340,6 +340,17 @@ export interface TunnelConfigCapability {
 
 export interface TunnelConfigPayload {
   channel_protocol: string
+  connection_initiator: 'LOCAL' | 'PEER'
+  local_device_id: string
+  peer_device_id: string
+  heartbeat_interval_sec: number
+  register_retry_count: number
+  register_retry_interval_sec: number
+  registration_status: string
+  last_register_time: string
+  last_heartbeat_time: string
+  heartbeat_status: string
+  supported_capabilities: string[]
   request_channel: string
   response_channel: string
   network_mode: string
