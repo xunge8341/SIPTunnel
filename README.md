@@ -927,3 +927,13 @@ cd gateway-ui && npm run test -- --run
 ```bash
 ./scripts/loadtest/run.sh
 ```
+
+### 网络模式迁移（发送端 / 接收端模型）
+
+自本版本起，`network.mode` 统一采用发送端（SIP 上级域）/接收端（SIP 下级域）命名，且 transport plan 仅由全局模式唯一推导：
+
+- `SENDER_SIP__RECEIVER_RTP`：`SIP --> | <-- RTP`
+- `SENDER_SIP__RECEIVER_SIP_RTP`：`SIP --> | <-- SIP&RTP`
+- `SENDER_SIP_RTP__RECEIVER_SIP_RTP`：`SIP&RTP --> | <-- SIP&RTP`
+
+兼容说明：旧值 `A_TO_B_SIP__B_TO_A_RTP`、`A_B_BIDIR_SIP__B_TO_A_RTP`、`A_B_BIDIR_SIP__BIDIR_RTP` 在后端会自动归一化到上述新枚举，建议尽快完成配置文件与自动化脚本替换。

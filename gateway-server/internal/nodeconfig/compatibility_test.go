@@ -8,7 +8,7 @@ import (
 
 func TestEvaluateCompatibilitySuccess(t *testing.T) {
 	local := DefaultLocalNodeConfig()
-	currentMode := config.NetworkModeAToBSIPBToARTP
+	currentMode := config.NetworkModeSenderSIPReceiverRTP
 	local.NetworkMode = currentMode
 	peers := []PeerNodeConfig{{
 		PeerNodeID:           "peer-1",
@@ -29,7 +29,7 @@ func TestEvaluateCompatibilitySuccess(t *testing.T) {
 
 func TestEvaluateCompatibilityPeerMissingField(t *testing.T) {
 	local := DefaultLocalNodeConfig()
-	currentMode := config.NetworkModeAToBSIPBToARTP
+	currentMode := config.NetworkModeSenderSIPReceiverRTP
 	local.NetworkMode = currentMode
 	peers := []PeerNodeConfig{{
 		PeerNodeID:           "peer-bad",

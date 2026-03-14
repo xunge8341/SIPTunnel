@@ -11,10 +11,10 @@ import (
 func TestSummaryToLogText(t *testing.T) {
 	s := Summary{
 		NodeID:              "gateway-a-01",
-		NetworkMode:         config.NetworkModeAToBSIPBToARTP,
-		Capability:          config.DeriveCapability(config.NetworkModeAToBSIPBToARTP),
-		CapabilitySummary:   CapabilitySummary{Supported: []string{"supports_small_request_body", "supports_large_response_body", "supports_streaming_response"}, Unsupported: []string{"supports_large_request_body", "supports_bidirectional_http_tunnel", "supports_transparent_http_proxy"}, Items: config.DeriveCapability(config.NetworkModeAToBSIPBToARTP).Matrix()},
-		TransportPlan:       config.ResolveTransportPlan(config.NetworkModeAToBSIPBToARTP, config.DeriveCapability(config.NetworkModeAToBSIPBToARTP)),
+		NetworkMode:         config.NetworkModeSenderSIPReceiverRTP,
+		Capability:          config.DeriveCapability(config.NetworkModeSenderSIPReceiverRTP),
+		CapabilitySummary:   CapabilitySummary{Supported: []string{"supports_small_request_body", "supports_large_response_body", "supports_streaming_response"}, Unsupported: []string{"supports_large_request_body", "supports_bidirectional_http_tunnel", "supports_transparent_http_proxy"}, Items: config.DeriveCapability(config.NetworkModeSenderSIPReceiverRTP).Matrix()},
+		TransportPlan:       config.ResolveTransportPlan(config.NetworkModeSenderSIPReceiverRTP),
 		ConfigPath:          "./configs/config.yaml",
 		ConfigSource:        "cli",
 		RunMode:             "dev",
@@ -45,7 +45,7 @@ func TestSummaryToLogText(t *testing.T) {
 		"config_candidates: ./configs/config.yaml (cwd)",
 		"ui: mode=embedded url=http://127.0.0.1:18080/",
 		"api_url: http://127.0.0.1:18080/api",
-		"network_mode: A_TO_B_SIP__B_TO_A_RTP",
+		"network_mode: SENDER_SIP__RECEIVER_RTP",
 		"capability_supported: supports_small_request_body,supports_large_response_body,supports_streaming_response",
 		"capability_unsupported: supports_large_request_body,supports_bidirectional_http_tunnel,supports_transparent_http_proxy",
 		"transport_plan: req_meta=sip_control req_body=sip_body_only resp_meta=sip_control resp_body=rtp_stream req_limit=65535 resp_limit=-1",
@@ -65,10 +65,10 @@ func TestSummaryToLogText(t *testing.T) {
 func ExampleSummary_ToLogText() {
 	s := Summary{
 		NodeID:            "gateway-a-01",
-		NetworkMode:       config.NetworkModeABBiDirSIPBiDirRTP,
-		Capability:        config.DeriveCapability(config.NetworkModeABBiDirSIPBiDirRTP),
-		CapabilitySummary: CapabilitySummary{Supported: config.DeriveCapability(config.NetworkModeABBiDirSIPBiDirRTP).SupportedFeatures(), Unsupported: config.DeriveCapability(config.NetworkModeABBiDirSIPBiDirRTP).UnsupportedFeatures(), Items: config.DeriveCapability(config.NetworkModeABBiDirSIPBiDirRTP).Matrix()},
-		TransportPlan:     config.ResolveTransportPlan(config.NetworkModeABBiDirSIPBiDirRTP, config.DeriveCapability(config.NetworkModeABBiDirSIPBiDirRTP)),
+		NetworkMode:       config.NetworkModeSenderSIPRTPReceiverAll,
+		Capability:        config.DeriveCapability(config.NetworkModeSenderSIPRTPReceiverAll),
+		CapabilitySummary: CapabilitySummary{Supported: config.DeriveCapability(config.NetworkModeSenderSIPRTPReceiverAll).SupportedFeatures(), Unsupported: config.DeriveCapability(config.NetworkModeSenderSIPRTPReceiverAll).UnsupportedFeatures(), Items: config.DeriveCapability(config.NetworkModeSenderSIPRTPReceiverAll).Matrix()},
+		TransportPlan:     config.ResolveTransportPlan(config.NetworkModeSenderSIPRTPReceiverAll),
 		ConfigPath:        "./configs/config.yaml",
 		ConfigSource:      "env",
 		RunMode:           "prod",
@@ -96,7 +96,7 @@ func ExampleSummary_ToLogText() {
 	// - auto_generated_config: false
 	// - ui: mode=external url=external
 	// - api_url: http://127.0.0.1:18080/api
-	// - network_mode: A_B_BIDIR_SIP__BIDIR_RTP
+	// - network_mode: SENDER_SIP_RTP__RECEIVER_SIP_RTP
 	// - capability_supported: supports_small_request_body,supports_large_request_body,supports_large_response_body,supports_streaming_response,supports_bidirectional_http_tunnel,supports_transparent_http_proxy
 	// - capability_unsupported: -
 	// - transport_plan: req_meta=sip_control req_body=sip_or_rtp_auto resp_meta=sip_control resp_body=rtp_stream req_limit=-1 resp_limit=-1

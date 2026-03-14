@@ -23,12 +23,15 @@
         style="margin-bottom: 12px"
       />
       <a-descriptions bordered :column="2" size="small">
-        <a-descriptions-item label="网络模式">{{ startupSummary?.network_mode ?? '-' }}</a-descriptions-item>
+        <a-descriptions-item label="网络模式">{{ networkModeProfile?.shortLabel ?? startupSummary?.network_mode ?? '-' }}</a-descriptions-item>
+        <a-descriptions-item label="发送端 / 接收端">{{ networkModeProfile?.flowLabel ?? '-' }}</a-descriptions-item>
         <a-descriptions-item label="能力摘要">{{ capabilitySummaryText }}</a-descriptions-item>
         <a-descriptions-item label="request_meta_transport">{{ startupSummary?.transport_plan.request_meta_transport ?? '-' }}</a-descriptions-item>
         <a-descriptions-item label="request_body_transport">{{ startupSummary?.transport_plan.request_body_transport ?? '-' }}</a-descriptions-item>
         <a-descriptions-item label="response_meta_transport">{{ startupSummary?.transport_plan.response_meta_transport ?? '-' }}</a-descriptions-item>
         <a-descriptions-item label="response_body_transport">{{ startupSummary?.transport_plan.response_body_transport ?? '-' }}</a-descriptions-item>
+        <a-descriptions-item label="请求方向">{{ networkModeProfile?.requestDirection ?? '-' }}</a-descriptions-item>
+        <a-descriptions-item label="响应方向">{{ networkModeProfile?.responseDirection ?? '-' }}</a-descriptions-item>
       </a-descriptions>
 
       <a-table
@@ -184,6 +187,7 @@ import { message } from 'ant-design-vue'
 import { gatewayApi } from '../api/gateway'
 import type { CapabilityItem, MappingTestPayload, PeerBinding, StartupSummaryPayload, TunnelMapping } from '../types/gateway'
 import { buildCapabilityMatrix, evaluateMappingCapability } from '../utils/capability'
+import { getNetworkModeProfile } from '../utils/networkMode'
 
 const keyword = ref('')
 const drawerVisible = ref(false)
@@ -217,6 +221,8 @@ const emptyMapping = (): TunnelMapping => ({
 const editing = reactive<TunnelMapping>(emptyMapping())
 
 const endpointText = (ip: string, port: number, path: string) => `${ip}:${port}${path}`
+const networkModeProfile = computed(() => getNetworkModeProfile(startupSummary.value?.network_mode ?? ""))
+
 const capabilitySummaryText = computed(() => {
   if (!startupSummary.value) return '-'
   return `支持: ${startupSummary.value.capability_summary.supported.join(', ') || '-'}；不支持: ${startupSummary.value.capability_summary.unsupported.join(', ') || '-'}`

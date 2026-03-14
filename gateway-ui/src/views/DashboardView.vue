@@ -44,7 +44,7 @@
           <a-statistic title="心跳状态" :value="heartbeatStatusText(systemStatus.heartbeat_status)" />
         </a-col>
         <a-col :xs="24" :sm="12" :lg="6">
-          <a-statistic title="网络模式" :value="systemStatus.network_mode" />
+          <a-statistic title="网络模式" :value="networkModeProfile?.shortLabel ?? systemStatus.network_mode" />
         </a-col>
       </a-row>
       <a-row :gutter="[12, 12]" style="margin-top: 8px">
@@ -75,6 +75,7 @@
       <a-descriptions bordered size="small" :column="2" style="margin-top: 12px">
         <a-descriptions-item label="peer_node_id">{{ systemStatus.bound_peer?.peer_node_id ?? '-' }}</a-descriptions-item>
         <a-descriptions-item label="peer_name">{{ systemStatus.bound_peer?.peer_name ?? '-' }}</a-descriptions-item>
+        <a-descriptions-item label="发送端 / 接收端" :span="2">{{ networkModeProfile?.flowLabel ?? '-' }}</a-descriptions-item>
       </a-descriptions>
       <a-typography-title :level="5" style="margin-top: 12px">能力矩阵</a-typography-title>
       <a-descriptions :column="1" size="small" bordered>
@@ -177,6 +178,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { gatewayApi } from '../api/gateway'
 import type { DashboardPayload, DeploymentModePayload, StartupSummaryPayload, SystemStatusPayload } from '../types/gateway'
+import { getNetworkModeProfile } from '../utils/networkMode'
 
 const deploymentMode = ref<DeploymentModePayload>({
   uiMode: 'embedded',
@@ -257,6 +259,8 @@ const systemStatus = ref<SystemStatusPayload>({
   }
 })
 
+
+const networkModeProfile = computed(() => getNetworkModeProfile(systemStatus.value.network_mode))
 const yesNo = (v: boolean) => (v ? '是' : '否')
 const formatDateTime = (value?: string) => {
   if (!value) return '-'

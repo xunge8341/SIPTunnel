@@ -55,9 +55,9 @@ let tunnelConfigState: Omit<TunnelConfigPayload, 'local_device_id' | 'peer_devic
   supported_capabilities: ['支持小请求体（典型 SIP JSON 负载）', '支持大响应体回传', '支持流式响应'],
   request_channel: 'SIP',
   response_channel: 'RTP',
-  network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
-  capability: deriveTunnelCapability({ network_mode: 'A_TO_B_SIP__B_TO_A_RTP' }),
-  capability_items: buildTunnelCapabilityItems(deriveTunnelCapability({ network_mode: 'A_TO_B_SIP__B_TO_A_RTP' }))
+  network_mode: 'SENDER_SIP__RECEIVER_RTP',
+  capability: deriveTunnelCapability({ network_mode: 'SENDER_SIP__RECEIVER_RTP' }),
+  capability_items: buildTunnelCapabilityItems(deriveTunnelCapability({ network_mode: 'SENDER_SIP__RECEIVER_RTP' }))
 }
 
 
@@ -122,7 +122,7 @@ let localNodeState: LocalNodeConfig = {
   node_id: 'gateway-a-01',
   node_name: 'Gateway A',
   node_role: 'gateway',
-  network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+  network_mode: 'SENDER_SIP__RECEIVER_RTP',
   sip_listen_ip: '0.0.0.0',
   sip_listen_port: 5060,
   sip_transport: 'UDP',
@@ -141,7 +141,7 @@ let peerNodeState: PeerNodeConfig[] = [
     peer_media_ip: '10.20.0.20',
     peer_media_port_start: 32000,
     peer_media_port_end: 32100,
-    supported_network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+    supported_network_mode: 'SENDER_SIP__RECEIVER_RTP',
     enabled: true
   }
 ]
@@ -254,7 +254,7 @@ export async function fetchStartupSummaryMock(): Promise<StartupSummaryPayload> 
   await wait()
   return {
     node_id: 'gateway-a-01',
-    network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+    network_mode: 'SENDER_SIP__RECEIVER_RTP',
     capability: {
       supports_large_request_body: false,
       supports_large_response_body: true,
@@ -309,7 +309,7 @@ export async function fetchSystemStatusMock(): Promise<SystemStatusPayload> {
   return {
     tunnel_status: 'connected',
     connection_reason: 'SIP 控制面握手成功，RTP 回传链路可用',
-    network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+    network_mode: 'SENDER_SIP__RECEIVER_RTP',
     registration_status: 'registered',
     heartbeat_status: 'healthy',
     last_register_time: '2026-03-14T10:00:00Z',
@@ -846,13 +846,13 @@ export async function downloadConfigTemplateMock(): Promise<ConfigTransferPayloa
       supported_capabilities: ['支持小请求体（典型 SIP JSON 负载）', '支持大响应体回传', '支持流式响应'],
       request_channel: 'SIP',
       response_channel: 'RTP',
-      network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+      network_mode: 'SENDER_SIP__RECEIVER_RTP',
       capability: deriveTunnelCapability({
-        network_mode: 'A_TO_B_SIP__B_TO_A_RTP'
+        network_mode: 'SENDER_SIP__RECEIVER_RTP'
       }),
       capability_items: buildTunnelCapabilityItems(
         deriveTunnelCapability({
-          network_mode: 'A_TO_B_SIP__B_TO_A_RTP'
+          network_mode: 'SENDER_SIP__RECEIVER_RTP'
         })
       )
     },

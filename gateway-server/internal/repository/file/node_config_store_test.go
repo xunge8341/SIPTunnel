@@ -29,7 +29,7 @@ func TestNodeConfigStorePersistAndReload(t *testing.T) {
 		PeerMediaIP:          "10.10.1.20",
 		PeerMediaPortStart:   32000,
 		PeerMediaPortEnd:     32010,
-		SupportedNetworkMode: config.NetworkModeAToBSIPBToARTP,
+		SupportedNetworkMode: config.NetworkModeSenderSIPReceiverRTP,
 		Enabled:              true,
 	}
 	if _, err := store.CreatePeer(peer); err != nil {
@@ -61,7 +61,7 @@ func TestNodeConfigStorePeerCRUD(t *testing.T) {
 		PeerMediaIP:          "10.0.0.3",
 		PeerMediaPortStart:   30000,
 		PeerMediaPortEnd:     30020,
-		SupportedNetworkMode: config.NetworkModeAToBSIPBToARTP,
+		SupportedNetworkMode: config.NetworkModeSenderSIPReceiverRTP,
 		Enabled:              true,
 	}
 	if _, err := store.CreatePeer(peer); err != nil {
@@ -95,7 +95,7 @@ func TestNodeConfigStoreRejectIncompatiblePeerAndLocalMode(t *testing.T) {
 		PeerMediaIP:          "10.0.0.3",
 		PeerMediaPortStart:   30000,
 		PeerMediaPortEnd:     30020,
-		SupportedNetworkMode: config.NetworkModeABBiDirSIPBiDirRTP,
+		SupportedNetworkMode: config.NetworkModeSenderSIPRTPReceiverAll,
 		Enabled:              true,
 	}
 	if _, err := store.CreatePeer(peer); err == nil {
@@ -104,13 +104,13 @@ func TestNodeConfigStoreRejectIncompatiblePeerAndLocalMode(t *testing.T) {
 
 	okPeer := peer
 	okPeer.PeerNodeID = "peer-ok"
-	okPeer.SupportedNetworkMode = config.NetworkModeAToBSIPBToARTP
+	okPeer.SupportedNetworkMode = config.NetworkModeSenderSIPReceiverRTP
 	if _, err := store.CreatePeer(okPeer); err != nil {
 		t.Fatalf("create compatible peer failed: %v", err)
 	}
 
 	local := nodeconfig.DefaultLocalNodeConfig()
-	local.NetworkMode = config.NetworkModeABBiDirSIPBiDirRTP
+	local.NetworkMode = config.NetworkModeSenderSIPRTPReceiverAll
 	if _, err := store.UpdateLocalNode(local); err == nil {
 		t.Fatalf("expected local mode incompatibility error")
 	}

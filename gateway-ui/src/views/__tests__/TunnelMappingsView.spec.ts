@@ -43,7 +43,7 @@ const stubs = {
 }
 
 const startupSummaryPayload = {
-  node_id: 'node', network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+  node_id: 'node', network_mode: 'SENDER_SIP__RECEIVER_RTP',
   capability: { supports_large_request_body: false, supports_large_response_body: true, supports_streaming_response: false, supports_bidirectional_http_tunnel: false, supports_transparent_proxy: false },
   capability_summary: { supported: ['small_request'], unsupported: ['large_request'], items: [] },
   config_path: '', config_source: '', ui_mode: 'embedded', ui_url: '', api_url: '',
@@ -72,7 +72,7 @@ describe('TunnelMappingsView', () => {
     vi.mocked(gatewayApi.fetchSystemStatus).mockResolvedValue({
       tunnel_status: 'degraded',
       connection_reason: '对端不可达',
-      network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+      network_mode: 'SENDER_SIP__RECEIVER_RTP',
       registration_status: 'registered',
       heartbeat_status: 'timeout',
       capability: {
@@ -139,7 +139,7 @@ describe('TunnelMappingsView', () => {
     vi.mocked(gatewayApi.fetchSystemStatus).mockResolvedValue({
       tunnel_status: 'connected',
       connection_reason: '正常',
-      network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+      network_mode: 'SENDER_SIP__RECEIVER_RTP',
       registration_status: 'registered',
       heartbeat_status: 'healthy',
       capability: {
