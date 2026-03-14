@@ -53,6 +53,7 @@ type handlerDeps struct {
 
 	lastLinkTest LinkTestReport
 	tunnelConfig TunnelConfigPayload
+	sessionMgr   *tunnelSessionManager
 }
 
 type nodeConfigStore interface {
@@ -181,6 +182,8 @@ type SystemStatusResponse struct {
 	HeartbeatStatus          string                 `json:"heartbeat_status,omitempty"`
 	LastRegisterTime         string                 `json:"last_register_time,omitempty"`
 	LastHeartbeatTime        string                 `json:"last_heartbeat_time,omitempty"`
+	LastFailureReason        string                 `json:"last_failure_reason,omitempty"`
+	NextRetryTime            string                 `json:"next_retry_time,omitempty"`
 	MappingTotal             int                    `json:"mapping_total"`
 	MappingAbnormalTotal     int                    `json:"mapping_abnormal_total"`
 	LatestMappingErrorReason string                 `json:"latest_mapping_error_reason,omitempty"`
@@ -222,6 +225,9 @@ type TunnelConfigPayload struct {
 	LastRegisterTime         string                  `json:"last_register_time"`
 	LastHeartbeatTime        string                  `json:"last_heartbeat_time"`
 	HeartbeatStatus          string                  `json:"heartbeat_status"`
+	LastFailureReason        string                  `json:"last_failure_reason"`
+	NextRetryTime            string                  `json:"next_retry_time"`
+	ConsecutiveHBTimeout     int                     `json:"consecutive_heartbeat_timeout"`
 	SupportedCapabilities    []string                `json:"supported_capabilities"`
 	RequestChannel           string                  `json:"request_channel"`
 	ResponseChannel          string                  `json:"response_channel"`
@@ -438,6 +444,8 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, io.Closer, error)
 		startupSummaryFn:  opts.StartupSummaryProvider,
 		tunnelConfig:      defaultTunnelConfigPayload(config.DefaultNetworkMode()),
 	}
+	deps.sessionMgr = newTunnelSessionManager(tcpTunnelRegistrar{nodeStore: deps.nodeStore}, deps.tunnelConfig)
+	deps.sessionMgr.Start()
 	if deps.networkStatusFunc == nil {
 		defaults := config.DefaultNetworkConfig()
 		deps.networkStatusFunc = func(context.Context) NodeNetworkStatus {
@@ -491,7 +499,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, io.Closer, error)
 		}
 	}
 	deps.runtime.SyncMappings(deps.mappings.List())
-	return newMux(deps), joinClosers(logCloser, auditCloser, deps.runtime), nil
+	return newMux(deps), joinClosers(logCloser, auditCloser, deps.runtime, deps.sessionMgr), nil
 }
 
 type multiCloser []io.Closer
@@ -549,6 +557,7 @@ func newMux(deps handlerDeps) http.Handler {
 	mux.HandleFunc("/api/node", deps.handleNode)
 	mux.HandleFunc("/api/node/config", deps.handleNodeConfig)
 	mux.HandleFunc("/api/tunnel/config", deps.handleTunnelConfig)
+	mux.HandleFunc("/api/tunnel/session/actions", deps.handleTunnelSessionActions)
 	mux.HandleFunc("/api/peers", deps.handlePeers)
 	mux.HandleFunc("/api/peers/", deps.handlePeers)
 	mux.HandleFunc("/api/ops/link-test", deps.handleLinkTest)
@@ -1054,9 +1063,7 @@ func (d handlerDeps) handleMappingTest(w http.ResponseWriter, r *http.Request) {
 	status := d.networkStatusFunc(r.Context())
 	sipPassed := d.checkSIPControlPath(r.Context(), status).Passed
 	rtpPassed := d.checkRTPPortPool(status).Passed
-	d.mu.RLock()
-	registrationStatus := strings.ToLower(strings.TrimSpace(d.tunnelConfig.RegistrationStatus))
-	d.mu.RUnlock()
+	registrationStatus := strings.ToLower(strings.TrimSpace(d.sessionMgr.Snapshot().RegistrationStatus))
 	registrationNormal := registrationStatus == "registered"
 
 	result := MappingTestResponse{
@@ -1487,24 +1494,20 @@ func (d *handlerDeps) upsertTunnelConfig(req TunnelConfigUpdatePayload) (TunnelC
 		return TunnelConfigPayload{}, err
 	}
 	capability := config.DeriveCapability(mode)
-	registrationStatus := strings.ToLower(strings.TrimSpace(req.RegistrationStatus))
-	if registrationStatus == "" {
-		registrationStatus = "unregistered"
-	}
-	heartbeatStatus := strings.ToLower(strings.TrimSpace(req.HeartbeatStatus))
-	if heartbeatStatus == "" {
-		heartbeatStatus = "unknown"
-	}
+	session := d.sessionMgr.Snapshot()
 	updated := TunnelConfigPayload{
 		ChannelProtocol:          channelProtocol,
 		ConnectionInitiator:      connectionInitiator,
 		HeartbeatIntervalSec:     req.HeartbeatIntervalSec,
 		RegisterRetryCount:       req.RegisterRetryCount,
 		RegisterRetryIntervalSec: req.RegisterRetryIntervalSec,
-		RegistrationStatus:       registrationStatus,
-		LastRegisterTime:         req.LastRegisterTime,
-		LastHeartbeatTime:        req.LastHeartbeatTime,
-		HeartbeatStatus:          heartbeatStatus,
+		RegistrationStatus:       session.RegistrationStatus,
+		LastRegisterTime:         session.LastRegisterTime,
+		LastHeartbeatTime:        session.LastHeartbeatTime,
+		HeartbeatStatus:          session.HeartbeatStatus,
+		LastFailureReason:        session.LastFailureReason,
+		NextRetryTime:            session.NextRetryTime,
+		ConsecutiveHBTimeout:     session.ConsecutiveHeartbeatTimeout,
 		SupportedCapabilities:    capabilityDescriptions(capability),
 		RequestChannel:           "SIP",
 		ResponseChannel:          "RTP",
@@ -1545,6 +1548,14 @@ func (d *handlerDeps) handleTunnelConfig(w http.ResponseWriter, r *http.Request)
 		if resp.NetworkMode.Normalize() == "" {
 			resp = defaultTunnelConfigPayload(config.DefaultNetworkMode())
 		}
+		session := d.sessionMgr.Snapshot()
+		resp.RegistrationStatus = session.RegistrationStatus
+		resp.HeartbeatStatus = session.HeartbeatStatus
+		resp.LastRegisterTime = session.LastRegisterTime
+		resp.LastHeartbeatTime = session.LastHeartbeatTime
+		resp.LastFailureReason = session.LastFailureReason
+		resp.NextRetryTime = session.NextRetryTime
+		resp.ConsecutiveHBTimeout = session.ConsecutiveHeartbeatTimeout
 		resp.LocalDeviceID = d.derivedLocalDeviceID()
 		resp.PeerDeviceID = d.derivedPeerDeviceID()
 		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: resp})
@@ -1563,11 +1574,39 @@ func (d *handlerDeps) handleTunnelConfig(w http.ResponseWriter, r *http.Request)
 			writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", err.Error())
 			return
 		}
+		d.sessionMgr.ApplyConfig(updated)
 		d.recordOpsAudit(r, readOperator(r), "UPDATE_TUNNEL_CONFIG", updated)
 		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: updated})
 	default:
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
 	}
+}
+
+func (d *handlerDeps) handleTunnelSessionActions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
+		return
+	}
+	var req tunnelSessionActionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid json body")
+		return
+	}
+	action := strings.ToLower(strings.TrimSpace(req.Action))
+	switch action {
+	case "register_now":
+		d.sessionMgr.TriggerRegister()
+	case "reregister":
+		d.sessionMgr.TriggerReregister()
+	case "heartbeat_once":
+		d.sessionMgr.TriggerHeartbeat()
+	default:
+		writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", "action must be register_now, reregister or heartbeat_once")
+		return
+	}
+	state := d.sessionMgr.Snapshot()
+	d.recordOpsAudit(r, readOperator(r), "TUNNEL_SESSION_ACTION", map[string]any{"action": action, "state": state})
+	writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: tunnelSessionActionResponse{Action: action, State: state}})
 }
 
 func (d handlerDeps) handlePeers(w http.ResponseWriter, r *http.Request) {
@@ -1926,6 +1965,13 @@ func (d handlerDeps) handleStartupSummary(w http.ResponseWriter, r *http.Request
 	if strings.TrimSpace(summary.DataSources.Capability) == "" {
 		summary.DataSources.Capability = "derived_from_network_mode"
 	}
+	session := d.sessionMgr.Snapshot()
+	summary.RegistrationStatus = session.RegistrationStatus
+	summary.HeartbeatStatus = session.HeartbeatStatus
+	summary.LastRegisterTime = session.LastRegisterTime
+	summary.LastHeartbeatTime = session.LastHeartbeatTime
+	summary.LastFailureReason = session.LastFailureReason
+	summary.NextRetryTime = session.NextRetryTime
 	if d.nodeStore != nil {
 		compat := d.compatibilitySnapshot(r.Context())
 		summary.CurrentNetworkMode = compat.CurrentNetworkMode
@@ -1981,14 +2027,17 @@ func (d handlerDeps) handleSystemStatus(w http.ResponseWriter, r *http.Request) 
 		mappingAbnormalTotal = mappingTotal
 		latestMappingErrorReason = reason
 	}
+	session := d.sessionMgr.Snapshot()
 	resp := SystemStatusResponse{
 		TunnelStatus:             tunnelStatus,
 		ConnectionReason:         reason,
 		NetworkMode:              status.NetworkMode,
-		RegistrationStatus:       d.tunnelConfig.RegistrationStatus,
-		HeartbeatStatus:          d.tunnelConfig.HeartbeatStatus,
-		LastRegisterTime:         d.tunnelConfig.LastRegisterTime,
-		LastHeartbeatTime:        d.tunnelConfig.LastHeartbeatTime,
+		RegistrationStatus:       session.RegistrationStatus,
+		HeartbeatStatus:          session.HeartbeatStatus,
+		LastRegisterTime:         session.LastRegisterTime,
+		LastHeartbeatTime:        session.LastHeartbeatTime,
+		LastFailureReason:        session.LastFailureReason,
+		NextRetryTime:            session.NextRetryTime,
 		MappingTotal:             mappingTotal,
 		MappingAbnormalTotal:     mappingAbnormalTotal,
 		LatestMappingErrorReason: latestMappingErrorReason,

@@ -73,6 +73,9 @@ func buildTestHandler(t *testing.T) (http.Handler, repository.TaskRepository, ob
 			}
 		},
 	}
+	deps.sessionMgr = newTunnelSessionManager(&fakeRegistrar{registerCodes: []int{200}}, deps.tunnelConfig)
+	deps.sessionMgr.Start()
+	t.Cleanup(func() { _ = deps.sessionMgr.Close() })
 	return newMux(deps), repo, audit
 }
 
@@ -246,8 +249,8 @@ func TestMappingTestEndpoint(t *testing.T) {
 	if payload.Data.ResponseChannel != "正常" {
 		t.Fatalf("expected response_channel=正常, got %s", payload.Data.ResponseChannel)
 	}
-	if payload.Data.RegistrationStatus != "未注册" {
-		t.Fatalf("expected registration_status=未注册, got %s", payload.Data.RegistrationStatus)
+	if payload.Data.RegistrationStatus != "未注册" && payload.Data.RegistrationStatus != "正常" {
+		t.Fatalf("unexpected registration_status=%s", payload.Data.RegistrationStatus)
 	}
 	if payload.Data.FailureReason == "" || payload.Data.SuggestedAction == "" {
 		t.Fatalf("expected failure diagnostics, got %+v", payload.Data)
@@ -850,10 +853,10 @@ func TestSystemStatusEndpoint(t *testing.T) {
 	if !payload.Data.Capability.SupportsSmallRequestBody || !payload.Data.Capability.SupportsLargeResponseBody || payload.Data.Capability.SupportsLargeFileUpload {
 		t.Fatalf("unexpected capability matrix: %+v", payload.Data.Capability)
 	}
-	if payload.Data.RegistrationStatus != "" && payload.Data.RegistrationStatus != "unregistered" {
+	if payload.Data.RegistrationStatus != "" && payload.Data.RegistrationStatus != "unregistered" && payload.Data.RegistrationStatus != "registered" {
 		t.Fatalf("unexpected registration status: %s", payload.Data.RegistrationStatus)
 	}
-	if payload.Data.HeartbeatStatus != "" && payload.Data.HeartbeatStatus != "unknown" {
+	if payload.Data.HeartbeatStatus != "" && payload.Data.HeartbeatStatus != "unknown" && payload.Data.HeartbeatStatus != "healthy" {
 		t.Fatalf("unexpected heartbeat status: %s", payload.Data.HeartbeatStatus)
 	}
 	if payload.Data.MappingTotal <= 0 || payload.Data.MappingAbnormalTotal != payload.Data.MappingTotal {
@@ -885,7 +888,7 @@ func TestTunnelConfigEndpointGetAndPost(t *testing.T) {
 		t.Fatalf("GET /api/tunnel/config failed code=%d body=%s", getRR.Code, getRR.Body.String())
 	}
 
-	postBody := `{"channel_protocol":"GB/T 28181","connection_initiator":"LOCAL","heartbeat_interval_sec":30,"register_retry_count":5,"register_retry_interval_sec":10,"registration_status":"registered","last_register_time":"2026-01-01T10:00:00Z","last_heartbeat_time":"2026-01-01T10:00:30Z","heartbeat_status":"healthy","network_mode":"SENDER_SIP_RTP__RECEIVER_SIP_RTP"}`
+	postBody := `{"channel_protocol":"GB/T 28181","connection_initiator":"LOCAL","heartbeat_interval_sec":30,"register_retry_count":5,"register_retry_interval_sec":10,"network_mode":"SENDER_SIP_RTP__RECEIVER_SIP_RTP"}`
 	postReq := httptest.NewRequest(http.MethodPost, "/api/tunnel/config", bytes.NewBufferString(postBody))
 	postRR := httptest.NewRecorder()
 	h.ServeHTTP(postRR, postReq)
@@ -918,7 +921,7 @@ func TestMappingsRejectWhenNoEnabledPeerConfigured(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new mapping store failed: %v", err)
 	}
-	h := newMux(handlerDeps{
+	deps := handlerDeps{
 		logger:    observability.NewStructuredLogger(nil),
 		audit:     audit,
 		repo:      repo,
@@ -929,7 +932,9 @@ func TestMappingsRejectWhenNoEnabledPeerConfigured(t *testing.T) {
 			capability := config.DeriveCapability(config.NetworkModeSenderSIPReceiverRTP)
 			return NodeNetworkStatus{NetworkMode: config.NetworkModeSenderSIPReceiverRTP, Capability: capability}
 		},
-	})
+	}
+	deps.sessionMgr = newTunnelSessionManager(&fakeRegistrar{registerCodes: []int{200}}, deps.tunnelConfig)
+	h := newMux(deps)
 
 	body := `{"mapping_id":"map-np","enabled":true,"local_bind_ip":"127.0.0.1","local_bind_port":18090,"local_base_path":"/orders","remote_target_ip":"10.0.0.2","remote_target_port":8090,"remote_base_path":"/api/orders","allowed_methods":["GET"],"connect_timeout_ms":500,"request_timeout_ms":3000,"response_timeout_ms":3000,"max_request_body_bytes":1024,"max_response_body_bytes":1024,"description":"orders mapping"}`
 	rr := httptest.NewRecorder()
@@ -971,5 +976,15 @@ func TestMappingsListIncludesBoundPeerAndBindingErrors(t *testing.T) {
 	h.ServeHTTP(listConflictRR, httptest.NewRequest(http.MethodGet, "/api/mappings", nil))
 	if listConflictRR.Code != http.StatusOK || !strings.Contains(listConflictRR.Body.String(), "binding_error") {
 		t.Fatalf("expected binding_error in list, got %d body=%s", listConflictRR.Code, listConflictRR.Body.String())
+	}
+}
+
+func TestTunnelSessionActionEndpoint(t *testing.T) {
+	h, _, _ := buildTestHandler(t)
+	body := `{"action":"register_now"}`
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/tunnel/session/actions", bytes.NewBufferString(body)))
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "register_now") {
+		t.Fatalf("unexpected response code=%d body=%s", rr.Code, rr.Body.String())
 	}
 }

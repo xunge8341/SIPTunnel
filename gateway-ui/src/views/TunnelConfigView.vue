@@ -72,9 +72,27 @@
           </a-form-item>
         </a-col>
       </a-row>
+      <a-row :gutter="12">
+        <a-col :span="12">
+          <a-alert type="error" show-icon :message="`最近失败原因：${draft.last_failure_reason || '暂无'}`" />
+        </a-col>
+        <a-col :span="12">
+          <a-alert type="warning" show-icon :message="`下次重试时间：${formatDateTime(draft.next_retry_time)}`" />
+        </a-col>
+      </a-row>
+      <a-row :gutter="12" style="margin-top: 12px">
+        <a-col :span="24">
+          <a-space>
+            <a-button :loading="actionLoading" @click="runAction('register_now')">立即注册</a-button>
+            <a-button :loading="actionLoading" @click="runAction('reregister')">重新注册</a-button>
+            <a-button :loading="actionLoading" @click="runAction('heartbeat_once')">发送一次心跳</a-button>
+          </a-space>
+        </a-col>
+      </a-row>
       <a-alert
         type="info"
         show-icon
+        style="margin-top: 12px"
         message="SIP 请求通道与 RTP 响应通道已由系统自动推导，无需运维单独编辑。"
       />
     </a-card>
@@ -85,11 +103,12 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { gatewayApi } from '../api/gateway'
-import type { TunnelConfigPayload, TunnelConfigUpdatePayload } from '../types/gateway'
+import type { TunnelConfigPayload, TunnelConfigUpdatePayload, TunnelSessionActionPayload } from '../types/gateway'
 import { deriveTunnelCapability } from '../utils/tunnelConfig'
 import { getNetworkModeProfile } from '../utils/networkMode'
 
 const saving = ref(false)
+const actionLoading = ref(false)
 
 const networkModeLabels: Record<string, string> = {
   SENDER_SIP__RECEIVER_RTP: '模式1：SIP --> | <-- RTP',
@@ -109,6 +128,9 @@ const draft = reactive<TunnelConfigPayload>({
   last_register_time: '',
   last_heartbeat_time: '',
   heartbeat_status: 'unknown',
+  last_failure_reason: '',
+  next_retry_time: '',
+  consecutive_heartbeat_timeout: 0,
   supported_capabilities: [],
   request_channel: 'SIP',
   response_channel: 'RTP',
@@ -161,10 +183,6 @@ const save = async () => {
       heartbeat_interval_sec: draft.heartbeat_interval_sec,
       register_retry_count: draft.register_retry_count,
       register_retry_interval_sec: draft.register_retry_interval_sec,
-      registration_status: draft.registration_status,
-      last_register_time: draft.last_register_time,
-      last_heartbeat_time: draft.last_heartbeat_time,
-      heartbeat_status: draft.heartbeat_status,
       network_mode: draft.network_mode
     }
     await gatewayApi.saveTunnelConfig(payload)
@@ -172,6 +190,17 @@ const save = async () => {
     await load()
   } finally {
     saving.value = false
+  }
+}
+
+const runAction = async (action: TunnelSessionActionPayload['action']) => {
+  actionLoading.value = true
+  try {
+    await gatewayApi.triggerTunnelSessionAction({ action })
+    message.success('会话动作已触发')
+    await load()
+  } finally {
+    actionLoading.value = false
   }
 }
 

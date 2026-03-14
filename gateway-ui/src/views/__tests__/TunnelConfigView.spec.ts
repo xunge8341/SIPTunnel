@@ -5,7 +5,8 @@ import { gatewayApi } from '../../api/gateway'
 vi.mock('../../api/gateway', () => ({
   gatewayApi: {
     fetchTunnelConfig: vi.fn(),
-    saveTunnelConfig: vi.fn()
+    saveTunnelConfig: vi.fn(),
+    triggerTunnelSessionAction: vi.fn()
   }
 }))
 
@@ -42,6 +43,9 @@ describe('TunnelConfigView', () => {
       last_register_time: '2026-03-14T10:00:00Z',
       last_heartbeat_time: '2026-03-14T10:00:30Z',
       heartbeat_status: 'healthy',
+      last_failure_reason: '',
+      next_retry_time: '',
+      consecutive_heartbeat_timeout: 0,
       supported_capabilities: ['支持小请求体（典型 SIP JSON 负载）'],
       request_channel: 'SIP',
       response_channel: 'RTP',
@@ -76,5 +80,12 @@ describe('TunnelConfigView', () => {
     })
     expect(calls[calls.length - 1][0]).not.toHaveProperty('local_device_id')
     expect(calls[calls.length - 1][0]).not.toHaveProperty('peer_device_id')
+
+    vi.mocked(gatewayApi.triggerTunnelSessionAction).mockResolvedValue({} as any)
+    const registerNowButton = wrapper.findAll('button').find((btn) => btn.text() === '立即注册')
+    expect(registerNowButton).toBeTruthy()
+    await registerNowButton!.trigger('click')
+    await flushPromises()
+    expect(gatewayApi.triggerTunnelSessionAction).toHaveBeenCalledWith({ action: 'register_now' })
   })
 })
