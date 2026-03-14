@@ -75,6 +75,15 @@ SIPTunnel 同时支持两种产品模式，文档与 UI 必须明确区分：
 - `registration_status`：正常 / 未注册
 - `failure_reason`：异常原因
 - `suggested_action`：建议动作
+
+GB/T 28181 注册/心跳状态字段（`/api/tunnel/config`、`/api/system/status`）：
+
+- `registration_status`：`unregistered` / `registering` / `registered` / `failed`（由后端会话状态机维护，非手工编辑）。
+- `heartbeat_status`：`unknown` / `healthy` / `timeout`。
+- `last_failure_reason`：最近一次注册或心跳失败原因。
+- `next_retry_time`：下一次自动重试（重注册）时间。
+- `consecutive_heartbeat_timeout`：连续心跳超时次数。
+- 会话动作接口：`POST /api/tunnel/session/actions`，`action` 支持 `register_now`、`reregister`、`heartbeat_once`。
 ## 如何启动
 
 ### 一键本地启动（推荐）

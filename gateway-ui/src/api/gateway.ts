@@ -68,6 +68,8 @@ import type {
   NodeConfigPayload,
   TunnelConfigPayload,
   TunnelConfigUpdatePayload,
+  TunnelSessionActionPayload,
+  TunnelSessionActionResponse,
   ConfigTransferPayload,
   ConfigTransferImportResult,
   MappingTestPayload
@@ -329,6 +331,9 @@ export const gatewayApi = {
     return unwrap(request<TunnelConfigPayload>('/tunnel/config', { method: 'POST', body: payload }))
   },
 
+  async triggerTunnelSessionAction(payload: TunnelSessionActionPayload) {
+    return unwrap(request<TunnelSessionActionResponse>('/tunnel/session/actions', { method: 'POST', body: payload }))
+  },
 
 
   async fetchNodeConfig() {

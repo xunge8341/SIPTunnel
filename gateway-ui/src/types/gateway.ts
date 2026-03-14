@@ -366,6 +366,9 @@ export interface TunnelConfigPayload {
   last_register_time: string
   last_heartbeat_time: string
   heartbeat_status: string
+  last_failure_reason: string
+  next_retry_time: string
+  consecutive_heartbeat_timeout: number
   supported_capabilities: string[]
   request_channel: string
   response_channel: string
@@ -380,11 +383,26 @@ export interface TunnelConfigUpdatePayload {
   heartbeat_interval_sec: number
   register_retry_count: number
   register_retry_interval_sec: number
+  network_mode: string
+}
+
+export interface TunnelSessionActionPayload {
+  action: 'register_now' | 'reregister' | 'heartbeat_once'
+}
+
+export interface TunnelSessionRuntimeState {
   registration_status: string
+  heartbeat_status: string
   last_register_time: string
   last_heartbeat_time: string
-  heartbeat_status: string
-  network_mode: string
+  last_failure_reason: string
+  next_retry_time: string
+  consecutive_heartbeat_timeout: number
+}
+
+export interface TunnelSessionActionResponse {
+  action: string
+  state: TunnelSessionRuntimeState
 }
 
 export interface NodeConfigEndpoint {

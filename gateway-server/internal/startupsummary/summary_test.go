@@ -45,6 +45,7 @@ func TestSummaryToLogText(t *testing.T) {
 		"config_candidates: ./configs/config.yaml (cwd)",
 		"ui: mode=embedded url=http://127.0.0.1:18080/",
 		"api_url: http://127.0.0.1:18080/api",
+		"session: registration=- heartbeat=- last_register=- last_heartbeat=- next_retry=- failure=-",
 		"network_mode: SENDER_SIP__RECEIVER_RTP",
 		"capability_supported: supports_small_request_body,supports_large_response_body,supports_streaming_response",
 		"capability_unsupported: supports_large_request_body,supports_bidirectional_http_tunnel,supports_transparent_http_proxy",
@@ -96,6 +97,7 @@ func ExampleSummary_ToLogText() {
 	// - auto_generated_config: false
 	// - ui: mode=external url=external
 	// - api_url: http://127.0.0.1:18080/api
+	// - session: registration=- heartbeat=- last_register=- last_heartbeat=- next_retry=- failure=-
 	// - network_mode: SENDER_SIP_RTP__RECEIVER_SIP_RTP
 	// - capability_supported: supports_small_request_body,supports_large_request_body,supports_large_response_body,supports_streaming_response,supports_bidirectional_http_tunnel,supports_transparent_http_proxy
 	// - capability_unsupported: -
