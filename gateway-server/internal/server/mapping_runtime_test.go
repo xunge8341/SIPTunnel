@@ -98,6 +98,45 @@ func TestMappingRuntimeManager_ForwardsHTTPRequestsE2E(t *testing.T) {
 	}
 }
 
+func TestMappingRuntimeManager_UpdatesDegradedWhenPrepareFails(t *testing.T) {
+	manager := newMappingRuntimeManager(nil)
+	defer func() { _ = manager.Close() }()
+
+	localPort := findFreePort(t)
+	manager.SyncMappings([]TunnelMapping{{
+		MappingID:            "map-prepare-fail",
+		Enabled:              true,
+		LocalBindIP:          "127.0.0.1",
+		LocalBindPort:        localPort,
+		LocalBasePath:        "/proxy",
+		RemoteTargetIP:       "127.0.0.1",
+		RemoteTargetPort:     1,
+		RemoteBasePath:       "/api",
+		AllowedMethods:       []string{"POST"},
+		ConnectTimeoutMS:     100,
+		RequestTimeoutMS:     200,
+		ResponseTimeoutMS:    200,
+		MaxRequestBodyBytes:  512,
+		MaxResponseBodyBytes: 512,
+	}})
+	waitMappingState(t, manager, "map-prepare-fail", mappingStateListening)
+
+	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/proxy/ping", localPort))
+	if err != nil {
+		t.Fatalf("request local mapping: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d", resp.StatusCode)
+	}
+
+	waitMappingState(t, manager, "map-prepare-fail", mappingStateDegraded)
+	snapshot := manager.Snapshot()["map-prepare-fail"]
+	if !strings.Contains(snapshot.Reason, "转发准备失败") {
+		t.Fatalf("expected prepare failure reason, got %q", snapshot.Reason)
+	}
+}
+
 func TestMappingRuntimeManager_UpdatesDegradedWhenForwardFails(t *testing.T) {
 	manager := newMappingRuntimeManager(nil)
 	defer func() { _ = manager.Close() }()

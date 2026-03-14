@@ -28,16 +28,41 @@ const (
 )
 
 type mappingForwarder interface {
-	Forward(context.Context, tunnelmapping.TunnelMapping, *http.Request) (*http.Response, error)
+	PrepareForward(context.Context, tunnelmapping.TunnelMapping, *http.Request) (*mappingForwardRequest, error)
+	ExecuteForward(context.Context, *mappingForwardRequest) (*http.Response, error)
 }
 
 type directHTTPMappingForwarder struct{}
+
+// mappingForwardRequest 是监听层与转发策略之间的稳定请求抽象。
+// direct 模式会把 HTTP 请求组装为上游请求；未来 SIP/RTP 隧道模式
+// 可复用该结构补充 SIP 元信息、RTP 大载荷和流式响应控制参数。
+type mappingForwardRequest struct {
+	MappingID string
+	Method    string
+	TargetURL *url.URL
+	Headers   http.Header
+	Body      []byte
+
+	ConnectTimeout        time.Duration
+	RequestTimeout        time.Duration
+	ResponseHeaderTimeout time.Duration
+	MaxResponseBodyBytes  int64
+
+	// 预留字段：后续隧道策略可在 Prepare 阶段写入 SIP/RTP 编排所需的上下文。
+	TunnelHint *mappingTunnelHint
+}
+
+// mappingTunnelHint 预留给未来 SIP/RTP 承载策略，不在 direct 模式中使用。
+type mappingTunnelHint struct {
+	SIPCallID string
+}
 
 func newDirectHTTPMappingForwarder() mappingForwarder {
 	return directHTTPMappingForwarder{}
 }
 
-func (directHTTPMappingForwarder) Forward(ctx context.Context, mapping tunnelmapping.TunnelMapping, req *http.Request) (*http.Response, error) {
+func (directHTTPMappingForwarder) PrepareForward(_ context.Context, mapping tunnelmapping.TunnelMapping, req *http.Request) (*mappingForwardRequest, error) {
 	if !methodAllowed(mapping.AllowedMethods, req.Method) {
 		return nil, fmt.Errorf("method %s is not allowed", req.Method)
 	}
@@ -53,36 +78,54 @@ func (directHTTPMappingForwarder) Forward(ctx context.Context, mapping tunnelmap
 	if err != nil {
 		return nil, err
 	}
+	forwardHeaders := make(http.Header)
+	copyHeaders(forwardHeaders, req.Header)
+	trimmedHost := strings.TrimSpace(req.Host)
+	if trimmedHost != "" {
+		forwardHeaders.Set("X-Forwarded-Host", trimmedHost)
+	}
+	forwardHeaders.Set("X-Forwarded-Proto", normalizeScheme(req))
+	forwardHeaders.Set("X-SIPTunnel-Mapping-ID", mapping.MappingID)
 
-	outReq, err := http.NewRequestWithContext(ctx, req.Method, targetURL.String(), bytes.NewReader(body))
+	return &mappingForwardRequest{
+		MappingID:             mapping.MappingID,
+		Method:                req.Method,
+		TargetURL:             targetURL,
+		Headers:               forwardHeaders,
+		Body:                  body,
+		ConnectTimeout:        time.Duration(mapping.ConnectTimeoutMS) * time.Millisecond,
+		RequestTimeout:        time.Duration(mapping.RequestTimeoutMS) * time.Millisecond,
+		ResponseHeaderTimeout: time.Duration(mapping.ResponseTimeoutMS) * time.Millisecond,
+		MaxResponseBodyBytes:  mapping.MaxResponseBodyBytes,
+	}, nil
+}
+
+func (directHTTPMappingForwarder) ExecuteForward(ctx context.Context, prepared *mappingForwardRequest) (*http.Response, error) {
+	if prepared == nil {
+		return nil, fmt.Errorf("nil prepared forward request")
+	}
+
+	outReq, err := http.NewRequestWithContext(ctx, prepared.Method, prepared.TargetURL.String(), bytes.NewReader(prepared.Body))
 	if err != nil {
 		return nil, fmt.Errorf("build upstream request: %w", err)
 	}
-	copyHeaders(outReq.Header, req.Header)
-	trimmedHost := strings.TrimSpace(req.Host)
-	if trimmedHost != "" {
-		outReq.Header.Set("X-Forwarded-Host", trimmedHost)
-	}
-	outReq.Header.Set("X-Forwarded-Proto", normalizeScheme(req))
-	outReq.Header.Set("X-SIPTunnel-Mapping-ID", mapping.MappingID)
+	copyHeaders(outReq.Header, prepared.Headers)
 
 	client := &http.Client{
 		Transport: &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-			DialContext: (&net.Dialer{
-				Timeout: time.Duration(mapping.ConnectTimeoutMS) * time.Millisecond,
-			}).DialContext,
-			ResponseHeaderTimeout: time.Duration(mapping.ResponseTimeoutMS) * time.Millisecond,
+			Proxy:                 http.ProxyFromEnvironment,
+			DialContext:           (&net.Dialer{Timeout: prepared.ConnectTimeout}).DialContext,
+			ResponseHeaderTimeout: prepared.ResponseHeaderTimeout,
 		},
-		Timeout: time.Duration(mapping.RequestTimeoutMS) * time.Millisecond,
+		Timeout: prepared.RequestTimeout,
 	}
 
 	resp, err := client.Do(outReq)
 	if err != nil {
-		return nil, fmt.Errorf("forward request to %s: %w", targetURL.String(), err)
+		return nil, fmt.Errorf("forward request to %s: %w", prepared.TargetURL.String(), err)
 	}
-	if mapping.MaxResponseBodyBytes > 0 {
-		resp.Body = &limitedReadCloser{ReadCloser: resp.Body, limit: mapping.MaxResponseBodyBytes}
+	if prepared.MaxResponseBodyBytes > 0 {
+		resp.Body = &limitedReadCloser{ReadCloser: resp.Body, limit: prepared.MaxResponseBodyBytes}
 	}
 	return resp, nil
 }
@@ -232,7 +275,14 @@ func (m *mappingRuntimeManager) syncOneLocked(item TunnelMapping) {
 	r.server = &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		start := time.Now()
 		m.beginForward(r.id)
-		resp, err := m.forward.Forward(req.Context(), r.mapping, req)
+		prepared, err := m.forward.PrepareForward(req.Context(), r.mapping, req)
+		if err != nil {
+			m.endForward(r.id, false, "转发准备失败："+err.Error())
+			log.Printf("mapping-runtime audit mapping=%s method=%s path=%s result=prepare_error err=%v", r.id, req.Method, req.URL.String(), err)
+			http.Error(w, "请求转发准备失败："+err.Error(), http.StatusBadGateway)
+			return
+		}
+		resp, err := m.forward.ExecuteForward(req.Context(), prepared)
 		if err != nil {
 			m.endForward(r.id, false, "转发失败："+err.Error())
 			log.Printf("mapping-runtime audit mapping=%s method=%s path=%s result=error err=%v", r.id, req.Method, req.URL.String(), err)
