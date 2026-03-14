@@ -75,7 +75,14 @@ try {
     Remove-Item -Recurse -Force $DistDir
   }
 
-  npm run build
+  Write-Host '[ui-build] running UI type check (vue-tsc --noEmit)'
+  npm exec -- vue-tsc --noEmit
+  if ($LASTEXITCODE -ne 0) {
+    throw "UI type check failed with exit code $LASTEXITCODE. Aborting before vite build."
+  }
+
+  Write-Host '[ui-build] running UI bundle build (vite build)'
+  npm exec -- vite build
   if ($LASTEXITCODE -ne 0) {
     throw "UI build failed with exit code $LASTEXITCODE. Aborting before dist sync/embedding."
   }
