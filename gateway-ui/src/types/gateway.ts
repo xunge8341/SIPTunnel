@@ -368,6 +368,16 @@ export interface NodeNetworkStatusPayload {
   capability_summary: CapabilitySummary
 }
 
+
+export interface OpsAuditFilters {
+  requestId?: string
+  traceId?: string
+  rule?: string
+  errorOnly?: boolean
+  startTime?: string
+  endTime?: string
+}
+
 export interface OpsAuditEvent {
   who: string
   when: string

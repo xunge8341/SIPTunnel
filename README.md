@@ -141,7 +141,7 @@ $env:VITE_API_BASE_URL='http://127.0.0.1:18080/api'
 - `GET/PUT /api/routes`（**deprecated**，仅兼容旧版 `OpsRoute/RouteConfig`）
 - `GET /api/tasks`
 - `GET /api/tasks/{id}`
-- `GET /api/audits`
+- `GET /api/audits`（支持 `request_id/trace_id/rule/error_only/start_time/end_time` 过滤）
 - `GET/PUT /api/network/config`
 - `GET /api/config-governance`
 - `POST /api/config-governance/rollback`

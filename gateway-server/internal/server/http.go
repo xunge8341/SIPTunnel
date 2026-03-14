@@ -669,14 +669,11 @@ func (d handlerDeps) demoProcess(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d handlerDeps) listAuditEvents(w http.ResponseWriter, r *http.Request) {
-	query := observability.AuditQuery{RequestID: r.URL.Query().Get("request_id"), APICode: r.URL.Query().Get("api_code"), Who: r.URL.Query().Get("who")}
+	query := readAuditQuery(r)
 	if v := r.URL.Query().Get("limit"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			query.Limit = n
 		}
-	}
-	if v := r.URL.Query().Get("trace_id"); v != "" {
-		query.TraceID = v
 	}
 
 	events, err := d.audit.List(r.Context(), query)
@@ -1374,7 +1371,7 @@ func (d handlerDeps) handleAudits(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page, pageSize := parsePagination(r)
-	query := observability.AuditQuery{RequestID: r.URL.Query().Get("request_id"), APICode: r.URL.Query().Get("api_code"), Who: r.URL.Query().Get("who"), TraceID: r.URL.Query().Get("trace_id")}
+	query := readAuditQuery(r)
 	allQuery := query
 	allQuery.Limit = 10000
 	all, err := d.audit.List(r.Context(), allQuery)
@@ -1407,6 +1404,37 @@ func (d handlerDeps) recordOpsAudit(r *http.Request, operator string, action str
 		Core:              fields,
 	})
 	_ = payload
+}
+
+func readAuditQuery(r *http.Request) observability.AuditQuery {
+	query := observability.AuditQuery{
+		RequestID: r.URL.Query().Get("request_id"),
+		APICode:   r.URL.Query().Get("api_code"),
+		Who:       r.URL.Query().Get("who"),
+		TraceID:   r.URL.Query().Get("trace_id"),
+		Rule:      strings.TrimSpace(r.URL.Query().Get("rule")),
+	}
+	query.ErrorOnly = parseBoolFlag(r.URL.Query().Get("error_only"))
+	query.StartTime = parseRFC3339Time(r.URL.Query().Get("start_time"))
+	query.EndTime = parseRFC3339Time(r.URL.Query().Get("end_time"))
+	return query
+}
+
+func parseBoolFlag(raw string) bool {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	return raw == "1" || raw == "true" || raw == "yes"
+}
+
+func parseRFC3339Time(raw string) time.Time {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}
+	}
+	parsed, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return time.Time{}
+	}
+	return parsed.UTC()
 }
 
 func parsePagination(r *http.Request) (int, int) {

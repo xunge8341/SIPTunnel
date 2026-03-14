@@ -40,6 +40,7 @@ import type {
   DashboardPayload,
   FileTask,
   OpsAuditEvent,
+  OpsAuditFilters,
   OpsLimits,
   OpsNode,
   OpsRoute,
@@ -461,11 +462,20 @@ export const gatewayApi = {
     const result = await unwrap<{ items: OpsNode[] }>(request('/nodes', { method: 'GET' }))
     return result.items
   },
-  async fetchAudits(page: number, pageSize: number, query?: { requestId?: string; traceId?: string }) {
+  async fetchAudits(page: number, pageSize: number, query?: OpsAuditFilters) {
     const result = await unwrap<{ items: OpsAuditEvent[]; pagination: { total: number; page: number; page_size: number } }>(
       request('/audits', {
         method: 'GET',
-        params: { page, page_size: pageSize, request_id: query?.requestId, trace_id: query?.traceId }
+        params: {
+          page,
+          page_size: pageSize,
+          request_id: query?.requestId,
+          trace_id: query?.traceId,
+          rule: query?.rule,
+          error_only: query?.errorOnly,
+          start_time: query?.startTime,
+          end_time: query?.endTime
+        }
       })
     )
     return {
