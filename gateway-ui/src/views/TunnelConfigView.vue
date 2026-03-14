@@ -34,7 +34,7 @@
     </a-card>
 
     <a-card title="能力矩阵（自动生成）">
-      <a-alert type="info" show-icon message="当网络模式变化时，能力矩阵会自动刷新。" style="margin-bottom: 12px" />
+      <a-alert type="info" show-icon message="当通道或网络模式变化时，能力矩阵会自动刷新。" style="margin-bottom: 12px" />
       <a-table :data-source="capabilityRows" :pagination="false" row-key="key" size="small">
         <a-table-column title="能力项" data-index="key" key="key" />
         <a-table-column title="支持" key="supported" width="120">
@@ -52,7 +52,8 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { gatewayApi } from '../api/gateway'
-import type { TunnelConfigCapability, TunnelConfigPayload } from '../types/gateway'
+import type { TunnelConfigPayload } from '../types/gateway'
+import { buildTunnelCapabilityItems, deriveTunnelCapability } from '../utils/tunnelConfig'
 
 const saving = ref(false)
 
@@ -84,52 +85,12 @@ const draft = reactive<TunnelConfigPayload>({
   capability_items: []
 })
 
-const deriveCapability = (mode: string): TunnelConfigCapability => {
-  if (mode === 'A_B_BIDIR_SIP__BIDIR_RTP') {
-    return {
-      supports_small_request_body: true,
-      supports_large_request_body: true,
-      supports_large_response_body: true,
-      supports_streaming_response: true,
-      supports_bidirectional_http_tunnel: true,
-      supports_transparent_http_proxy: true
-    }
-  }
-  if (mode === 'A_TO_B_SIP__B_TO_A_RTP' || mode === 'A_B_BIDIR_SIP__B_TO_A_RTP') {
-    return {
-      supports_small_request_body: true,
-      supports_large_request_body: false,
-      supports_large_response_body: true,
-      supports_streaming_response: true,
-      supports_bidirectional_http_tunnel: false,
-      supports_transparent_http_proxy: false
-    }
-  }
-  return {
-    supports_small_request_body: false,
-    supports_large_request_body: false,
-    supports_large_response_body: false,
-    supports_streaming_response: false,
-    supports_bidirectional_http_tunnel: false,
-    supports_transparent_http_proxy: false
-  }
-}
-
-const buildCapabilityItems = (capability: TunnelConfigCapability) => [
-  { key: 'supports_small_request_body', supported: capability.supports_small_request_body, description: '支持小请求体（典型 SIP 载荷范围）' },
-  { key: 'supports_large_request_body', supported: capability.supports_large_request_body, description: '支持大请求体上传' },
-  { key: 'supports_large_response_body', supported: capability.supports_large_response_body, description: '支持大响应体回传' },
-  { key: 'supports_streaming_response', supported: capability.supports_streaming_response, description: '支持流式响应/分块回传' },
-  { key: 'supports_bidirectional_http_tunnel', supported: capability.supports_bidirectional_http_tunnel, description: '支持双向 HTTP 隧道' },
-  { key: 'supports_transparent_http_proxy', supported: capability.supports_transparent_http_proxy, description: '支持透明 HTTP 代理' }
-]
-
 watch(
-  () => draft.network_mode,
-  (mode) => {
-    const capability = deriveCapability(mode)
+  () => [draft.channel_protocol, draft.request_channel, draft.response_channel, draft.network_mode],
+  () => {
+    const capability = deriveTunnelCapability(draft)
     draft.capability = capability
-    draft.capability_items = buildCapabilityItems(capability)
+    draft.capability_items = buildTunnelCapabilityItems(capability)
   },
   { immediate: true }
 )
@@ -144,11 +105,11 @@ const load = async () => {
 const save = async () => {
   saving.value = true
   try {
-    const capability = deriveCapability(draft.network_mode)
+    const capability = deriveTunnelCapability(draft)
     const payload: TunnelConfigPayload = {
       ...JSON.parse(JSON.stringify(draft)),
       capability,
-      capability_items: buildCapabilityItems(capability)
+      capability_items: buildTunnelCapabilityItems(capability)
     }
     await gatewayApi.saveTunnelConfig(payload)
     message.success('隧道配置保存成功，能力矩阵已更新')
