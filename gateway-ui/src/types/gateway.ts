@@ -301,6 +301,19 @@ export interface PeerNodeConfig {
   enabled: boolean
 }
 
+export interface NodeConfigEndpoint {
+  node_ip: string
+  signaling_port: number
+  device_id: string
+  rtp_port_start?: number
+  rtp_port_end?: number
+}
+
+export interface NodeConfigPayload {
+  local_node: NodeConfigEndpoint
+  peer_node: NodeConfigEndpoint
+}
+
 export interface NodeConfigCheckResult {
   level: 'info' | 'warn' | 'error'
   message: string

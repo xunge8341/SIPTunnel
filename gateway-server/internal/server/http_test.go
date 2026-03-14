@@ -70,6 +70,25 @@ func buildTestHandler(t *testing.T) (http.Handler, repository.TaskRepository, ob
 	return newMux(deps), repo, audit
 }
 
+func TestNodeConfigEndpointSaveAndLoad(t *testing.T) {
+	h, _, _ := buildTestHandler(t)
+
+	postBody := `{"local_node":{"node_ip":"10.10.1.11","signaling_port":6060,"device_id":"gateway-a-m31","rtp_port_start":21000,"rtp_port_end":21099},"peer_node":{"node_ip":"10.20.1.11","signaling_port":7060,"device_id":"gateway-b-m31"}}`
+	postReq := httptest.NewRequest(http.MethodPost, "/api/node/config", bytes.NewBufferString(postBody))
+	postRR := httptest.NewRecorder()
+	h.ServeHTTP(postRR, postReq)
+	if postRR.Code != http.StatusOK || !strings.Contains(postRR.Body.String(), "tunnel_restarted") {
+		t.Fatalf("POST /api/node/config failed code=%d body=%s", postRR.Code, postRR.Body.String())
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/node/config", nil)
+	getRR := httptest.NewRecorder()
+	h.ServeHTTP(getRR, getReq)
+	if getRR.Code != http.StatusOK || !strings.Contains(getRR.Body.String(), "gateway-a-m31") || !strings.Contains(getRR.Body.String(), "gateway-b-m31") {
+		t.Fatalf("GET /api/node/config failed code=%d body=%s", getRR.Code, getRR.Body.String())
+	}
+}
+
 func TestMappingsCRUD(t *testing.T) {
 	h, _, _ := buildTestHandler(t)
 	body := `{"mapping_id":"map-2","name":"orders","enabled":true,"peer_node_id":"peer-b","local_bind_ip":"127.0.0.1","local_bind_port":18090,"local_base_path":"/orders","remote_target_ip":"10.0.0.2","remote_target_port":8090,"remote_base_path":"/api/orders","allowed_methods":["GET","POST"],"connect_timeout_ms":500,"request_timeout_ms":3000,"response_timeout_ms":3000,"max_request_body_bytes":1048576,"max_response_body_bytes":1048576,"description":"orders mapping"}`

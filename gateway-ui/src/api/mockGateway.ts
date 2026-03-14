@@ -23,7 +23,8 @@ import type {
   LocalNodeConfig,
   PeerNodeConfig,
   NodeNetworkStatusPayload,
-  SystemStatusPayload
+  SystemStatusPayload,
+  NodeConfigPayload
 } from '../types/gateway'
 
 const wait = (ms = 200) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -707,6 +708,59 @@ export async function retryDiagnosticExportMock(jobId: string): Promise<Diagnost
   return cloneJob(record.job)
 }
 
+
+export async function fetchNodeConfigMock(): Promise<NodeConfigPayload> {
+  await wait()
+  const primaryPeer = peerNodeState[0]
+  return {
+    local_node: {
+      node_ip: localNodeState.sip_listen_ip,
+      signaling_port: localNodeState.sip_listen_port,
+      device_id: localNodeState.node_id,
+      rtp_port_start: localNodeState.rtp_port_start,
+      rtp_port_end: localNodeState.rtp_port_end
+    },
+    peer_node: primaryPeer
+      ? {
+          node_ip: primaryPeer.peer_signaling_ip,
+          signaling_port: primaryPeer.peer_signaling_port,
+          device_id: primaryPeer.peer_node_id
+        }
+      : { node_ip: '', signaling_port: 5060, device_id: '' }
+  }
+}
+
+export async function saveNodeConfigMock(payload: NodeConfigPayload): Promise<{ config: NodeConfigPayload; tunnel_restarted: boolean }> {
+  await wait()
+  localNodeState = {
+    ...localNodeState,
+    node_id: payload.local_node.device_id,
+    node_name: payload.local_node.device_id,
+    sip_listen_ip: payload.local_node.node_ip,
+    rtp_listen_ip: payload.local_node.node_ip,
+    sip_listen_port: payload.local_node.signaling_port,
+    rtp_port_start: payload.local_node.rtp_port_start ?? localNodeState.rtp_port_start,
+    rtp_port_end: payload.local_node.rtp_port_end ?? localNodeState.rtp_port_end
+  }
+  const nextPeer: PeerNodeConfig = {
+    peer_node_id: payload.peer_node.device_id,
+    peer_name: payload.peer_node.device_id,
+    peer_signaling_ip: payload.peer_node.node_ip,
+    peer_signaling_port: payload.peer_node.signaling_port,
+    peer_media_ip: payload.peer_node.node_ip,
+    peer_media_port_start: localNodeState.rtp_port_start,
+    peer_media_port_end: localNodeState.rtp_port_end,
+    supported_network_mode: localNodeState.network_mode,
+    enabled: true
+  }
+  const idx = peerNodeState.findIndex((item) => item.peer_node_id === nextPeer.peer_node_id)
+  if (idx >= 0) {
+    peerNodeState[idx] = nextPeer
+  } else {
+    peerNodeState = [nextPeer, ...peerNodeState]
+  }
+  return { config: JSON.parse(JSON.stringify(payload)), tunnel_restarted: true }
+}
 
 export async function fetchNodeDetailMock(): Promise<NodeDetailPayload> {
   await wait()

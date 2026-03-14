@@ -13,6 +13,7 @@ import NetworkConfigView from '../views/NetworkConfigView.vue'
 import ConfigGovernanceView from '../views/ConfigGovernanceView.vue'
 import LocalNodeConfigView from '../views/LocalNodeConfigView.vue'
 import PeerNodeConfigView from '../views/PeerNodeConfigView.vue'
+import NodeConfigView from '../views/NodeConfigView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -51,6 +52,13 @@ const router = createRouter({
           name: 'network-config',
           component: NetworkConfigView,
           meta: { title: '网络配置', description: '统一管理 SIP/RTP 网络参数与端口池状态。' }
+        },
+
+        {
+          path: 'node-config',
+          name: 'node-config',
+          component: NodeConfigView,
+          meta: { title: 'M31 节点配置', description: '统一配置本端和对端节点，并触发隧道重启。' }
         },
         {
           path: 'local-node-config',
