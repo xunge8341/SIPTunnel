@@ -13,7 +13,7 @@ vi.mock('../../api/gateway', () => ({
 }))
 
 vi.mock('ant-design-vue', () => ({
-  message: { success: vi.fn() }
+  message: { success: vi.fn(), warning: vi.fn(), error: vi.fn() }
 }))
 
 const stubs = {
@@ -26,7 +26,11 @@ const stubs = {
   'a-descriptions': { template: '<div><slot /></div>' },
   'a-descriptions-item': { template: '<div><slot /></div>' },
   'a-alert': { props: ['message'], template: '<div>{{ message }}<slot /></div>' },
-  'a-table': { template: '<div><slot name="bodyCell" :column="{key: `action`}" :record="record" /></div>', data: () => ({ record: { mapping_id: 'map-1' } }) },
+  'a-table': {
+    props: ['dataSource'],
+    template: '<div><div v-for="item in (dataSource || [])" :key="item.mapping_id || item.key">{{ item.label || item.mapping_id }}</div><slot name="bodyCell" :column="{key: `action`}" :record="record" /></div>',
+    data: () => ({ record: { mapping_id: 'map-1' } })
+  },
   'a-switch': { template: '<input type="checkbox" />' },
   'a-tag': { template: '<span><slot /></span>' },
   'a-popconfirm': { template: '<div><slot /></div>' },
@@ -68,5 +72,6 @@ describe('TunnelMappingsView', () => {
     expect(gatewayApi.fetchStartupSummary).toHaveBeenCalled()
     expect(wrapper.text()).toContain('A_TO_B_SIP__B_TO_A_RTP')
     expect(wrapper.text()).toContain('warning-1')
+    expect(wrapper.text()).toContain('小请求体')
   })
 })
