@@ -1,3 +1,8 @@
+param(
+  [string]$BuildNonce,
+  [switch]$SkipUiBuild
+)
+
 $ErrorActionPreference = 'Stop'
 
 $RootDir = Split-Path -Parent $PSScriptRoot
@@ -6,12 +11,19 @@ $DistDir = Join-Path $UiDir 'dist'
 $TargetDir = Join-Path $RootDir 'gateway-server/internal/server/embedded-ui'
 $MetadataFile = Join-Path $TargetDir '.siptunnel-ui-embed.json'
 
-$BuildNonce = [guid]::NewGuid().ToString()
+if (-not $BuildNonce) {
+  $BuildNonce = [guid]::NewGuid().ToString()
+}
 
-Write-Host "[embed-ui] running UI build with nonce: $BuildNonce"
-& (Join-Path $RootDir 'scripts/ui-build.ps1') -BuildNonce $BuildNonce
-if ($LASTEXITCODE -ne 0) {
-  throw "[embed-ui] UI build step failed with exit code $LASTEXITCODE. Embedding aborted."
+if (-not $SkipUiBuild) {
+  Write-Host "[embed-ui] running UI build with nonce: $BuildNonce"
+  & (Join-Path $RootDir 'scripts/ui-build.ps1') -BuildNonce $BuildNonce
+  if ($LASTEXITCODE -ne 0) {
+    throw "[embed-ui] UI build step failed with exit code $LASTEXITCODE. Embedding aborted."
+  }
+}
+else {
+  Write-Host "[embed-ui] skip UI build and reuse dist with nonce: $BuildNonce"
 }
 
 if (-not (Test-Path $DistDir)) {

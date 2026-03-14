@@ -70,4 +70,12 @@ RELEASE_FILE=./dist/gateway-linux-amd64 ./deploy/scripts/upgrade.sh
 ./scripts/verify-embedded-ui.sh
 ```
 
+Windows 交付推荐使用一键入口（自动执行 UI 构建、嵌入校验、后端打包并输出摘要）：
+
+```powershell
+.\scripts\build-release.ps1 -Mode native -UiPolicy delivery
+```
+
+若任一步失败，脚本会立即退出并返回非零退出码，避免将旧 UI 打进交付包。
+
 若未嵌入真实前端产物，内置占位页会显示“首启部署引导”，同时 API 保持可用，便于先完成配置初始化与联调。

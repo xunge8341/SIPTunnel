@@ -782,12 +782,33 @@ go run ./cmd/gatewayctl link test
 
 ### 交付版推荐顺序（带 UI 保护）
 
-1. 先执行 `./scripts/embed-ui.sh`（Windows 用 `./scripts/embed-ui.ps1`）构建并嵌入 UI。
-2. 再执行 `./scripts/build.sh native delivery`（Windows 用 `./scripts/build.ps1 -UiPolicy delivery`）。
-3. 构建日志会输出：
-   - UI 是否最新（latest check）
-   - UI 嵌入时间（`embedded_at_utc`）
-   - 哈希校验结果（expected/actual + PASS/FAIL）
+推荐使用一键交付入口（Windows PowerShell）：
+
+```powershell
+.\scripts\build-release.ps1 -Mode native -UiPolicy delivery
+```
+
+该脚本会串行执行并在任一步失败时立即中止：
+
+1. UI 构建（生成本次 nonce）
+2. UI 构建结果校验（`dist`、nonce、`index.html`、`assets`）
+3. UI 嵌入（复用同一 nonce，拒绝旧产物）
+4. 嵌入结果校验（metadata + 目录哈希）
+5. 后端打包（复用 `build.ps1` 的 `delivery` 校验）
+
+成功时会打印交付摘要，至少包含：
+
+- UI 构建是否成功
+- UI 嵌入目录
+- 嵌入校验结果
+- 后端输出路径
+- 最终交付包位置（`dist/release/release-<timestamp>/`）
+
+兼容关系说明：
+
+- `build-release.ps1` 内部调用既有 `ui-build.ps1`、`embed-ui.ps1`、`build.ps1`；
+- 现有分步脚本保留可单独使用；
+- 需要手工分步时，仍可按旧顺序执行 `embed-ui.ps1` + `build.ps1`。
 
 若 UI 未成功构建/嵌入，交付模式构建会被阻断。
 
