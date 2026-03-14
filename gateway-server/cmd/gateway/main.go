@@ -293,11 +293,11 @@ func buildStartupSummary(nodeID string, cfgLoad configLoadResult, uiCfg config.U
 	}
 
 	businessState := "active"
-	businessMessage := "业务执行层已激活，下游 HTTP 路由映射可用"
+	businessMessage := "业务执行层已激活，下游 HTTP 隧道映射可用"
 	businessImpact := "A 网 HTTP 落地可执行"
 	if routeCount <= 0 {
 		businessState = "protocol_only"
-		businessMessage = "协议层可启动，业务执行层未激活（未加载下游 HTTP 路由）"
+		businessMessage = "协议层可启动，业务执行层未激活（未加载下游 HTTP 隧道映射）"
 		businessImpact = "仅完成 SIP/RTP 协议交互，不会执行 A 网 HTTP 落地"
 	}
 

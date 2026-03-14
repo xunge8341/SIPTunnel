@@ -238,13 +238,13 @@ export async function fetchStartupSummaryMock(): Promise<StartupSummaryPayload> 
       response_body_transport: 'rtp_stream',
       request_body_size_limit: 65535,
       response_body_size_limit: -1,
-      notes: ['transport 决策由全局 network.mode 推导，禁止在单条映射上覆盖。'],
+      notes: ['transport 决策由全局网络模式推导，禁止在单条隧道映射上覆盖。'],
       warnings: ['不支持大请求体上传；超过 SIP 限制的请求体将被拒绝。']
     },
     business_execution: {
       state: 'protocol_only',
       route_count: 0,
-      message: '协议层可启动，业务执行层未激活（未加载下游 HTTP 路由）',
+      message: '协议层可启动，业务执行层未激活（未加载下游 HTTP 隧道映射）',
       impact: '仅完成 SIP/RTP 协议交互，不会执行 A 网 HTTP 落地'
     },
     self_check_summary: {
@@ -429,9 +429,9 @@ let networkConfigState: NetworkConfigPayload = {
       key: "downstream-http",
       name: "downstream.http_base_reachability",
       level: "warn",
-      message: "未配置下游 HTTP 路由：当前处于协议层可启动、业务执行层未激活状态。",
-      suggestion: "请加载最小 httpinvoke 路由配置以激活业务执行层。",
-      action_hint: "补齐 api_code 映射后重启并复核 /api/selfcheck。",
+      message: "未配置下游 HTTP 隧道映射：当前处于协议层可启动、业务执行层未激活状态。",
+      suggestion: "请加载最小隧道映射配置（旧 httpinvoke route 为兼容格式）以激活业务执行层。",
+      action_hint: "补齐隧道映射（旧 api_code 为兼容索引）后重启并复核 /api/selfcheck。",
       doc_link: "docs/troubleshooting.md#310-下游-http-未配置"
     }
   ],

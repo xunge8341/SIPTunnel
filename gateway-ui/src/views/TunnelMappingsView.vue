@@ -15,8 +15,8 @@
       <a-alert
         type="info"
         show-icon
-        message="能力矩阵由后端 capability API 实时返回"
-        description="用于指导映射配置：超出当前网络模式能力的配置将提示告警，并在保存时拦截。"
+        message="能力矩阵由后端实时返回（网络模式全局约束）"
+        description="用于指导隧道映射配置：超出当前网络模式能力的配置会提示告警并在保存时拦截。"
         style="margin-bottom: 12px"
       />
       <a-descriptions bordered :column="2" size="small">
@@ -85,7 +85,7 @@
       <a-alert
         type="warning"
         show-icon
-        message="当前映射配置超出 network mode 能力"
+        message="当前隧道映射配置超出网络模式能力"
         :description="editorBlockingIssues.join('；')"
         style="margin-bottom: 12px"
         v-if="editorBlockingIssues.length"
@@ -126,7 +126,7 @@
         </a-row>
         <a-form-item>
           <template #label>
-            流式响应（仅在 NetworkMode 支持时可启用）
+            流式响应（仅在当前网络模式支持时可启用）
           </template>
           <a-switch v-model:checked="editing.require_streaming_response" />
         </a-form-item>

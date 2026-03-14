@@ -77,7 +77,7 @@
                 type="warning"
                 show-icon
                 message="业务执行层未激活"
-                description="当前未加载业务路由，因此不会执行 A 网 HTTP 落地。"
+                description="当前未加载 HTTP 隧道映射，因此不会执行 A 网 HTTP 落地。"
               />
               <a-typography-text type="secondary">{{ selectedNode.selfCheck.summary }}</a-typography-text>
               <a-typography-text type="secondary">检查时间：{{ selectedNode.selfCheck.checkedAt }}</a-typography-text>
@@ -203,7 +203,7 @@ const nodes = ref<NodeOpsSnapshot[]>([
       { service: 'RTP', protocol: 'UDP', bindAddress: '0.0.0.0:20000-20999', status: 'bound', updatedAt: '2026-03-12 14:30:11' }
     ],
     bindingFailures: [{ id: 'evt-001', occurredAt: '2026-03-12 07:14:03', service: 'RTP', reason: '端口 20032 被占用，已自动回收后重试成功。' }],
-    selfCheck: { status: 'pass', checkedAt: '2026-03-12 14:29:45', passed: 18, warning: 0, failed: 0, summary: '网络、存储、任务队列与路由模板均通过。' }
+    selfCheck: { status: 'pass', checkedAt: '2026-03-12 14:29:45', passed: 18, warning: 0, failed: 0, summary: '网络、存储、任务队列与隧道映射检查均通过。' }
   },
   {
     id: 'gateway-a-02',
@@ -220,7 +220,7 @@ const nodes = ref<NodeOpsSnapshot[]>([
       { id: 'evt-002', occurredAt: '2026-03-12 13:47:12', service: 'SIP', reason: '监听端口瞬时抖动，重绑耗时 3.2s。' },
       { id: 'evt-003', occurredAt: '2026-03-12 11:07:54', service: 'RTP', reason: '端口池耗尽触发限速，回收后恢复。' }
     ],
-    selfCheck: { status: 'warn', checkedAt: '2026-03-12 14:29:45', passed: 15, warning: 2, failed: 1, summary: '协议层可启动、业务执行层未激活：当前未加载业务路由，A 网 HTTP 落地不会执行。' }
+    selfCheck: { status: 'warn', checkedAt: '2026-03-12 14:29:45', passed: 15, warning: 2, failed: 1, summary: '协议层可启动、业务执行层未激活：当前未加载 HTTP 隧道映射，A 网 HTTP 落地不会执行。' }
   },
   {
     id: 'gateway-b-01',

@@ -60,7 +60,7 @@
 
 
 
-    <a-card title="全局 TunnelTransportPlan（只读）" :bordered="false">
+    <a-card title="全局传输策略（TunnelTransportPlan，只读）" :bordered="false">
       <a-descriptions :column="1" size="small" bordered>
         <a-descriptions-item label="request_meta_transport">{{ startupSummary.transport_plan.request_meta_transport }}</a-descriptions-item>
         <a-descriptions-item label="request_body_transport">{{ startupSummary.transport_plan.request_body_transport }}</a-descriptions-item>
@@ -90,11 +90,11 @@
       <a-alert
         type="warning"
         show-icon
-        message="当前未加载业务路由"
-        description="系统当前为“协议层可启动、业务执行层未激活”状态，因此不会执行 A 网 HTTP 落地。请加载最小 httpinvoke 路由配置后重启并复核。"
+        message="当前未加载 HTTP 隧道映射"
+        description="系统当前为“协议层可启动、业务执行层未激活”状态，因此不会执行 A 网 HTTP 落地。请加载最小隧道映射配置（旧 httpinvoke route 为兼容格式）后重启并复核。"
       />
       <a-typography-paragraph style="margin-top: 8px; margin-bottom: 0">
-        当前未加载业务路由，因此不会执行 A 网 HTTP 落地。
+        当前未加载 HTTP 隧道映射，因此不会执行 A 网 HTTP 落地。
       </a-typography-paragraph>
     </a-card>
 

@@ -83,7 +83,7 @@ const columns = [
   { title: '任务ID', dataIndex: 'id', key: 'id' },
   { title: 'request_id', dataIndex: 'requestId', key: 'requestId' },
   { title: 'trace_id', dataIndex: 'traceId', key: 'traceId' },
-  { title: 'api_code', dataIndex: 'apiCode', key: 'apiCode' },
+  { title: 'api_code（兼容索引）', dataIndex: 'apiCode', key: 'apiCode' },
   { title: '状态', dataIndex: 'status', key: 'status' },
   { title: '延迟(ms)', dataIndex: 'latencyMs', key: 'latencyMs' },
   { title: '更新时间', dataIndex: 'updatedAt', key: 'updatedAt' },

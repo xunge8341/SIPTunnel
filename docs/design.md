@@ -24,12 +24,14 @@
 - 首版实现 `HMAC_SHA256`。
 - 预留 `SM3_HMAC` 常量作为后续国密升级占位，不破坏调用方接口。
 
-## 4. A 网 HTTP 执行策略
+## 4. A 网 HTTP 执行策略（HTTP 映射隧道模式主线）
 
 `gateway-server/internal/router/template_router.go`
 
-- 仅允许预定义 `api_code` 映射模板。
-- 未知 `api_code` 直接拒绝，避免任意 HTTP 透传风险。
+- 主线模型为“隧道映射（本端入口 -> 对端目标）”。
+- `api_code`/`route template` 为历史兼容术语，仍可作为控制面索引或迁移输入。
+- 未知 `api_code` 在兼容路径下直接拒绝，避免任意 HTTP 透传风险。
+- transport 决策由全局 `NetworkMode -> Capability -> TunnelTransportPlan` 推导，不在单条映射配置。
 
 ## 5. 可靠性基础模块
 
