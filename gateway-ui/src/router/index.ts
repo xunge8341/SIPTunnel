@@ -16,6 +16,7 @@ import PeerNodeConfigView from '../views/PeerNodeConfigView.vue'
 import NodeConfigView from '../views/NodeConfigView.vue'
 import TunnelConfigView from '../views/TunnelConfigView.vue'
 import OpsToolsView from '../views/OpsToolsView.vue'
+import ConfigTransferView from '../views/ConfigTransferView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -116,6 +117,12 @@ const router = createRouter({
           name: 'ops-tools',
           component: OpsToolsView,
           meta: { title: 'M36 运维工具', description: '网络诊断、端口检测、隧道测试、配置校验。' }
+        },
+        {
+          path: 'config-transfer',
+          name: 'config-transfer',
+          component: ConfigTransferView,
+          meta: { title: 'M37 配置导入导出', description: '支持配置 JSON 导出、导入与模板下载。' }
         },
         {
           path: 'audit-logs',

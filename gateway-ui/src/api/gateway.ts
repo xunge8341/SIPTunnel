@@ -30,6 +30,9 @@ import {
   saveNodeConfigMock,
   fetchTunnelConfigMock,
   saveTunnelConfigMock,
+  exportConfigJsonMock,
+  importConfigJsonMock,
+  downloadConfigTemplateMock,
   testMappingMock
 } from './mockGateway'
 import type {
@@ -63,6 +66,8 @@ import type {
   SystemStatusPayload,
   NodeConfigPayload,
   TunnelConfigPayload,
+  ConfigTransferPayload,
+  ConfigTransferImportResult,
   MappingTestPayload
 } from '../types/gateway'
 
@@ -338,6 +343,27 @@ export const gatewayApi = {
     return unwrap(request<{ config: NodeConfigPayload; tunnel_restarted: boolean }>('/node/config', { method: 'POST', body: payload }))
   },
 
+
+  async exportConfigJson() {
+    if (useMockMode()) {
+      return exportConfigJsonMock()
+    }
+    return unwrap(request<ConfigTransferPayload>('/config/transfer/export', { method: 'GET' }))
+  },
+
+  async importConfigJson(payload: ConfigTransferPayload) {
+    if (useMockMode()) {
+      return importConfigJsonMock(payload)
+    }
+    return unwrap(request<ConfigTransferImportResult>('/config/transfer/import', { method: 'POST', body: payload }))
+  },
+
+  async downloadConfigTemplate() {
+    if (useMockMode()) {
+      return downloadConfigTemplateMock()
+    }
+    return unwrap(request<ConfigTransferPayload>('/config/transfer/template', { method: 'GET' }))
+  },
   async fetchNodeDetail() {
     if (useMockMode()) {
       return fetchNodeDetailMock()

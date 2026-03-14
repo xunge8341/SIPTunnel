@@ -528,6 +528,21 @@ export interface ConfigGovernancePayload {
   diff: ConfigDiffItem[]
 }
 
+export interface ConfigTransferPayload {
+  version: string
+  exported_at: string
+  network_config: UpdateNetworkConfigPayload
+  tunnel_config: TunnelConfigPayload
+  node_config: NodeConfigPayload
+}
+
+export interface ConfigTransferImportResult {
+  imported: boolean
+  tunnel_restarted: boolean
+  version: string
+  message: string
+}
+
 export type DiagnosticExportStatus = 'pending' | 'collecting' | 'packaging' | 'succeeded' | 'failed'
 
 export interface DiagnosticExportCreatePayload {
