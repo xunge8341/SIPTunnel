@@ -25,6 +25,11 @@ func readRepoScript(t *testing.T, name string) string {
 func TestUIBuildPowerShellScriptFailFastOnBuildError(t *testing.T) {
 	script := readRepoScript(t, "ui-build.ps1")
 	for _, want := range []string{
+		"$PackageJsonPath = Join-Path $UiDir 'package.json'",
+		"if (-not (Test-Path $UiDir))",
+		"throw \"UI directory not found:",
+		"if (-not (Test-Path $PackageJsonPath))",
+		"throw \"UI package manifest missing:",
 		"npm run build",
 		"if ($LASTEXITCODE -ne 0)",
 		"throw \"UI build failed with exit code",
