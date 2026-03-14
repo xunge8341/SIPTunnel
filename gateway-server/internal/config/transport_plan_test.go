@@ -9,8 +9,8 @@ func TestResolveTransportPlan(t *testing.T) {
 		want TunnelTransportPlan
 	}{
 		{
-			name: "A_TO_B_SIP__B_TO_A_RTP derives sip request and rtp response",
-			mode: NetworkModeAToBSIPBToARTP,
+			name: "SENDER_SIP__RECEIVER_RTP derives sip request and rtp response",
+			mode: NetworkModeSenderSIPReceiverRTP,
 			want: TunnelTransportPlan{
 				RequestMetaTransport:  TransportSIPControl,
 				RequestBodyTransport:  TransportSIPBodyOnly,
@@ -21,8 +21,8 @@ func TestResolveTransportPlan(t *testing.T) {
 			},
 		},
 		{
-			name: "A_B_BIDIR_SIP__BIDIR_RTP derives full duplex large body plan",
-			mode: NetworkModeABBiDirSIPBiDirRTP,
+			name: "SENDER_SIP_RTP__RECEIVER_SIP_RTP derives full duplex large body plan",
+			mode: NetworkModeSenderSIPRTPReceiverAll,
 			want: TunnelTransportPlan{
 				RequestMetaTransport:  TransportSIPControl,
 				RequestBodyTransport:  TransportSIPOrRTPAuto,
@@ -33,8 +33,8 @@ func TestResolveTransportPlan(t *testing.T) {
 			},
 		},
 		{
-			name: "A_B_BIDIR_SIP__B_TO_A_RTP keeps request large upload disabled",
-			mode: NetworkModeABBiDirSIPBToARTP,
+			name: "SENDER_SIP__RECEIVER_SIP_RTP keeps request large upload disabled",
+			mode: NetworkModeSenderSIPReceiverSIPRTP,
 			want: TunnelTransportPlan{
 				RequestMetaTransport:  TransportSIPControl,
 				RequestBodyTransport:  TransportSIPBodyOnly,
@@ -60,8 +60,7 @@ func TestResolveTransportPlan(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			capability := DeriveCapability(tt.mode)
-			got := ResolveTransportPlan(tt.mode, capability)
+			got := ResolveTransportPlan(tt.mode)
 			if got.RequestMetaTransport != tt.want.RequestMetaTransport ||
 				got.RequestBodyTransport != tt.want.RequestBodyTransport ||
 				got.ResponseMetaTransport != tt.want.ResponseMetaTransport ||

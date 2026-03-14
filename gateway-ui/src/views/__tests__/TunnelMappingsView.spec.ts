@@ -43,7 +43,7 @@ const stubs = {
 }
 
 const startupSummaryPayload = {
-  node_id: 'node', network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+  node_id: 'node', network_mode: 'SENDER_SIP__RECEIVER_RTP',
   capability: { supports_large_request_body: false, supports_large_response_body: true, supports_streaming_response: false, supports_bidirectional_http_tunnel: false, supports_transparent_proxy: false },
   capability_summary: { supported: ['small_request'], unsupported: ['large_request'], items: [] },
   config_path: '', config_source: '', ui_mode: 'embedded', ui_url: '', api_url: '',
@@ -68,11 +68,11 @@ describe('TunnelMappingsView', () => {
       bound_peer: { peer_node_id: 'peer-b', peer_name: 'Peer B', peer_signaling_ip: '10.20.0.20', peer_signaling_port: 5060 }
     })
     vi.mocked(gatewayApi.fetchStartupSummary).mockResolvedValue(startupSummaryPayload as never)
-    vi.mocked(gatewayApi.testMapping).mockResolvedValue({ signaling_request: '成功', response_channel: '异常', registration_status: '正常', failure_reason: '响应通道异常', suggested_action: '检查 RTP 端口池' })
+    vi.mocked(gatewayApi.testMapping).mockResolvedValue({ passed: false, status: 'failed', failure_stage: '对端可达', stages: [{ key: 'local_listening', name: '本地监听可用', status: 'passed', passed: true, detail: 'ok' }, { key: 'registration', name: '注册状态正常', status: 'passed', passed: true, detail: 'ok' }, { key: 'heartbeat', name: '心跳状态正常', status: 'passed', passed: true, detail: 'ok' }, { key: 'peer_reachability', name: '对端可达', status: 'failed', passed: false, detail: 'TCP 探测失败', blocking_reason: 'timeout', suggested_action: '检查 ACL' }, { key: 'session_ready', name: '会话已准备', status: 'blocked', passed: false, detail: 'blocked', blocking_reason: '对端不可达' }, { key: 'mapping_forward', name: '映射转发准备就绪', status: 'blocked', passed: false, detail: 'blocked' }], signaling_request: '成功', response_channel: '正常', registration_status: '正常', failure_reason: 'timeout', suggested_action: '检查 ACL' })
     vi.mocked(gatewayApi.fetchSystemStatus).mockResolvedValue({
       tunnel_status: 'degraded',
       connection_reason: '对端不可达',
-      network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+      network_mode: 'SENDER_SIP__RECEIVER_RTP',
       registration_status: 'registered',
       heartbeat_status: 'timeout',
       capability: {
@@ -93,21 +93,21 @@ describe('TunnelMappingsView', () => {
     expect(wrapper.text()).toContain('建议动作')
     expect(wrapper.text()).toContain('更新时间')
     expect(wrapper.text()).not.toContain('名称')
-    expect(wrapper.text()).not.toContain('对端节点')
+    expect(wrapper.text()).toContain('对端节点')
     expect(wrapper.text()).not.toContain('方法白名单')
     expect(wrapper.text()).toContain('peer-b')
 
     const text = wrapper.text()
-    expect(text).toContain('本端入口 IP')
+    expect(text).toContain('填写本端节点对外暴露的 HTTP 入口地址。')
     expect(text).toContain('本端入口端口')
-    expect(text).toContain('对端目标 IP')
+    expect(text).toContain('填写对端节点上的目标 HTTP 服务地址。')
     expect(text).toContain('对端目标端口')
-    expect(text).toContain('系统按动作类型自动选择命令或文件传输链路。')
+    expect(text).toContain('系统按网络模式全局推导 transport；route/api_code/template 仅作为兼容术语（deprecated）。')
     expect(text).toContain('备注')
 
-    const indexLocalIp = text.indexOf('本端入口 IP')
+    const indexLocalIp = text.indexOf('填写本端节点对外暴露的 HTTP 入口地址。')
     const indexLocalPort = text.indexOf('本端入口端口')
-    const indexRemoteIp = text.indexOf('对端目标 IP')
+    const indexRemoteIp = text.indexOf('填写对端节点上的目标 HTTP 服务地址。')
     const indexRemotePort = text.indexOf('对端目标端口')
     const indexReqTimeout = text.indexOf('请求超时（毫秒）')
     const indexRespTimeout = text.indexOf('响应超时（毫秒）')
@@ -139,7 +139,7 @@ describe('TunnelMappingsView', () => {
     vi.mocked(gatewayApi.fetchSystemStatus).mockResolvedValue({
       tunnel_status: 'connected',
       connection_reason: '正常',
-      network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+      network_mode: 'SENDER_SIP__RECEIVER_RTP',
       registration_status: 'registered',
       heartbeat_status: 'healthy',
       capability: {

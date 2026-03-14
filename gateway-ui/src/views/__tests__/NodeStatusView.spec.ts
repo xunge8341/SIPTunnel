@@ -44,7 +44,7 @@ describe('NodeStatusView', () => {
     vi.mocked(gatewayApi.fetchSystemStatus).mockResolvedValue({
       tunnel_status: 'connected',
       connection_reason: '链路稳定',
-      network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+      network_mode: 'SENDER_SIP__RECEIVER_RTP',
       registration_status: 'registered',
       heartbeat_status: 'healthy',
       last_register_time: '2026-03-12T08:00:00Z',

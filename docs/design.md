@@ -83,3 +83,11 @@
   - `GET/POST /api/peers`
   - `PUT/DELETE /api/peers/{peer_node_id}`
 - `TunnelMapping` 在当前主流程按单对单模型运行：映射编辑不暴露 `peer_node_id`，运行时由后端绑定唯一启用 peer（内部仍保留 `peer_node_id` 字段以兼容未来多对端扩展）。
+
+
+## 术语纠偏（主线）
+
+- 架构文档默认采用：本端节点、对端节点、网络模式、能力矩阵、隧道映射、本端入口、对端目标。
+- `route/api_code/template` 仅在兼容 API、历史配置和迁移工具中出现，统一视为历史模型（兼容术语 / deprecated）。
+- 运行链路应理解为“接收端（SIP 下级域）监听本端入口并发起 Invite，发送端（SIP 上级域）访问对端目标并回传”。
+

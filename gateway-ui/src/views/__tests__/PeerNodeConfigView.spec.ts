@@ -27,8 +27,8 @@ const stubs = {
   'a-popconfirm': { template: '<div><slot /></div>' },
   'a-drawer': { template: '<div><slot /><slot name="footer" /></div>' },
   'a-form': { template: '<form><slot /></form>' },
-  'a-row': { template: '<div><slot /></div>' },
-  'a-col': { template: '<div><slot /></div>' },
+  'a-row': { template: '<div class="stub-row"><slot /></div>' },
+  'a-col': { template: '<div class="stub-col"><slot /></div>' },
   'a-form-item': { template: '<div><slot /></div>' },
   'a-input': { template: '<input />' },
   'a-input-number': { template: '<input />' }
@@ -41,14 +41,14 @@ describe('PeerNodeConfigView', () => {
         {
           peer_node_id: 'peer-1', peer_name: 'Peer 1', peer_signaling_ip: '10.0.0.1', peer_signaling_port: 5060,
           peer_media_ip: '10.0.0.2', peer_media_port_start: 32000, peer_media_port_end: 32100,
-          supported_network_mode: 'A_TO_B_SIP__B_TO_A_RTP', enabled: true
+          supported_network_mode: 'SENDER_SIP__RECEIVER_RTP', enabled: true
         }
       ]
     })
     vi.mocked(gatewayApi.fetchNodeNetworkStatus).mockResolvedValue({
-      network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+      network_mode: 'SENDER_SIP__RECEIVER_RTP',
       capability: { supports_large_request_body: false, supports_large_response_body: true, supports_streaming_response: false, supports_bidirectional_http_tunnel: false, supports_transparent_proxy: false },
-      current_network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+      current_network_mode: 'SENDER_SIP__RECEIVER_RTP',
       current_capability: { supports_large_request_body: false, supports_large_response_body: true, supports_streaming_response: false, supports_bidirectional_http_tunnel: false, supports_transparent_proxy: false },
       compatibility_status: { level: 'info', message: '', suggestion: '', action_hint: '' },
       capability_summary: { supported: ['small_request'], unsupported: ['large_request'], items: [] }
@@ -59,7 +59,8 @@ describe('PeerNodeConfigView', () => {
 
     expect(gatewayApi.fetchPeers).toHaveBeenCalled()
     expect(gatewayApi.fetchNodeNetworkStatus).toHaveBeenCalled()
-    expect(wrapper.text()).toContain('A_TO_B_SIP__B_TO_A_RTP')
+    expect(wrapper.text()).toContain('SENDER_SIP__RECEIVER_RTP')
     expect(wrapper.text()).toContain('small_request')
+    expect(wrapper.findAll('.stub-row')).toHaveLength(0)
   })
 })

@@ -15,8 +15,8 @@ const stubs = {
   'a-card': { template: '<section><slot /></section>' },
   'a-form': { template: '<form><slot /></form>' },
   'a-divider': { template: '<div><slot /></div>' },
-  'a-row': { template: '<div><slot /></div>' },
-  'a-col': { template: '<div><slot /></div>' },
+  'a-row': { template: '<div class="stub-row"><slot /></div>' },
+  'a-col': { template: '<div class="stub-col"><slot /></div>' },
   'a-form-item': { template: '<div><slot /></div>' },
   'a-input': { template: '<input />' },
   'a-input-number': { template: '<input />' },
@@ -45,5 +45,6 @@ describe('NodeConfigView', () => {
     await wrapper.findAll('button')[1].trigger('click')
     await flushPromises()
     expect(gatewayApi.saveNodeConfig).toHaveBeenCalled()
+    expect(wrapper.findAll('.stub-row')).toHaveLength(0)
   })
 })

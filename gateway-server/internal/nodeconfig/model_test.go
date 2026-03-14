@@ -27,7 +27,7 @@ func TestPeerNodeConfigValidate(t *testing.T) {
 		PeerMediaIP:          "10.0.0.2",
 		PeerMediaPortStart:   30000,
 		PeerMediaPortEnd:     30100,
-		SupportedNetworkMode: config.NetworkModeAToBSIPBToARTP,
+		SupportedNetworkMode: config.NetworkModeSenderSIPReceiverRTP,
 		Enabled:              true,
 	}
 	if err := peer.Validate(); err != nil {

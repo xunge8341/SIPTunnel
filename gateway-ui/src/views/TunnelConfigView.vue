@@ -1,58 +1,62 @@
 <template>
   <a-space direction="vertical" size="middle" style="width: 100%">
-    <a-card title="通道配置（GB/T 28181 注册与心跳）">
+    <a-card title="HTTP 映射隧道配置（GB/T 28181 注册与心跳）">
       <a-form layout="vertical">
-        <a-row :gutter="12">
-          <a-col :span="8">
-            <a-form-item label="通道协议">
-              <a-input :value="draft.channel_protocol" disabled />
-            </a-form-item>
-          </a-col>
-          <a-col :span="8">
-            <a-form-item label="连接发起方">
-              <a-radio-group v-model:value="draft.connection_initiator">
-                <a-radio-button value="LOCAL">本端</a-radio-button>
-                <a-radio-button value="PEER">对端</a-radio-button>
-              </a-radio-group>
-            </a-form-item>
-          </a-col>
-          <a-col :span="8">
-            <a-form-item label="网络模式（只读）">
-              <a-input :value="networkModeLabel" disabled />
-            </a-form-item>
-          </a-col>
-        </a-row>
+        <a-form-item label="通道协议（控制面）">
+          <a-input :value="draft.channel_protocol" disabled />
+        </a-form-item>
+        <a-form-item>
+          <template #label>
+            <a-space size="small">
+              当前节点角色（发送端 / 接收端，只读）
+              <a-tooltip>
+                <template #title>角色由网络模式决定：本端与对端在请求/响应方向上各自承担发送端或接收端职责。</template>
+                <a-typography-text type="secondary">ⓘ</a-typography-text>
+              </a-tooltip>
+            </a-space>
+          </template>
+          <a-space direction="vertical" style="width: 100%">
+            <a-alert type="info" show-icon :message="networkModeProfile?.senderRole ?? '发送端角色未知'" />
+            <a-alert type="info" show-icon :message="networkModeProfile?.receiverRole ?? '接收端角色未知'" />
+            <a-typography-text type="secondary">{{ networkModeProfile?.requestDirection ?? '-' }}</a-typography-text>
+            <a-typography-text type="secondary">{{ networkModeProfile?.responseDirection ?? '-' }}</a-typography-text>
+          </a-space>
+        </a-form-item>
+        <a-form-item>
+          <template #label>
+            <a-space size="small">
+              网络模式（只读）
+              <a-tooltip>
+                <template #title>网络模式是全局约束，决定能力矩阵与 transport 推导，不能按单条映射覆盖。</template>
+                <a-typography-text type="secondary">ⓘ</a-typography-text>
+              </a-tooltip>
+            </a-space>
+          </template>
+          <a-input :value="networkModeProfile?.flowLabel ?? networkModeLabel" disabled />
+        </a-form-item>
 
-        <a-row :gutter="12">
-          <a-col :span="12">
-            <a-form-item label="本端设备编号">
-              <a-input v-model:value="draft.local_device_id" placeholder="例如：34020000001320000001" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="对端设备编号">
-              <a-input v-model:value="draft.peer_device_id" placeholder="例如：34020000002000000001" />
-            </a-form-item>
-          </a-col>
-        </a-row>
+        <a-form-item label="本端设备编号（来源：节点配置）">
+          <a-input :value="draft.local_device_id || '未配置'" disabled />
+        </a-form-item>
+        <a-form-item label="对端设备编号（来源：节点配置）">
+          <a-input :value="draft.peer_device_id || '未配置'" disabled />
+        </a-form-item>
+        <a-alert
+          type="info"
+          show-icon
+          style="margin-bottom: 12px"
+          message="设备编码由节点配置统一维护，通道配置仅展示，不可编辑。"
+        />
 
-        <a-row :gutter="12">
-          <a-col :span="8">
-            <a-form-item label="心跳间隔（秒）">
-              <a-input-number v-model:value="draft.heartbeat_interval_sec" :min="1" style="width: 100%" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="8">
-            <a-form-item label="注册重试次数">
-              <a-input-number v-model:value="draft.register_retry_count" :min="0" style="width: 100%" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="8">
-            <a-form-item label="注册重试间隔（秒）">
-              <a-input-number v-model:value="draft.register_retry_interval_sec" :min="1" style="width: 100%" />
-            </a-form-item>
-          </a-col>
-        </a-row>
+        <a-form-item label="心跳间隔（秒）">
+          <a-input-number v-model:value="draft.heartbeat_interval_sec" :min="1" style="width: 100%" />
+        </a-form-item>
+        <a-form-item label="注册重试次数">
+          <a-input-number v-model:value="draft.register_retry_count" :min="0" style="width: 100%" />
+        </a-form-item>
+        <a-form-item label="注册重试间隔（秒）">
+          <a-input-number v-model:value="draft.register_retry_interval_sec" :min="1" style="width: 100%" />
+        </a-form-item>
       </a-form>
       <a-space>
         <a-button @click="load">重载</a-button>
@@ -86,10 +90,28 @@
           </a-form-item>
         </a-col>
       </a-row>
+      <a-row :gutter="12">
+        <a-col :span="12">
+          <a-alert type="error" show-icon :message="`最近失败原因：${draft.last_failure_reason || '暂无'}`" />
+        </a-col>
+        <a-col :span="12">
+          <a-alert type="warning" show-icon :message="`下次重试时间：${formatDateTime(draft.next_retry_time)}`" />
+        </a-col>
+      </a-row>
+      <a-row :gutter="12" style="margin-top: 12px">
+        <a-col :span="24">
+          <a-space>
+            <a-button :loading="actionLoading" @click="runAction('register_now')">立即注册</a-button>
+            <a-button :loading="actionLoading" @click="runAction('reregister')">重新注册</a-button>
+            <a-button :loading="actionLoading" @click="runAction('heartbeat_once')">发送一次心跳</a-button>
+          </a-space>
+        </a-col>
+      </a-row>
       <a-alert
         type="info"
         show-icon
-        message="SIP 请求通道与 RTP 响应通道已由系统自动推导，无需运维单独编辑。"
+        style="margin-top: 12px"
+        message="transport 来源：由网络模式全局推导（SIP 请求通道 + RTP 响应通道），无需逐条映射配置。"
       />
     </a-card>
   </a-space>
@@ -99,15 +121,17 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { gatewayApi } from '../api/gateway'
-import type { TunnelConfigPayload } from '../types/gateway'
+import type { TunnelConfigPayload, TunnelConfigUpdatePayload, TunnelSessionActionPayload } from '../types/gateway'
 import { deriveTunnelCapability } from '../utils/tunnelConfig'
+import { getNetworkModeProfile } from '../utils/networkMode'
 
 const saving = ref(false)
+const actionLoading = ref(false)
 
 const networkModeLabels: Record<string, string> = {
-  A_TO_B_SIP__B_TO_A_RTP: 'A 到 B 单向 SIP，B 到 A 单向 RTP',
-  A_B_BIDIR_SIP__BIDIR_RTP: 'A 与 B 双向 SIP + 双向 RTP',
-  A_B_BIDIR_SIP__B_TO_A_RTP: 'A 与 B 双向 SIP，B 到 A 单向 RTP'
+  SENDER_SIP__RECEIVER_RTP: '模式1：SIP --> | <-- RTP',
+  SENDER_SIP__RECEIVER_SIP_RTP: '模式2：SIP --> | <-- SIP&RTP',
+  SENDER_SIP_RTP__RECEIVER_SIP_RTP: '模式3：SIP&RTP --> | <-- SIP&RTP'
 }
 
 const draft = reactive<TunnelConfigPayload>({
@@ -122,11 +146,14 @@ const draft = reactive<TunnelConfigPayload>({
   last_register_time: '',
   last_heartbeat_time: '',
   heartbeat_status: 'unknown',
+  last_failure_reason: '',
+  next_retry_time: '',
+  consecutive_heartbeat_timeout: 0,
   supported_capabilities: [],
   request_channel: 'SIP',
   response_channel: 'RTP',
-  network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
-  capability: deriveTunnelCapability({ network_mode: 'A_TO_B_SIP__B_TO_A_RTP' }),
+  network_mode: 'SENDER_SIP__RECEIVER_RTP',
+  capability: deriveTunnelCapability({ network_mode: 'SENDER_SIP__RECEIVER_RTP' }),
   capability_items: []
 })
 
@@ -137,6 +164,7 @@ const heartbeatTagColor = computed(() => {
 })
 
 const networkModeLabel = computed(() => networkModeLabels[draft.network_mode] ?? draft.network_mode)
+const networkModeProfile = computed(() => getNetworkModeProfile(draft.network_mode))
 
 const formatDateTime = (value: string) => {
   if (!value) return '暂无'
@@ -167,11 +195,30 @@ const load = async () => {
 const save = async () => {
   saving.value = true
   try {
-    await gatewayApi.saveTunnelConfig(JSON.parse(JSON.stringify(draft)))
+    const payload: TunnelConfigUpdatePayload = {
+      channel_protocol: draft.channel_protocol,
+      connection_initiator: draft.connection_initiator,
+      heartbeat_interval_sec: draft.heartbeat_interval_sec,
+      register_retry_count: draft.register_retry_count,
+      register_retry_interval_sec: draft.register_retry_interval_sec,
+      network_mode: draft.network_mode
+    }
+    await gatewayApi.saveTunnelConfig(payload)
     message.success('GB/T 28181 注册与心跳配置保存成功')
     await load()
   } finally {
     saving.value = false
+  }
+}
+
+const runAction = async (action: TunnelSessionActionPayload['action']) => {
+  actionLoading.value = true
+  try {
+    await gatewayApi.triggerTunnelSessionAction({ action })
+    message.success('会话动作已触发')
+    await load()
+  } finally {
+    actionLoading.value = false
   }
 }
 

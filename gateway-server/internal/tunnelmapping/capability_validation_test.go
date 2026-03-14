@@ -11,8 +11,8 @@ func TestValidateMappingCapabilityValid(t *testing.T) {
 	mapping.MaxRequestBodyBytes = 512 * 1024
 	mapping.MaxResponseBodyBytes = 2 * 1024 * 1024
 
-	cap := config.DeriveCapability(config.NetworkModeAToBSIPBToARTP)
-	result := ValidateMappingCapability(mapping, config.NetworkModeAToBSIPBToARTP, cap)
+	cap := config.DeriveCapability(config.NetworkModeSenderSIPReceiverRTP)
+	result := ValidateMappingCapability(mapping, config.NetworkModeSenderSIPReceiverRTP, cap)
 	if result.HasErrors() {
 		t.Fatalf("expected no errors, got %v", result.Errors)
 	}
@@ -26,8 +26,8 @@ func TestValidateMappingCapabilityWarning(t *testing.T) {
 	mapping.AllowedMethods = []string{"PUT"}
 	mapping.MaxRequestBodyBytes = 512 * 1024
 
-	cap := config.DeriveCapability(config.NetworkModeAToBSIPBToARTP)
-	result := ValidateMappingCapability(mapping, config.NetworkModeAToBSIPBToARTP, cap)
+	cap := config.DeriveCapability(config.NetworkModeSenderSIPReceiverRTP)
+	result := ValidateMappingCapability(mapping, config.NetworkModeSenderSIPReceiverRTP, cap)
 	if result.HasErrors() {
 		t.Fatalf("expected warning only, got errors %v", result.Errors)
 	}
@@ -40,8 +40,8 @@ func TestValidateMappingCapabilityInvalid(t *testing.T) {
 	mapping := validMapping()
 	mapping.MaxRequestBodyBytes = 2 * 1024 * 1024
 
-	cap := config.DeriveCapability(config.NetworkModeAToBSIPBToARTP)
-	result := ValidateMappingCapability(mapping, config.NetworkModeAToBSIPBToARTP, cap)
+	cap := config.DeriveCapability(config.NetworkModeSenderSIPReceiverRTP)
+	result := ValidateMappingCapability(mapping, config.NetworkModeSenderSIPReceiverRTP, cap)
 	if !result.HasErrors() {
 		t.Fatalf("expected errors for unsupported large request body")
 	}

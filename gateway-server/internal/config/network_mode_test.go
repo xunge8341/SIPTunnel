@@ -13,7 +13,7 @@ func TestDeriveCapability(t *testing.T) {
 	}{
 		{
 			name: "restricted sip one-way rtp",
-			mode: NetworkModeAToBSIPBToARTP,
+			mode: NetworkModeSenderSIPReceiverRTP,
 			want: Capability{
 				SupportsSmallRequestBody:        true,
 				SupportsLargeRequestBody:        false,
@@ -25,7 +25,7 @@ func TestDeriveCapability(t *testing.T) {
 		},
 		{
 			name: "full bidirectional",
-			mode: NetworkModeABBiDirSIPBiDirRTP,
+			mode: NetworkModeSenderSIPRTPReceiverAll,
 			want: Capability{
 				SupportsSmallRequestBody:        true,
 				SupportsLargeRequestBody:        true,
@@ -37,7 +37,7 @@ func TestDeriveCapability(t *testing.T) {
 		},
 		{
 			name: "bidirectional sip but limited rtp",
-			mode: NetworkModeABBiDirSIPBToARTP,
+			mode: NetworkModeSenderSIPReceiverSIPRTP,
 			want: Capability{
 				SupportsSmallRequestBody:        true,
 				SupportsLargeRequestBody:        false,
@@ -69,7 +69,7 @@ func TestDeriveCapability(t *testing.T) {
 }
 
 func TestNetworkModeValidate(t *testing.T) {
-	if err := NetworkModeAToBSIPBToARTP.Validate(); err != nil {
+	if err := NetworkModeSenderSIPReceiverRTP.Validate(); err != nil {
 		t.Fatalf("known mode should be valid: %v", err)
 	}
 	if err := NetworkMode("reserved_custom").Validate(); err != nil {
@@ -81,7 +81,7 @@ func TestNetworkModeValidate(t *testing.T) {
 }
 
 func TestCapabilityHelpers(t *testing.T) {
-	capability := DeriveCapability(NetworkModeAToBSIPBToARTP)
+	capability := DeriveCapability(NetworkModeSenderSIPReceiverRTP)
 	if len(capability.Matrix()) != 6 {
 		t.Fatalf("matrix size=%d, want 6", len(capability.Matrix()))
 	}
@@ -90,5 +90,11 @@ func TestCapabilityHelpers(t *testing.T) {
 	}
 	if !reflect.DeepEqual(capability.UnsupportedFeatures(), []string{"supports_large_request_body", "supports_bidirectional_http_tunnel", "supports_transparent_http_proxy"}) {
 		t.Fatalf("unexpected unsupported features: %+v", capability.UnsupportedFeatures())
+	}
+}
+
+func TestNetworkModeNormalizeLegacyAlias(t *testing.T) {
+	if got := NetworkMode("A_TO_B_SIP__B_TO_A_RTP").Normalize(); got != NetworkModeSenderSIPReceiverRTP {
+		t.Fatalf("legacy alias normalize got %s", got)
 	}
 }

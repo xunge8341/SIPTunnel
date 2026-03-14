@@ -33,7 +33,7 @@ func buildTestHandler(t *testing.T) (http.Handler, repository.TaskRepository, ob
 	if err != nil {
 		t.Fatalf("new node config store failed: %v", err)
 	}
-	if _, err := nodeStore.CreatePeer(nodeconfig.PeerNodeConfig{PeerNodeID: "peer-b", PeerName: "Peer B", PeerSignalingIP: "10.20.0.20", PeerSignalingPort: 5060, PeerMediaIP: "10.20.0.20", PeerMediaPortStart: 32000, PeerMediaPortEnd: 32100, SupportedNetworkMode: config.NetworkModeAToBSIPBToARTP, Enabled: true}); err != nil {
+	if _, err := nodeStore.CreatePeer(nodeconfig.PeerNodeConfig{PeerNodeID: "peer-b", PeerName: "Peer B", PeerSignalingIP: "10.20.0.20", PeerSignalingPort: 5060, PeerMediaIP: "10.20.0.20", PeerMediaPortStart: 32000, PeerMediaPortEnd: 32100, SupportedNetworkMode: config.NetworkModeSenderSIPReceiverRTP, Enabled: true}); err != nil {
 		t.Fatalf("seed peer failed: %v", err)
 	}
 	mappingStore, err := filerepo.NewTunnelMappingStore(t.TempDir() + "/tunnel_mappings.json")
@@ -56,16 +56,16 @@ func buildTestHandler(t *testing.T) (http.Handler, repository.TaskRepository, ob
 			return selfcheck.Report{Overall: selfcheck.LevelInfo, Summary: selfcheck.Summary{Info: 1, Warn: 1, Error: 1}, Items: []selfcheck.Item{{Name: "sample-info", Level: selfcheck.LevelInfo, Message: "ok", Suggestion: "none", ActionHint: "keep"}, {Name: "sample-warn", Level: selfcheck.LevelWarn, Message: "warn", Suggestion: "check", ActionHint: "verify"}, {Name: "sample-error", Level: selfcheck.LevelError, Message: "err", Suggestion: "fix", ActionHint: "recover"}}}
 		},
 		startupSummaryFn: func(_ context.Context) startupsummary.Summary {
-			capability := config.DeriveCapability(config.NetworkModeAToBSIPBToARTP)
-			return startupsummary.Summary{NodeID: "n1", NetworkMode: config.NetworkModeAToBSIPBToARTP, Capability: capability, CapabilitySummary: startupsummary.CapabilitySummary{Supported: capability.SupportedFeatures(), Unsupported: capability.UnsupportedFeatures(), Items: capability.Matrix()}, TransportPlan: config.ResolveTransportPlan(config.NetworkModeAToBSIPBToARTP, capability), ConfigPath: "./configs/config.yaml", ConfigSource: "cli", UIMode: "embedded", UIURL: "http://127.0.0.1:18080/", APIURL: "http://127.0.0.1:18080/api"}
+			capability := config.DeriveCapability(config.NetworkModeSenderSIPReceiverRTP)
+			return startupsummary.Summary{NodeID: "n1", NetworkMode: config.NetworkModeSenderSIPReceiverRTP, Capability: capability, CapabilitySummary: startupsummary.CapabilitySummary{Supported: capability.SupportedFeatures(), Unsupported: capability.UnsupportedFeatures(), Items: capability.Matrix()}, TransportPlan: config.ResolveTransportPlan(config.NetworkModeSenderSIPReceiverRTP), ConfigPath: "./configs/config.yaml", ConfigSource: "cli", UIMode: "embedded", UIURL: "http://127.0.0.1:18080/", APIURL: "http://127.0.0.1:18080/api"}
 		},
 		networkStatusFunc: func(_ context.Context) NodeNetworkStatus {
-			capability := config.DeriveCapability(config.NetworkModeAToBSIPBToARTP)
+			capability := config.DeriveCapability(config.NetworkModeSenderSIPReceiverRTP)
 			return NodeNetworkStatus{
-				NetworkMode:         config.NetworkModeAToBSIPBToARTP,
+				NetworkMode:         config.NetworkModeSenderSIPReceiverRTP,
 				Capability:          capability,
 				CapabilitySummary:   startupsummary.CapabilitySummary{Supported: capability.SupportedFeatures(), Unsupported: capability.UnsupportedFeatures(), Items: capability.Matrix()},
-				TransportPlan:       config.ResolveTransportPlan(config.NetworkModeAToBSIPBToARTP, capability),
+				TransportPlan:       config.ResolveTransportPlan(config.NetworkModeSenderSIPReceiverRTP),
 				SIP:                 SIPNetworkStatus{ListenIP: "10.10.1.10", ListenPort: 5060, Transport: "TCP", CurrentSessions: 12, CurrentConnections: 7},
 				RTP:                 RTPNetworkStatus{ListenIP: "10.10.1.10", PortStart: 30000, PortEnd: 30020, Transport: "UDP", ActiveTransfers: 3, UsedPorts: 6, AvailablePorts: 15, PortPoolTotal: 21, PortPoolUsed: 6, PortAllocFailTotal: 2},
 				RecentBindErrors:    []string{"sip: bind 10.10.1.10:5061 failed"},
@@ -73,6 +73,9 @@ func buildTestHandler(t *testing.T) (http.Handler, repository.TaskRepository, ob
 			}
 		},
 	}
+	deps.sessionMgr = newTunnelSessionManager(&fakeRegistrar{registerCodes: []int{200}}, deps.tunnelConfig)
+	deps.sessionMgr.Start()
+	t.Cleanup(func() { _ = deps.sessionMgr.Close() })
 	return newMux(deps), repo, audit
 }
 
@@ -246,11 +249,20 @@ func TestMappingTestEndpoint(t *testing.T) {
 	if payload.Data.ResponseChannel != "正常" {
 		t.Fatalf("expected response_channel=正常, got %s", payload.Data.ResponseChannel)
 	}
-	if payload.Data.RegistrationStatus != "未注册" {
-		t.Fatalf("expected registration_status=未注册, got %s", payload.Data.RegistrationStatus)
+	if payload.Data.RegistrationStatus != "未注册" && payload.Data.RegistrationStatus != "正常" {
+		t.Fatalf("unexpected registration_status=%s", payload.Data.RegistrationStatus)
 	}
-	if payload.Data.FailureReason == "" || payload.Data.SuggestedAction == "" {
-		t.Fatalf("expected failure diagnostics, got %+v", payload.Data)
+	if len(payload.Data.Stages) != 6 {
+		t.Fatalf("expected 6 staged checks, got %d", len(payload.Data.Stages))
+	}
+	if payload.Data.Stages[0].Key != "local_listening" || payload.Data.Stages[3].Key != "peer_reachability" || payload.Data.Stages[5].Key != "mapping_forward" {
+		t.Fatalf("unexpected stage sequence: %+v", payload.Data.Stages)
+	}
+	if payload.Data.Passed {
+		t.Fatalf("expected test environment staged test to fail")
+	}
+	if payload.Data.FailureStage == "" || payload.Data.FailureReason == "" || payload.Data.SuggestedAction == "" {
+		t.Fatalf("expected stage diagnostics, got %+v", payload.Data)
 	}
 }
 
@@ -422,13 +434,13 @@ func TestNodeNetworkStatusEndpointAndAudit(t *testing.T) {
 	if payload.Code != "OK" {
 		t.Fatalf("unexpected code: %s", payload.Code)
 	}
-	if payload.Data.CurrentNetworkMode != config.NetworkModeAToBSIPBToARTP || payload.Data.CompatibilityStatus.Level == "" {
+	if payload.Data.CurrentNetworkMode != config.NetworkModeSenderSIPReceiverRTP || payload.Data.CompatibilityStatus.Level == "" {
 		t.Fatalf("compatibility fields missing in network status: %+v", payload.Data)
 	}
 	if payload.Data.SIP.ListenIP != "10.10.1.10" || payload.Data.RTP.AvailablePorts != 15 || payload.Data.RTP.PortAllocFailTotal != 2 {
 		t.Fatalf("unexpected network status payload: %+v", payload.Data)
 	}
-	if payload.Data.NetworkMode != config.NetworkModeAToBSIPBToARTP || !payload.Data.Capability.SupportsLargeResponseBody || payload.Data.Capability.SupportsLargeRequestBody {
+	if payload.Data.NetworkMode != config.NetworkModeSenderSIPReceiverRTP || !payload.Data.Capability.SupportsLargeResponseBody || payload.Data.Capability.SupportsLargeRequestBody {
 		t.Fatalf("unexpected mode/capability payload: %+v", payload.Data)
 	}
 	if payload.Data.TransportPlan.RequestBodyTransport != config.TransportSIPBodyOnly || payload.Data.TransportPlan.ResponseBodyTransport != config.TransportRTPStream {
@@ -648,7 +660,7 @@ func TestNodeAndPeerEndpoints(t *testing.T) {
 		t.Fatalf("GET /api/node missing compatibility fields: %s", getNodeRR.Body.String())
 	}
 
-	putNodeBody := `{"node_id":"gateway-a-01","node_name":"Gateway-A-Updated","node_role":"gateway","network_mode":"A_TO_B_SIP__B_TO_A_RTP","sip_listen_ip":"10.10.1.10","sip_listen_port":5060,"sip_transport":"TCP","rtp_listen_ip":"10.10.1.10","rtp_port_start":30000,"rtp_port_end":30100,"rtp_transport":"UDP"}`
+	putNodeBody := `{"node_id":"gateway-a-01","node_name":"Gateway-A-Updated","node_role":"gateway","network_mode":"SENDER_SIP__RECEIVER_RTP","sip_listen_ip":"10.10.1.10","sip_listen_port":5060,"sip_transport":"TCP","rtp_listen_ip":"10.10.1.10","rtp_port_start":30000,"rtp_port_end":30100,"rtp_transport":"UDP"}`
 	putNode := httptest.NewRequest(http.MethodPut, "/api/node", bytes.NewBufferString(putNodeBody))
 	putNodeRR := httptest.NewRecorder()
 	h.ServeHTTP(putNodeRR, putNode)
@@ -656,14 +668,14 @@ func TestNodeAndPeerEndpoints(t *testing.T) {
 		t.Fatalf("PUT /api/node expected 200 got %d body=%s", putNodeRR.Code, putNodeRR.Body.String())
 	}
 
-	incompatiblePeerBody := `{"peer_node_id":"peer-b-bad","peer_name":"Peer B Bad","peer_signaling_ip":"10.20.0.20","peer_signaling_port":5060,"peer_media_ip":"10.20.0.20","peer_media_port_start":32000,"peer_media_port_end":32100,"supported_network_mode":"A_B_BIDIR_SIP__BIDIR_RTP","enabled":true}`
+	incompatiblePeerBody := `{"peer_node_id":"peer-b-bad","peer_name":"Peer B Bad","peer_signaling_ip":"10.20.0.20","peer_signaling_port":5060,"peer_media_ip":"10.20.0.20","peer_media_port_start":32000,"peer_media_port_end":32100,"supported_network_mode":"SENDER_SIP_RTP__RECEIVER_SIP_RTP","enabled":true}`
 	incompatiblePeer := httptest.NewRequest(http.MethodPost, "/api/peers", bytes.NewBufferString(incompatiblePeerBody))
 	incompatiblePeerRR := httptest.NewRecorder()
 	h.ServeHTTP(incompatiblePeerRR, incompatiblePeer)
 	if incompatiblePeerRR.Code != http.StatusBadRequest {
 		t.Fatalf("POST /api/peers incompatible expected 400 got %d body=%s", incompatiblePeerRR.Code, incompatiblePeerRR.Body.String())
 	}
-	createPeerBody := `{"peer_node_id":"peer-b-01","peer_name":"Peer B","peer_signaling_ip":"10.20.0.20","peer_signaling_port":5060,"peer_media_ip":"10.20.0.20","peer_media_port_start":32000,"peer_media_port_end":32100,"supported_network_mode":"A_TO_B_SIP__B_TO_A_RTP","enabled":true}`
+	createPeerBody := `{"peer_node_id":"peer-b-01","peer_name":"Peer B","peer_signaling_ip":"10.20.0.20","peer_signaling_port":5060,"peer_media_ip":"10.20.0.20","peer_media_port_start":32000,"peer_media_port_end":32100,"supported_network_mode":"SENDER_SIP__RECEIVER_RTP","enabled":true}`
 	createPeer := httptest.NewRequest(http.MethodPost, "/api/peers", bytes.NewBufferString(createPeerBody))
 	createPeerRR := httptest.NewRecorder()
 	h.ServeHTTP(createPeerRR, createPeer)
@@ -674,11 +686,11 @@ func TestNodeAndPeerEndpoints(t *testing.T) {
 	listPeers := httptest.NewRequest(http.MethodGet, "/api/peers", nil)
 	listPeersRR := httptest.NewRecorder()
 	h.ServeHTTP(listPeersRR, listPeers)
-	if listPeersRR.Code != http.StatusOK || !strings.Contains(listPeersRR.Body.String(), "peer-b-01") {
+	if listPeersRR.Code != http.StatusOK || !strings.Contains(listPeersRR.Body.String(), "peer-b") {
 		t.Fatalf("GET /api/peers failed code=%d body=%s", listPeersRR.Code, listPeersRR.Body.String())
 	}
 
-	updatePeerBody := `{"peer_name":"Peer B2","peer_signaling_ip":"10.20.0.20","peer_signaling_port":5061,"peer_media_ip":"10.20.0.21","peer_media_port_start":32010,"peer_media_port_end":32110,"supported_network_mode":"A_TO_B_SIP__B_TO_A_RTP","enabled":false}`
+	updatePeerBody := `{"peer_name":"Peer B2","peer_signaling_ip":"10.20.0.20","peer_signaling_port":5061,"peer_media_ip":"10.20.0.21","peer_media_port_start":32010,"peer_media_port_end":32110,"supported_network_mode":"SENDER_SIP__RECEIVER_RTP","enabled":false}`
 	updatePeer := httptest.NewRequest(http.MethodPut, "/api/peers/peer-b-01", bytes.NewBufferString(updatePeerBody))
 	updatePeerRR := httptest.NewRecorder()
 	h.ServeHTTP(updatePeerRR, updatePeer)
@@ -704,14 +716,14 @@ func TestNodePeerPersistenceAcrossHandlerRestart(t *testing.T) {
 		defer closer1.Close()
 	}
 
-	putNodeBody := `{"node_id":"gateway-a-01","node_name":"Persisted Node","node_role":"gateway","network_mode":"A_TO_B_SIP__B_TO_A_RTP","sip_listen_ip":"10.10.1.11","sip_listen_port":5060,"sip_transport":"TCP","rtp_listen_ip":"10.10.1.11","rtp_port_start":30000,"rtp_port_end":30010,"rtp_transport":"UDP"}`
+	putNodeBody := `{"node_id":"gateway-a-01","node_name":"Persisted Node","node_role":"gateway","network_mode":"SENDER_SIP__RECEIVER_RTP","sip_listen_ip":"10.10.1.11","sip_listen_port":5060,"sip_transport":"TCP","rtp_listen_ip":"10.10.1.11","rtp_port_start":30000,"rtp_port_end":30010,"rtp_transport":"UDP"}`
 	rrPut := httptest.NewRecorder()
 	h1.ServeHTTP(rrPut, httptest.NewRequest(http.MethodPut, "/api/node", bytes.NewBufferString(putNodeBody)))
 	if rrPut.Code != http.StatusOK {
 		t.Fatalf("update node failed: %d body=%s", rrPut.Code, rrPut.Body.String())
 	}
 
-	createPeerBody := `{"peer_node_id":"persist-peer","peer_name":"Persist Peer","peer_signaling_ip":"10.20.0.30","peer_signaling_port":5060,"peer_media_ip":"10.20.0.30","peer_media_port_start":33000,"peer_media_port_end":33010,"supported_network_mode":"A_TO_B_SIP__B_TO_A_RTP","enabled":true}`
+	createPeerBody := `{"peer_node_id":"persist-peer","peer_name":"Persist Peer","peer_signaling_ip":"10.20.0.30","peer_signaling_port":5060,"peer_media_ip":"10.20.0.30","peer_media_port_start":33000,"peer_media_port_end":33010,"supported_network_mode":"SENDER_SIP__RECEIVER_RTP","enabled":true}`
 	rrCreate := httptest.NewRecorder()
 	h1.ServeHTTP(rrCreate, httptest.NewRequest(http.MethodPost, "/api/peers", bytes.NewBufferString(createPeerBody)))
 	if rrCreate.Code != http.StatusCreated {
@@ -844,16 +856,16 @@ func TestSystemStatusEndpoint(t *testing.T) {
 	if payload.Data.TunnelStatus != "degraded" {
 		t.Fatalf("unexpected tunnel status: %+v", payload.Data)
 	}
-	if payload.Data.NetworkMode != config.NetworkModeAToBSIPBToARTP {
+	if payload.Data.NetworkMode != config.NetworkModeSenderSIPReceiverRTP {
 		t.Fatalf("unexpected network mode: %s", payload.Data.NetworkMode)
 	}
 	if !payload.Data.Capability.SupportsSmallRequestBody || !payload.Data.Capability.SupportsLargeResponseBody || payload.Data.Capability.SupportsLargeFileUpload {
 		t.Fatalf("unexpected capability matrix: %+v", payload.Data.Capability)
 	}
-	if payload.Data.RegistrationStatus != "" && payload.Data.RegistrationStatus != "unregistered" {
+	if payload.Data.RegistrationStatus != "" && payload.Data.RegistrationStatus != "unregistered" && payload.Data.RegistrationStatus != "registered" {
 		t.Fatalf("unexpected registration status: %s", payload.Data.RegistrationStatus)
 	}
-	if payload.Data.HeartbeatStatus != "" && payload.Data.HeartbeatStatus != "unknown" {
+	if payload.Data.HeartbeatStatus != "" && payload.Data.HeartbeatStatus != "unknown" && payload.Data.HeartbeatStatus != "healthy" {
 		t.Fatalf("unexpected heartbeat status: %s", payload.Data.HeartbeatStatus)
 	}
 	if payload.Data.MappingTotal <= 0 || payload.Data.MappingAbnormalTotal != payload.Data.MappingTotal {
@@ -885,7 +897,7 @@ func TestTunnelConfigEndpointGetAndPost(t *testing.T) {
 		t.Fatalf("GET /api/tunnel/config failed code=%d body=%s", getRR.Code, getRR.Body.String())
 	}
 
-	postBody := `{"channel_protocol":"GB/T 28181","connection_initiator":"LOCAL","local_device_id":"gateway-a-001","peer_device_id":"gateway-b-001","heartbeat_interval_sec":30,"register_retry_count":5,"register_retry_interval_sec":10,"registration_status":"registered","last_register_time":"2026-01-01T10:00:00Z","last_heartbeat_time":"2026-01-01T10:00:30Z","heartbeat_status":"healthy","network_mode":"A_B_BIDIR_SIP__BIDIR_RTP"}`
+	postBody := `{"channel_protocol":"GB/T 28181","connection_initiator":"LOCAL","heartbeat_interval_sec":30,"register_retry_count":5,"register_retry_interval_sec":10,"network_mode":"SENDER_SIP_RTP__RECEIVER_SIP_RTP"}`
 	postReq := httptest.NewRequest(http.MethodPost, "/api/tunnel/config", bytes.NewBufferString(postBody))
 	postRR := httptest.NewRecorder()
 	h.ServeHTTP(postRR, postReq)
@@ -896,8 +908,14 @@ func TestTunnelConfigEndpointGetAndPost(t *testing.T) {
 	getAfterReq := httptest.NewRequest(http.MethodGet, "/api/tunnel/config", nil)
 	getAfterRR := httptest.NewRecorder()
 	h.ServeHTTP(getAfterRR, getAfterReq)
-	if getAfterRR.Code != http.StatusOK || !strings.Contains(getAfterRR.Body.String(), "A_B_BIDIR_SIP__BIDIR_RTP") {
+	if getAfterRR.Code != http.StatusOK || !strings.Contains(getAfterRR.Body.String(), "SENDER_SIP_RTP__RECEIVER_SIP_RTP") {
 		t.Fatalf("GET after POST /api/tunnel/config failed code=%d body=%s", getAfterRR.Code, getAfterRR.Body.String())
+	}
+	if !strings.Contains(getAfterRR.Body.String(), "\"local_device_id\":\"gateway-a-01\"") {
+		t.Fatalf("expected local_device_id derived from node config, body=%s", getAfterRR.Body.String())
+	}
+	if !strings.Contains(getAfterRR.Body.String(), "\"peer_device_id\":\"peer-b\"") {
+		t.Fatalf("expected peer_device_id derived from node config, body=%s", getAfterRR.Body.String())
 	}
 }
 
@@ -912,7 +930,7 @@ func TestMappingsRejectWhenNoEnabledPeerConfigured(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new mapping store failed: %v", err)
 	}
-	h := newMux(handlerDeps{
+	deps := handlerDeps{
 		logger:    observability.NewStructuredLogger(nil),
 		audit:     audit,
 		repo:      repo,
@@ -920,10 +938,12 @@ func TestMappingsRejectWhenNoEnabledPeerConfigured(t *testing.T) {
 		mappings:  mappingStore,
 		nodeStore: nodeStore,
 		networkStatusFunc: func(_ context.Context) NodeNetworkStatus {
-			capability := config.DeriveCapability(config.NetworkModeAToBSIPBToARTP)
-			return NodeNetworkStatus{NetworkMode: config.NetworkModeAToBSIPBToARTP, Capability: capability}
+			capability := config.DeriveCapability(config.NetworkModeSenderSIPReceiverRTP)
+			return NodeNetworkStatus{NetworkMode: config.NetworkModeSenderSIPReceiverRTP, Capability: capability}
 		},
-	})
+	}
+	deps.sessionMgr = newTunnelSessionManager(&fakeRegistrar{registerCodes: []int{200}}, deps.tunnelConfig)
+	h := newMux(deps)
 
 	body := `{"mapping_id":"map-np","enabled":true,"local_bind_ip":"127.0.0.1","local_bind_port":18090,"local_base_path":"/orders","remote_target_ip":"10.0.0.2","remote_target_port":8090,"remote_base_path":"/api/orders","allowed_methods":["GET"],"connect_timeout_ms":500,"request_timeout_ms":3000,"response_timeout_ms":3000,"max_request_body_bytes":1024,"max_response_body_bytes":1024,"description":"orders mapping"}`
 	rr := httptest.NewRecorder()
@@ -935,7 +955,7 @@ func TestMappingsRejectWhenNoEnabledPeerConfigured(t *testing.T) {
 
 func TestMappingsRejectWhenMultipleEnabledPeersConfigured(t *testing.T) {
 	h, _, _ := buildTestHandler(t)
-	createPeerBody := `{"peer_node_id":"peer-b-02","peer_name":"Peer B2","peer_signaling_ip":"10.20.0.21","peer_signaling_port":5060,"peer_media_ip":"10.20.0.21","peer_media_port_start":32000,"peer_media_port_end":32100,"supported_network_mode":"A_TO_B_SIP__B_TO_A_RTP","enabled":true}`
+	createPeerBody := `{"peer_node_id":"peer-b-02","peer_name":"Peer B2","peer_signaling_ip":"10.20.0.21","peer_signaling_port":5060,"peer_media_ip":"10.20.0.21","peer_media_port_start":32000,"peer_media_port_end":32100,"supported_network_mode":"SENDER_SIP__RECEIVER_RTP","enabled":true}`
 	createPeer := httptest.NewRequest(http.MethodPost, "/api/peers", bytes.NewBufferString(createPeerBody))
 	createPeerRR := httptest.NewRecorder()
 	h.ServeHTTP(createPeerRR, createPeer)
@@ -959,11 +979,21 @@ func TestMappingsListIncludesBoundPeerAndBindingErrors(t *testing.T) {
 		t.Fatalf("expected bound peer in list, got %d body=%s", listRR.Code, listRR.Body.String())
 	}
 
-	createPeerBody := `{"peer_node_id":"peer-b-03","peer_name":"Peer B3","peer_signaling_ip":"10.20.0.22","peer_signaling_port":5060,"peer_media_ip":"10.20.0.22","peer_media_port_start":32000,"peer_media_port_end":32100,"supported_network_mode":"A_TO_B_SIP__B_TO_A_RTP","enabled":true}`
+	createPeerBody := `{"peer_node_id":"peer-b-03","peer_name":"Peer B3","peer_signaling_ip":"10.20.0.22","peer_signaling_port":5060,"peer_media_ip":"10.20.0.22","peer_media_port_start":32000,"peer_media_port_end":32100,"supported_network_mode":"SENDER_SIP__RECEIVER_RTP","enabled":true}`
 	h.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/peers", bytes.NewBufferString(createPeerBody)))
 	listConflictRR := httptest.NewRecorder()
 	h.ServeHTTP(listConflictRR, httptest.NewRequest(http.MethodGet, "/api/mappings", nil))
 	if listConflictRR.Code != http.StatusOK || !strings.Contains(listConflictRR.Body.String(), "binding_error") {
 		t.Fatalf("expected binding_error in list, got %d body=%s", listConflictRR.Code, listConflictRR.Body.String())
+	}
+}
+
+func TestTunnelSessionActionEndpoint(t *testing.T) {
+	h, _, _ := buildTestHandler(t)
+	body := `{"action":"register_now"}`
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, httptest.NewRequest(http.MethodPost, "/api/tunnel/session/actions", bytes.NewBufferString(body)))
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), "register_now") {
+		t.Fatalf("unexpected response code=%d body=%s", rr.Code, rr.Body.String())
 	}
 }

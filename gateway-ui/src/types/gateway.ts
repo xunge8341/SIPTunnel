@@ -249,6 +249,7 @@ export interface OpsLimits {
   maxConcurrent: number
 }
 
+// 兼容 API（历史模型 route/api_code）返回结构，非主线术语。
 export interface OpsRoute {
   api_code: string
   http_method: string
@@ -295,7 +296,21 @@ export interface TunnelMappingSavePayload {
   warnings?: string[]
 }
 
+export interface MappingTestStage {
+  key: string
+  name: string
+  status: 'passed' | 'failed' | 'blocked'
+  passed: boolean
+  detail: string
+  blocking_reason?: string
+  suggested_action?: string
+}
+
 export interface MappingTestPayload {
+  passed: boolean
+  status: 'passed' | 'failed'
+  stages: MappingTestStage[]
+  failure_stage?: string
   signaling_request: '成功' | '失败'
   response_channel: '正常' | '异常'
   registration_status: '正常' | '未注册'
@@ -365,12 +380,43 @@ export interface TunnelConfigPayload {
   last_register_time: string
   last_heartbeat_time: string
   heartbeat_status: string
+  last_failure_reason: string
+  next_retry_time: string
+  consecutive_heartbeat_timeout: number
   supported_capabilities: string[]
   request_channel: string
   response_channel: string
   network_mode: string
   capability: TunnelConfigCapability
   capability_items: TunnelConfigCapabilityItem[]
+}
+
+export interface TunnelConfigUpdatePayload {
+  channel_protocol: string
+  connection_initiator: 'LOCAL' | 'PEER'
+  heartbeat_interval_sec: number
+  register_retry_count: number
+  register_retry_interval_sec: number
+  network_mode: string
+}
+
+export interface TunnelSessionActionPayload {
+  action: 'register_now' | 'reregister' | 'heartbeat_once'
+}
+
+export interface TunnelSessionRuntimeState {
+  registration_status: string
+  heartbeat_status: string
+  last_register_time: string
+  last_heartbeat_time: string
+  last_failure_reason: string
+  next_retry_time: string
+  consecutive_heartbeat_timeout: number
+}
+
+export interface TunnelSessionActionResponse {
+  action: string
+  state: TunnelSessionRuntimeState
 }
 
 export interface NodeConfigEndpoint {

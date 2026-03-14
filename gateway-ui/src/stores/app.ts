@@ -5,7 +5,7 @@ const navigation: NavigationItem[] = [
   { key: 'dashboard', label: '首页', path: '/dashboard' },
   { key: 'node-config', label: '节点配置', path: '/node-config' },
   { key: 'tunnel-config', label: '通道配置', path: '/tunnel-config' },
-  { key: 'tunnel-mappings', label: '映射规则', path: '/tunnel-mappings' },
+  { key: 'tunnel-mappings', label: '隧道映射', path: '/tunnel-mappings' },
   { key: 'audit-log', label: '日志', path: '/audit-logs' },
   { key: 'ops-tools', label: '运维工具', path: '/ops-tools' }
 ]

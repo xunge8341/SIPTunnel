@@ -12,11 +12,23 @@ SIPTunnel 是跨安全边界业务交换网关，当前仓库为 monorepo 结构
 SIPTunnel 同时支持两种产品模式，文档与 UI 必须明确区分：
 
 1. **命令网关模式**：以 SIP 控制命令分发与状态同步为核心。
-2. **HTTP 映射隧道模式（当前主线）**：以“受全局网络模式约束的 HTTP 映射转发”为核心。
+2. **HTTP 映射隧道模式（当前主线）**：以“受全局网络模式约束的 HTTP 映射隧道”为核心。
 
 当前主线统一术语：**本端节点 / 对端节点 / 网络模式 / 能力矩阵 / 隧道映射 / 本端入口 / 对端目标**。
 
-> 兼容说明：`route` / `api_code` / `template` 属于历史模型（兼容术语），仅在迁移或兼容接口（如 `/api/routes`）中出现，不再作为默认产品术语。
+网络模型（HTTP 映射隧道主链路）：
+
+- 接收端（SIP 下级域）：监听本端入口端口，收到 HTTP 请求后通过 Invite 连接发送端。
+- 发送端（SIP 上级域）：收到 Invite 后访问对端目标 `IP:Port`，并通过 SIP/RTP 返回给接收端。
+- 支持单向映射与双向映射，基础承载能力来自 GB/T 28181 视频点流链路。
+
+> 兼容说明：`route` / `api_code` / `template` 属于**历史模型**（**兼容术语 / deprecated 术语**），仅在迁移或兼容接口（如 `/api/routes`）中出现，不再作为默认产品术语。
+
+详见：
+
+- `docs/command-gateway-vs-http-mapping-tunnel.md`
+- `docs/network-mode-capability-tunnel-mapping.md`
+- `docs/migration-round10.md`（本轮重构迁移说明：术语/配置模型/网络模式/注册心跳/映射运行时）
 
 ## 关键能力与约束落实
 
@@ -29,7 +41,8 @@ SIPTunnel 同时支持两种产品模式，文档与 UI 必须明确区分：
 - 生产基线：限流、审计日志、trace 字段透传和结构化日志。
 - 网络模式能力矩阵：`NetworkMode -> Capability` 由后端统一推导，覆盖系统信息 API、启动摘要与诊断导出（见 `docs/README.md#网络模式与能力矩阵`）。
 - 映射能力联动校验：`TunnelMapping` 保存/更新会按当前 `NetworkMode/Capability` 校验 `max_request_body_bytes`、`max_response_body_bytes`、`allowed_methods`（默认 `[*]`，即全部允许）与 `require_streaming_response`，并在 API/selfcheck/诊断暴露 warnings 或 errors。
-- 映射运行时主链路：`enabled=true` 时后端会自动监听 `local_bind_ip:local_bind_port`；`enabled=false` 或删除映射会自动释放监听。监听状态会回写到映射列表/状态页（后端状态字段：`disabled/listening/connected/interrupted/start_failed`；统一中文展示：`未启用/监听中/已连接/异常/启动失败`），并附带异常原因与建议动作（含中文端口冲突提示）。
+- 映射运行时主链路：`enabled=true` 时后端会自动监听 `local_bind_ip:local_bind_port`；`enabled=false` 或删除映射会自动释放监听。监听状态会回写到映射列表/状态页（后端状态字段：`disabled/listening/forwarding/degraded/connected/interrupted/start_failed`；统一中文展示：`未启用/监听中/转发中/降级/已连接/异常/启动失败`），并附带异常原因与建议动作（含中文端口冲突提示）。
+- 映射入口收到 HTTP 请求后会执行 direct HTTP forwarder：转发 method/path/query/header/body 到对端目标，并回传真实 status/header/body；链路失败时返回 `502 Bad Gateway`。
 
 
 ### 映射规则配置瘦身（当前产品要求）
@@ -53,17 +66,35 @@ SIPTunnel 同时支持两种产品模式，文档与 UI 必须明确区分：
 | --- | --- | --- |
 | `disabled` | 未启用 | 规则未启用，不参与链路。 |
 | `listening` | 监听中 | 本端监听就绪，等待业务流量。 |
+| `forwarding` | 转发中 | 正在把本端请求转发到对端目标。 |
+| `degraded` | 降级 | 链路可监听但最近转发失败，需要排障。 |
 | `connected` | 已连接 | 链路可用。 |
 | `interrupted` / `abnormal` | 异常 | 运行中断或健康检查失败。 |
 | `start_failed` | 启动失败 | 启动监听失败（常见端口冲突）。 |
 
-规则测试统一字段：
+规则测试（`POST /api/mapping/test`）统一字段：
 
-- `signaling_request`：成功 / 失败
-- `response_channel`：正常 / 异常
-- `registration_status`：正常 / 未注册
-- `failure_reason`：异常原因
-- `suggested_action`：建议动作
+- `passed`/`status`：阶段化联调总结果（`passed|failed`）。
+- `stages`：分阶段结果数组，至少包含：
+  - `local_listening`（本地监听可用）
+  - `registration`（注册状态正常）
+  - `heartbeat`（心跳状态正常）
+  - `peer_reachability`（对端可达）
+  - `session_ready`（会话已准备）
+  - `mapping_forward`（映射转发准备就绪）
+- `failure_stage`：当前卡住的阶段名称。
+- `failure_reason`：阻塞原因（例如 peer 不可达、映射未监听、绑定对端冲突）。
+- `suggested_action`：对应阶段建议动作。
+- 保留兼容字段：`signaling_request`、`response_channel`、`registration_status`。
+
+GB/T 28181 注册/心跳状态字段（`/api/tunnel/config`、`/api/system/status`）：
+
+- `registration_status`：`unregistered` / `registering` / `registered` / `failed`（由后端会话状态机维护，非手工编辑）。
+- `heartbeat_status`：`unknown` / `healthy` / `timeout`。
+- `last_failure_reason`：最近一次注册或心跳失败原因。
+- `next_retry_time`：下一次自动重试（重注册）时间。
+- `consecutive_heartbeat_timeout`：连续心跳超时次数。
+- 会话动作接口：`POST /api/tunnel/session/actions`，`action` 支持 `register_now`、`reregister`、`heartbeat_once`。
 ## 如何启动
 
 ### 一键本地启动（推荐）
@@ -226,6 +257,20 @@ $env:VITE_API_BASE_URL='http://127.0.0.1:18080/api'
 - API 清单（OpenAPI）：`gateway-server/docs/openapi-ops.yaml`
 
 
+
+## 本轮重构验证步骤（回归建议）
+
+```bash
+cd gateway-ui && npm test -- src/views/__tests__/TunnelConfigView.spec.ts src/views/__tests__/TunnelMappingsView.spec.ts src/utils/__tests__/capability.spec.ts
+cd ../gateway-server && go test ./internal/service/sipcontrol ./internal/server ./internal/config
+cd ../gateway-server && go test ./...
+```
+
+关键接口核验：
+
+- `GET /api/tunnel/config`：确认设备编码为节点配置派生只读字段，注册/心跳状态字段完整。
+- `GET /api/system/status`：确认网络模式、能力矩阵、注册状态、心跳状态已暴露。
+- `POST/GET /api/mappings`：确认映射运行时状态（含 `status_reason/suggested_action`）可回写。
 
 ## Embedded UI（后端自宿主）模式
 
@@ -898,7 +943,7 @@ cd gateway-ui && npm run test -- --run
 - 映射规则：按 TunnelMapping 编辑核心业务映射，并展示每条映射的“映射链路状态 + 状态原因”（如未注册、心跳超时、对端不可达、未建立响应通道），不再直出英文状态字段（发布/回滚流程见 `docs/operations.md`）。
 - 本端节点配置：集中维护 `node_id/node_name/node_role/network_mode` 与 SIP/RTP 监听参数，并展示当前 NetworkMode/Capability 摘要。
 - 节点状态页：统一使用中文状态标签（正常/异常/已连接/未连接），并补充注册状态、心跳状态、最近时间和异常原因，便于值班快速定位。
-- 通道配置：以 GB/T 28181 注册与心跳为核心，维护连接发起方、设备编号、心跳间隔、注册重试策略，并只读展示当前注册/心跳状态与最近时间。
+- 通道配置：以 GB/T 28181 注册与心跳为核心，维护连接发起方、心跳间隔、注册重试策略；设备编号改为从节点配置派生并只读展示。
 - 对端节点配置：维护 peer signaling/media 地址范围、`supported_network_mode` 与启停状态，支持增删改查。
 - 审计日志：查询与详情查看（升级研发前需附带审计与诊断信息）
 
@@ -916,3 +961,13 @@ cd gateway-ui && npm run test -- --run
 ```bash
 ./scripts/loadtest/run.sh
 ```
+
+### 网络模式迁移（发送端 / 接收端模型）
+
+自本版本起，`network.mode` 统一采用发送端（SIP 上级域）/接收端（SIP 下级域）命名，且 transport plan 仅由全局模式唯一推导：
+
+- `SENDER_SIP__RECEIVER_RTP`：`SIP --> | <-- RTP`
+- `SENDER_SIP__RECEIVER_SIP_RTP`：`SIP --> | <-- SIP&RTP`
+- `SENDER_SIP_RTP__RECEIVER_SIP_RTP`：`SIP&RTP --> | <-- SIP&RTP`
+
+兼容说明：旧值 `A_TO_B_SIP__B_TO_A_RTP`、`A_B_BIDIR_SIP__B_TO_A_RTP`、`A_B_BIDIR_SIP__BIDIR_RTP` 在后端会自动归一化到上述新枚举，建议尽快完成配置文件与自动化脚本替换。

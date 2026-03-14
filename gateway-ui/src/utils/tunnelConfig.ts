@@ -1,7 +1,7 @@
 import type { TunnelConfigCapability, TunnelConfigCapabilityItem, TunnelConfigPayload } from '../types/gateway'
 
 export function deriveTunnelCapability(config: Pick<TunnelConfigPayload, 'network_mode'>): TunnelConfigCapability {
-  if (config.network_mode === 'A_B_BIDIR_SIP__BIDIR_RTP') {
+  if (config.network_mode === 'SENDER_SIP_RTP__RECEIVER_SIP_RTP') {
     return {
       supports_small_request_body: true,
       supports_large_request_body: true,
@@ -12,7 +12,7 @@ export function deriveTunnelCapability(config: Pick<TunnelConfigPayload, 'networ
     }
   }
 
-  if (config.network_mode === 'A_TO_B_SIP__B_TO_A_RTP' || config.network_mode === 'A_B_BIDIR_SIP__B_TO_A_RTP') {
+  if (config.network_mode === 'SENDER_SIP__RECEIVER_RTP' || config.network_mode === 'SENDER_SIP__RECEIVER_SIP_RTP') {
     return {
       supports_small_request_body: true,
       supports_large_request_body: false,

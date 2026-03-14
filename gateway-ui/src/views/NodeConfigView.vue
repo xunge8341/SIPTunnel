@@ -1,23 +1,18 @@
 <template>
-  <a-card title="节点配置">
+  <a-card title="节点配置（HTTP 映射隧道）">
     <a-form layout="vertical">
-      <a-divider orientation="left">本端节点</a-divider>
-      <a-row :gutter="12">
-        <a-col :span="12"><a-form-item label="节点IP"><a-input v-model:value="draft.local_node.node_ip" /></a-form-item></a-col>
-        <a-col :span="12"><a-form-item label="信令端口"><a-input-number v-model:value="draft.local_node.signaling_port" :min="1" :max="65535" style="width: 100%" /></a-form-item></a-col>
-      </a-row>
-      <a-row :gutter="12">
-        <a-col :span="12"><a-form-item label="设备编号"><a-input v-model:value="draft.local_node.device_id" /></a-form-item></a-col>
-        <a-col :span="6"><a-form-item label="RTP起始端口"><a-input-number v-model:value="draft.local_node.rtp_port_start" :min="1" :max="65535" style="width: 100%" /></a-form-item></a-col>
-        <a-col :span="6"><a-form-item label="RTP结束端口"><a-input-number v-model:value="draft.local_node.rtp_port_end" :min="1" :max="65535" style="width: 100%" /></a-form-item></a-col>
-      </a-row>
+      <a-alert type="info" show-icon message="节点配置按“本端节点 / 对端节点”拆分；角色由网络模式推导，不再按 route/api_code 术语区分。" style="margin-bottom: 12px" />
+      <a-divider orientation="left">本端节点（本端入口监听）</a-divider>
+      <a-form-item label="节点IP"><a-input v-model:value="draft.local_node.node_ip" /></a-form-item>
+      <a-form-item label="信令端口"><a-input-number v-model:value="draft.local_node.signaling_port" :min="1" :max="65535" style="width: 100%" /></a-form-item>
+      <a-form-item label="设备编号"><a-input v-model:value="draft.local_node.device_id" /></a-form-item>
+      <a-form-item label="RTP起始端口"><a-input-number v-model:value="draft.local_node.rtp_port_start" :min="1" :max="65535" style="width: 100%" /></a-form-item>
+      <a-form-item label="RTP结束端口"><a-input-number v-model:value="draft.local_node.rtp_port_end" :min="1" :max="65535" style="width: 100%" /></a-form-item>
 
-      <a-divider orientation="left">对端节点</a-divider>
-      <a-row :gutter="12">
-        <a-col :span="8"><a-form-item label="节点IP"><a-input v-model:value="draft.peer_node.node_ip" /></a-form-item></a-col>
-        <a-col :span="8"><a-form-item label="信令端口"><a-input-number v-model:value="draft.peer_node.signaling_port" :min="1" :max="65535" style="width: 100%" /></a-form-item></a-col>
-        <a-col :span="8"><a-form-item label="设备编号"><a-input v-model:value="draft.peer_node.device_id" /></a-form-item></a-col>
-      </a-row>
+      <a-divider orientation="left">对端节点（对端目标接入）</a-divider>
+      <a-form-item label="节点IP"><a-input v-model:value="draft.peer_node.node_ip" /></a-form-item>
+      <a-form-item label="信令端口"><a-input-number v-model:value="draft.peer_node.signaling_port" :min="1" :max="65535" style="width: 100%" /></a-form-item>
+      <a-form-item label="设备编号"><a-input v-model:value="draft.peer_node.device_id" /></a-form-item>
     </a-form>
     <a-space>
       <a-button @click="load">重载</a-button>

@@ -23,7 +23,8 @@ type TunnelTransportPlan struct {
 
 // ResolveTransportPlan 统一根据全局 NetworkMode/Capability 推导 HTTP 映射承载策略。
 // 注意：该计划属于系统全局能力，不属于逐条映射可编辑字段。
-func ResolveTransportPlan(mode NetworkMode, capability Capability) TunnelTransportPlan {
+func ResolveTransportPlan(mode NetworkMode) TunnelTransportPlan {
+	capability := DeriveCapability(mode)
 	plan := TunnelTransportPlan{
 		RequestMetaTransport:  TransportSIPControl,
 		ResponseMetaTransport: TransportSIPControl,
@@ -67,12 +68,12 @@ func ResolveTransportPlan(mode NetworkMode, capability Capability) TunnelTranspo
 	}
 
 	switch mode.Normalize() {
-	case NetworkModeAToBSIPBToARTP:
-		plan.Notes = append(plan.Notes, "模式=A_TO_B_SIP__B_TO_A_RTP：适合小请求 + 大响应。")
-	case NetworkModeABBiDirSIPBiDirRTP:
-		plan.Notes = append(plan.Notes, "模式=A_B_BIDIR_SIP__BIDIR_RTP：支持双向大载荷承载。")
-	case NetworkModeABBiDirSIPBToARTP:
-		plan.Notes = append(plan.Notes, "模式=A_B_BIDIR_SIP__B_TO_A_RTP：上行大请求受限，下行大响应可用。")
+	case NetworkModeSenderSIPReceiverRTP:
+		plan.Notes = append(plan.Notes, "模式=SENDER_SIP__RECEIVER_RTP：适合小请求 + 大响应。")
+	case NetworkModeSenderSIPRTPReceiverAll:
+		plan.Notes = append(plan.Notes, "模式=SENDER_SIP_RTP__RECEIVER_SIP_RTP：支持双向大载荷承载。")
+	case NetworkModeSenderSIPReceiverSIPRTP:
+		plan.Notes = append(plan.Notes, "模式=SENDER_SIP__RECEIVER_SIP_RTP：上行大请求受限，下行大响应可用。")
 	default:
 		plan.Warnings = append(plan.Warnings, "未知/预留 network.mode，transport 计划已降级为最小可用能力。")
 	}

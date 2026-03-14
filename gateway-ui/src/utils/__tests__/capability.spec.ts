@@ -3,7 +3,7 @@ import type { StartupSummaryPayload, TunnelMapping } from '../../types/gateway'
 
 const startupSummary: StartupSummaryPayload = {
   node_id: 'node-1',
-  network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+  network_mode: 'SENDER_SIP__RECEIVER_RTP',
   capability: {
     supports_large_request_body: false,
     supports_large_response_body: false,

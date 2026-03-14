@@ -5,7 +5,8 @@ import { gatewayApi } from '../../api/gateway'
 vi.mock('../../api/gateway', () => ({
   gatewayApi: {
     fetchTunnelConfig: vi.fn(),
-    saveTunnelConfig: vi.fn()
+    saveTunnelConfig: vi.fn(),
+    triggerTunnelSessionAction: vi.fn()
   }
 }))
 
@@ -42,10 +43,13 @@ describe('TunnelConfigView', () => {
       last_register_time: '2026-03-14T10:00:00Z',
       last_heartbeat_time: '2026-03-14T10:00:30Z',
       heartbeat_status: 'healthy',
+      last_failure_reason: '',
+      next_retry_time: '',
+      consecutive_heartbeat_timeout: 0,
       supported_capabilities: ['支持小请求体（典型 SIP JSON 负载）'],
       request_channel: 'SIP',
       response_channel: 'RTP',
-      network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+      network_mode: 'SENDER_SIP__RECEIVER_RTP',
       capability: {
         supports_small_request_body: true,
         supports_large_request_body: false,
@@ -62,6 +66,10 @@ describe('TunnelConfigView', () => {
     await flushPromises()
 
     expect(gatewayApi.fetchTunnelConfig).toHaveBeenCalled()
+    expect(wrapper.text()).toContain('单向请求：发送端 -> 接收端（SIP）')
+    expect(wrapper.text()).toContain('单向响应：接收端 -> 发送端（RTP）')
+    expect(wrapper.text()).toMatchSnapshot()
+
     const saveButton = wrapper.findAll('button').find((btn) => btn.text() === '保存配置')
     expect(saveButton).toBeTruthy()
     await saveButton!.trigger('click')
@@ -72,8 +80,16 @@ describe('TunnelConfigView', () => {
       channel_protocol: 'GB/T 28181',
       connection_initiator: 'LOCAL',
       heartbeat_interval_sec: 60,
-      request_channel: 'SIP',
-      response_channel: 'RTP'
+      register_retry_count: 3
     })
+    expect(calls[calls.length - 1][0]).not.toHaveProperty('local_device_id')
+    expect(calls[calls.length - 1][0]).not.toHaveProperty('peer_device_id')
+
+    vi.mocked(gatewayApi.triggerTunnelSessionAction).mockResolvedValue({} as any)
+    const registerNowButton = wrapper.findAll('button').find((btn) => btn.text() === '立即注册')
+    expect(registerNowButton).toBeTruthy()
+    await registerNowButton!.trigger('click')
+    await flushPromises()
+    expect(gatewayApi.triggerTunnelSessionAction).toHaveBeenCalledWith({ action: 'register_now' })
   })
 })

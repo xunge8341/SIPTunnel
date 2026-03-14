@@ -53,6 +53,7 @@ type handlerDeps struct {
 
 	lastLinkTest LinkTestReport
 	tunnelConfig TunnelConfigPayload
+	sessionMgr   *tunnelSessionManager
 }
 
 type nodeConfigStore interface {
@@ -106,11 +107,25 @@ type MappingWithWarnings struct {
 }
 
 type MappingTestResponse struct {
-	SignalingRequest   string `json:"signaling_request"`
-	ResponseChannel    string `json:"response_channel"`
-	RegistrationStatus string `json:"registration_status"`
-	FailureReason      string `json:"failure_reason,omitempty"`
-	SuggestedAction    string `json:"suggested_action,omitempty"`
+	Passed             bool               `json:"passed"`
+	Status             string             `json:"status"`
+	Stages             []MappingTestStage `json:"stages"`
+	FailureStage       string             `json:"failure_stage,omitempty"`
+	SignalingRequest   string             `json:"signaling_request"`
+	ResponseChannel    string             `json:"response_channel"`
+	RegistrationStatus string             `json:"registration_status"`
+	FailureReason      string             `json:"failure_reason,omitempty"`
+	SuggestedAction    string             `json:"suggested_action,omitempty"`
+}
+
+type MappingTestStage struct {
+	Key             string `json:"key"`
+	Name            string `json:"name"`
+	Status          string `json:"status"`
+	Passed          bool   `json:"passed"`
+	Detail          string `json:"detail"`
+	BlockingReason  string `json:"blocking_reason,omitempty"`
+	SuggestedAction string `json:"suggested_action,omitempty"`
 }
 
 type mappingListResponse struct {
@@ -181,6 +196,8 @@ type SystemStatusResponse struct {
 	HeartbeatStatus          string                 `json:"heartbeat_status,omitempty"`
 	LastRegisterTime         string                 `json:"last_register_time,omitempty"`
 	LastHeartbeatTime        string                 `json:"last_heartbeat_time,omitempty"`
+	LastFailureReason        string                 `json:"last_failure_reason,omitempty"`
+	NextRetryTime            string                 `json:"next_retry_time,omitempty"`
 	MappingTotal             int                    `json:"mapping_total"`
 	MappingAbnormalTotal     int                    `json:"mapping_abnormal_total"`
 	LatestMappingErrorReason string                 `json:"latest_mapping_error_reason,omitempty"`
@@ -210,8 +227,9 @@ type NodeConfigPayload struct {
 }
 
 type TunnelConfigPayload struct {
-	ChannelProtocol          string                  `json:"channel_protocol"`
-	ConnectionInitiator      string                  `json:"connection_initiator"`
+	ChannelProtocol     string `json:"channel_protocol"`
+	ConnectionInitiator string `json:"connection_initiator"`
+	// Device IDs are derived from node configuration and are read-only in tunnel config.
 	LocalDeviceID            string                  `json:"local_device_id"`
 	PeerDeviceID             string                  `json:"peer_device_id"`
 	HeartbeatIntervalSec     int                     `json:"heartbeat_interval_sec"`
@@ -221,12 +239,28 @@ type TunnelConfigPayload struct {
 	LastRegisterTime         string                  `json:"last_register_time"`
 	LastHeartbeatTime        string                  `json:"last_heartbeat_time"`
 	HeartbeatStatus          string                  `json:"heartbeat_status"`
+	LastFailureReason        string                  `json:"last_failure_reason"`
+	NextRetryTime            string                  `json:"next_retry_time"`
+	ConsecutiveHBTimeout     int                     `json:"consecutive_heartbeat_timeout"`
 	SupportedCapabilities    []string                `json:"supported_capabilities"`
 	RequestChannel           string                  `json:"request_channel"`
 	ResponseChannel          string                  `json:"response_channel"`
 	NetworkMode              config.NetworkMode      `json:"network_mode"`
 	Capability               config.Capability       `json:"capability"`
 	CapabilityItems          []config.CapabilityItem `json:"capability_items"`
+}
+
+type TunnelConfigUpdatePayload struct {
+	ChannelProtocol          string             `json:"channel_protocol"`
+	ConnectionInitiator      string             `json:"connection_initiator"`
+	HeartbeatIntervalSec     int                `json:"heartbeat_interval_sec"`
+	RegisterRetryCount       int                `json:"register_retry_count"`
+	RegisterRetryIntervalSec int                `json:"register_retry_interval_sec"`
+	RegistrationStatus       string             `json:"registration_status"`
+	LastRegisterTime         string             `json:"last_register_time"`
+	LastHeartbeatTime        string             `json:"last_heartbeat_time"`
+	HeartbeatStatus          string             `json:"heartbeat_status"`
+	NetworkMode              config.NetworkMode `json:"network_mode"`
 }
 
 type SIPNetworkStatus struct {
@@ -424,6 +458,8 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, io.Closer, error)
 		startupSummaryFn:  opts.StartupSummaryProvider,
 		tunnelConfig:      defaultTunnelConfigPayload(config.DefaultNetworkMode()),
 	}
+	deps.sessionMgr = newTunnelSessionManager(tcpTunnelRegistrar{nodeStore: deps.nodeStore}, deps.tunnelConfig)
+	deps.sessionMgr.Start()
 	if deps.networkStatusFunc == nil {
 		defaults := config.DefaultNetworkConfig()
 		deps.networkStatusFunc = func(context.Context) NodeNetworkStatus {
@@ -433,7 +469,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, io.Closer, error)
 			}
 			mode := defaults.Mode.Normalize()
 			capability := config.DeriveCapability(mode)
-			transportPlan := config.ResolveTransportPlan(mode, capability)
+			transportPlan := config.ResolveTransportPlan(mode)
 			return NodeNetworkStatus{
 				NetworkMode:   mode,
 				Capability:    capability,
@@ -477,7 +513,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, io.Closer, error)
 		}
 	}
 	deps.runtime.SyncMappings(deps.mappings.List())
-	return newMux(deps), joinClosers(logCloser, auditCloser, deps.runtime), nil
+	return newMux(deps), joinClosers(logCloser, auditCloser, deps.runtime, deps.sessionMgr), nil
 }
 
 type multiCloser []io.Closer
@@ -535,6 +571,7 @@ func newMux(deps handlerDeps) http.Handler {
 	mux.HandleFunc("/api/node", deps.handleNode)
 	mux.HandleFunc("/api/node/config", deps.handleNodeConfig)
 	mux.HandleFunc("/api/tunnel/config", deps.handleTunnelConfig)
+	mux.HandleFunc("/api/tunnel/session/actions", deps.handleTunnelSessionActions)
 	mux.HandleFunc("/api/peers", deps.handlePeers)
 	mux.HandleFunc("/api/peers/", deps.handlePeers)
 	mux.HandleFunc("/api/ops/link-test", deps.handleLinkTest)
@@ -1038,32 +1075,159 @@ func (d handlerDeps) handleMappingTest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	status := d.networkStatusFunc(r.Context())
-	sipPassed := d.checkSIPControlPath(r.Context(), status).Passed
-	rtpPassed := d.checkRTPPortPool(status).Passed
-	d.mu.RLock()
-	registrationStatus := strings.ToLower(strings.TrimSpace(d.tunnelConfig.RegistrationStatus))
-	d.mu.RUnlock()
-	registrationNormal := registrationStatus == "registered"
+	sip := d.checkSIPControlPath(r.Context(), status)
+	rtp := d.checkRTPPortPool(status)
+	localListeningPassed := sip.Passed && rtp.Passed
+	session := d.sessionMgr.Snapshot()
+	registrationNormal := strings.EqualFold(strings.TrimSpace(session.RegistrationStatus), "registered")
+	heartbeatNormal := strings.EqualFold(strings.TrimSpace(session.HeartbeatStatus), "healthy")
+	peerStage := d.checkPeerReachabilityStage(r.Context())
+	sessionReady := registrationNormal && heartbeatNormal && peerStage.Passed
+	forwardStage := d.checkMappingForwardReadinessStage(sessionReady)
 
+	stages := []MappingTestStage{
+		{Key: "local_listening", Name: "本地监听可用", Status: boolLabel(localListeningPassed, "passed", "failed"), Passed: localListeningPassed, Detail: fmt.Sprintf("SIP=%s；RTP=%s", sip.Detail, rtp.Detail), BlockingReason: firstNonEmpty(failedReason(sip), failedReason(rtp)), SuggestedAction: "检查本端 SIP 监听与 RTP 端口池配置。"},
+		{Key: "registration", Name: "注册状态正常", Status: boolLabel(registrationNormal, "passed", "failed"), Passed: registrationNormal, Detail: fmt.Sprintf("当前注册状态：%s", normalizeValue(session.RegistrationStatus, "unknown")), BlockingReason: boolLabel(registrationNormal, "", normalizeValue(session.LastFailureReason, "注册尚未完成")), SuggestedAction: "检查鉴权参数并触发重新注册。"},
+		{Key: "heartbeat", Name: "心跳状态正常", Status: boolLabel(heartbeatNormal, "passed", "failed"), Passed: heartbeatNormal, Detail: fmt.Sprintf("当前心跳状态：%s", normalizeValue(session.HeartbeatStatus, "unknown")), BlockingReason: boolLabel(heartbeatNormal, "", normalizeValue(session.LastFailureReason, "心跳未恢复健康")), SuggestedAction: "检查心跳周期、网络时延与丢包。"},
+		peerStage,
+		{Key: "session_ready", Name: "会话已准备", Status: ternary(sessionReady, "passed", "blocked"), Passed: sessionReady, Detail: "会话准备要求：注册正常 + 心跳正常 + 对端可达。", BlockingReason: blockingReasonsForSession(registrationNormal, heartbeatNormal, peerStage.Passed), SuggestedAction: "按前置阶段提示恢复会话条件后重试。"},
+		forwardStage,
+	}
+
+	passed := allMappingStagesPassed(stages)
 	result := MappingTestResponse{
-		SignalingRequest:   boolLabel(sipPassed, "成功", "失败"),
-		ResponseChannel:    boolLabel(rtpPassed, "正常", "异常"),
+		Passed:             passed,
+		Status:             boolLabel(passed, "passed", "failed"),
+		Stages:             stages,
+		SignalingRequest:   boolLabel(localListeningPassed, "成功", "失败"),
+		ResponseChannel:    boolLabel(rtp.Passed, "正常", "异常"),
 		RegistrationStatus: boolLabel(registrationNormal, "正常", "未注册"),
 	}
 
-	if !sipPassed {
-		result.FailureReason = "信令请求未通过，当前节点未完成控制链路健康校验。"
-		result.SuggestedAction = "优先检查 SIP 注册、对端信令地址和监听端口，再重试规则测试。"
-	} else if !rtpPassed {
-		result.FailureReason = "响应通道异常，RTP 端口池不可用或端口不足。"
-		result.SuggestedAction = "检查 RTP 端口池占用、对端媒体可达性，并确认端口范围配置。"
-	} else if !registrationNormal {
-		result.FailureReason = "注册状态未就绪，映射规则无法稳定收发控制消息。"
-		result.SuggestedAction = "检查注册鉴权参数与心跳状态，确认后再执行映射联调。"
+	if failed := firstFailedMappingStage(stages); failed != nil {
+		result.FailureStage = failed.Name
+		result.FailureReason = normalizeValue(failed.BlockingReason, failed.Detail)
+		result.SuggestedAction = failed.SuggestedAction
 	}
 
-	d.recordOpsAudit(r, readOperator(r), "RUN_MAPPING_TEST", map[string]any{"signaling_request": result.SignalingRequest, "response_channel": result.ResponseChannel, "registration_status": result.RegistrationStatus})
+	d.recordOpsAudit(r, readOperator(r), "RUN_MAPPING_TEST", map[string]any{"status": result.Status, "failure_stage": result.FailureStage, "signaling_request": result.SignalingRequest, "response_channel": result.ResponseChannel, "registration_status": result.RegistrationStatus})
 	writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: result})
+}
+
+func (d handlerDeps) checkPeerReachabilityStage(ctx context.Context) MappingTestStage {
+	binding, err := d.currentPeerBinding()
+	if err != nil {
+		return MappingTestStage{Key: "peer_reachability", Name: "对端可达", Status: "failed", Passed: false, Detail: "对端绑定检查失败", BlockingReason: err.Error(), SuggestedAction: "在对端配置页面保持且仅保持一个启用对端。"}
+	}
+	if strings.TrimSpace(binding.PeerSignalingIP) == "" || binding.PeerSignalingPort <= 0 {
+		return MappingTestStage{Key: "peer_reachability", Name: "对端可达", Status: "failed", Passed: false, Detail: "对端信令地址未配置", BlockingReason: "peer_signaling_ip 或 peer_signaling_port 未配置", SuggestedAction: "补齐对端信令地址后再测试。"}
+	}
+	addr := net.JoinHostPort(strings.TrimSpace(binding.PeerSignalingIP), strconv.Itoa(binding.PeerSignalingPort))
+	dialer := &net.Dialer{Timeout: 1200 * time.Millisecond}
+	conn, dialErr := dialer.DialContext(ctx, "tcp", addr)
+	if dialErr != nil {
+		return MappingTestStage{Key: "peer_reachability", Name: "对端可达", Status: "failed", Passed: false, Detail: fmt.Sprintf("TCP 探测 %s 失败", addr), BlockingReason: dialErr.Error(), SuggestedAction: "检查对端进程、ACL 与路由。"}
+	}
+	_ = conn.Close()
+	return MappingTestStage{Key: "peer_reachability", Name: "对端可达", Status: "passed", Passed: true, Detail: fmt.Sprintf("TCP 探测 %s 成功", addr)}
+}
+
+func (d handlerDeps) checkMappingForwardReadinessStage(sessionReady bool) MappingTestStage {
+	if !sessionReady {
+		return MappingTestStage{Key: "mapping_forward", Name: "映射转发准备就绪", Status: "blocked", Passed: false, Detail: "会话尚未准备完成，暂不执行转发准备判定", BlockingReason: "依赖阶段“会话已准备”未通过", SuggestedAction: "先恢复注册/心跳/对端可达后重试。"}
+	}
+	items := d.mappings.List()
+	enabled := make([]TunnelMapping, 0, len(items))
+	for _, item := range items {
+		if item.Enabled {
+			enabled = append(enabled, item)
+		}
+	}
+	if len(enabled) == 0 {
+		return MappingTestStage{Key: "mapping_forward", Name: "映射转发准备就绪", Status: "failed", Passed: false, Detail: "未找到启用的映射规则", BlockingReason: "至少需要一个 enabled=true 的映射规则", SuggestedAction: "启用至少一个映射规则后再执行联调。"}
+	}
+	runtime := d.runtime.Snapshot()
+	notReady := make([]string, 0)
+	for _, item := range enabled {
+		rs, ok := runtime[item.MappingID]
+		if !ok {
+			notReady = append(notReady, fmt.Sprintf("%s: 运行时状态缺失", item.MappingID))
+			continue
+		}
+		if rs.State != mappingStateListening && rs.State != mappingStateForwarding && rs.State != "connected" {
+			notReady = append(notReady, fmt.Sprintf("%s: %s", item.MappingID, normalizeValue(rs.Reason, rs.State)))
+		}
+	}
+	if len(notReady) > 0 {
+		return MappingTestStage{Key: "mapping_forward", Name: "映射转发准备就绪", Status: "failed", Passed: false, Detail: fmt.Sprintf("共有 %d 条启用规则未就绪", len(notReady)), BlockingReason: strings.Join(notReady, "；"), SuggestedAction: "修复映射监听失败/中断后重试。"}
+	}
+	return MappingTestStage{Key: "mapping_forward", Name: "映射转发准备就绪", Status: "passed", Passed: true, Detail: fmt.Sprintf("%d 条启用规则已进入监听态", len(enabled))}
+}
+
+func allMappingStagesPassed(stages []MappingTestStage) bool {
+	for _, stage := range stages {
+		if !stage.Passed {
+			return false
+		}
+	}
+	return true
+}
+
+func firstFailedMappingStage(stages []MappingTestStage) *MappingTestStage {
+	for _, stage := range stages {
+		if !stage.Passed {
+			item := stage
+			return &item
+		}
+	}
+	return nil
+}
+
+func failedReason(item LinkTestItem) string {
+	if item.Passed {
+		return ""
+	}
+	return item.Detail
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func normalizeValue(v string, fallback string) string {
+	if strings.TrimSpace(v) == "" {
+		return fallback
+	}
+	return v
+}
+
+func blockingReasonsForSession(registrationNormal, heartbeatNormal, peerReachable bool) string {
+	reasons := make([]string, 0, 3)
+	if !registrationNormal {
+		reasons = append(reasons, "注册状态未就绪")
+	}
+	if !heartbeatNormal {
+		reasons = append(reasons, "心跳状态未恢复")
+	}
+	if !peerReachable {
+		reasons = append(reasons, "对端不可达")
+	}
+	if len(reasons) == 0 {
+		return ""
+	}
+	return strings.Join(reasons, "；")
+}
+
+func ternary(ok bool, pass, fail string) string {
+	if ok {
+		return pass
+	}
+	return fail
 }
 
 func (d handlerDeps) listLegacyRoutesFromMappings() []OpsRoute {
@@ -1119,7 +1283,11 @@ func mappingStatusDiagnosis(state, reason string) (statusText, failureReason, su
 	case mappingStateDisabled:
 		return "未启用", "映射规则未启用。", "按需开启规则后再观察链路状态。"
 	case mappingStateListening:
-		return "监听中", "本端入口监听已建立，等待对端完成业务连接。", "可发起联调请求，确认信令请求与响应通道状态。"
+		return "监听中", "本端入口监听已建立，等待业务请求。", "可发起联调请求，确认转发链路状态。"
+	case mappingStateForwarding:
+		return "转发中", normalizeValue(trimmedReason, "映射链路正在转发请求。"), "持续观察吞吐与延迟指标，确认请求成功率。"
+	case mappingStateDegraded:
+		return "降级", normalizeValue(trimmedReason, "映射链路出现转发异常。"), "检查对端目标可达性、超时与请求体大小配置后重试。"
 	case "connected":
 		return "已连接", "映射链路已连接。", "无需处理，持续观察心跳与延迟指标。"
 	case mappingStateInterrupted:
@@ -1408,8 +1576,6 @@ func defaultTunnelConfigPayload(mode config.NetworkMode) TunnelConfigPayload {
 	return TunnelConfigPayload{
 		ChannelProtocol:          "GB/T 28181",
 		ConnectionInitiator:      "LOCAL",
-		LocalDeviceID:            "gateway-local",
-		PeerDeviceID:             "gateway-peer",
 		HeartbeatIntervalSec:     60,
 		RegisterRetryCount:       3,
 		RegisterRetryIntervalSec: 10,
@@ -1452,22 +1618,14 @@ func capabilityDescriptions(capability config.Capability) []string {
 	return desc
 }
 
-func (d *handlerDeps) upsertTunnelConfig(req TunnelConfigPayload) (TunnelConfigPayload, error) {
+func (d *handlerDeps) upsertTunnelConfig(req TunnelConfigUpdatePayload) (TunnelConfigPayload, error) {
 	channelProtocol := strings.ToUpper(strings.TrimSpace(req.ChannelProtocol))
 	connectionInitiator := strings.ToUpper(strings.TrimSpace(req.ConnectionInitiator))
-	localDeviceID := strings.TrimSpace(req.LocalDeviceID)
-	peerDeviceID := strings.TrimSpace(req.PeerDeviceID)
 	if channelProtocol == "" {
 		return TunnelConfigPayload{}, fmt.Errorf("channel_protocol is required")
 	}
 	if connectionInitiator != "LOCAL" && connectionInitiator != "PEER" {
 		return TunnelConfigPayload{}, fmt.Errorf("connection_initiator must be LOCAL or PEER")
-	}
-	if localDeviceID == "" {
-		return TunnelConfigPayload{}, fmt.Errorf("local_device_id is required")
-	}
-	if peerDeviceID == "" {
-		return TunnelConfigPayload{}, fmt.Errorf("peer_device_id is required")
 	}
 	if req.HeartbeatIntervalSec <= 0 {
 		return TunnelConfigPayload{}, fmt.Errorf("heartbeat_interval_sec must be greater than 0")
@@ -1483,26 +1641,20 @@ func (d *handlerDeps) upsertTunnelConfig(req TunnelConfigPayload) (TunnelConfigP
 		return TunnelConfigPayload{}, err
 	}
 	capability := config.DeriveCapability(mode)
-	registrationStatus := strings.ToLower(strings.TrimSpace(req.RegistrationStatus))
-	if registrationStatus == "" {
-		registrationStatus = "unregistered"
-	}
-	heartbeatStatus := strings.ToLower(strings.TrimSpace(req.HeartbeatStatus))
-	if heartbeatStatus == "" {
-		heartbeatStatus = "unknown"
-	}
+	session := d.sessionMgr.Snapshot()
 	updated := TunnelConfigPayload{
 		ChannelProtocol:          channelProtocol,
 		ConnectionInitiator:      connectionInitiator,
-		LocalDeviceID:            localDeviceID,
-		PeerDeviceID:             peerDeviceID,
 		HeartbeatIntervalSec:     req.HeartbeatIntervalSec,
 		RegisterRetryCount:       req.RegisterRetryCount,
 		RegisterRetryIntervalSec: req.RegisterRetryIntervalSec,
-		RegistrationStatus:       registrationStatus,
-		LastRegisterTime:         req.LastRegisterTime,
-		LastHeartbeatTime:        req.LastHeartbeatTime,
-		HeartbeatStatus:          heartbeatStatus,
+		RegistrationStatus:       session.RegistrationStatus,
+		LastRegisterTime:         session.LastRegisterTime,
+		LastHeartbeatTime:        session.LastHeartbeatTime,
+		HeartbeatStatus:          session.HeartbeatStatus,
+		LastFailureReason:        session.LastFailureReason,
+		NextRetryTime:            session.NextRetryTime,
+		ConsecutiveHBTimeout:     session.ConsecutiveHeartbeatTimeout,
 		SupportedCapabilities:    capabilityDescriptions(capability),
 		RequestChannel:           "SIP",
 		ResponseChannel:          "RTP",
@@ -1516,6 +1668,24 @@ func (d *handlerDeps) upsertTunnelConfig(req TunnelConfigPayload) (TunnelConfigP
 	return updated, nil
 }
 
+func (d handlerDeps) derivedLocalDeviceID() string {
+	if d.nodeStore == nil {
+		return ""
+	}
+	return strings.TrimSpace(d.nodeStore.GetLocalNode().NodeID)
+}
+
+func (d handlerDeps) derivedPeerDeviceID() string {
+	if d.nodeStore == nil {
+		return ""
+	}
+	peers := d.nodeStore.ListPeers()
+	if len(peers) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(peers[0].PeerNodeID)
+}
+
 func (d *handlerDeps) handleTunnelConfig(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -1525,23 +1695,65 @@ func (d *handlerDeps) handleTunnelConfig(w http.ResponseWriter, r *http.Request)
 		if resp.NetworkMode.Normalize() == "" {
 			resp = defaultTunnelConfigPayload(config.DefaultNetworkMode())
 		}
+		session := d.sessionMgr.Snapshot()
+		resp.RegistrationStatus = session.RegistrationStatus
+		resp.HeartbeatStatus = session.HeartbeatStatus
+		resp.LastRegisterTime = session.LastRegisterTime
+		resp.LastHeartbeatTime = session.LastHeartbeatTime
+		resp.LastFailureReason = session.LastFailureReason
+		resp.NextRetryTime = session.NextRetryTime
+		resp.ConsecutiveHBTimeout = session.ConsecutiveHeartbeatTimeout
+		resp.LocalDeviceID = d.derivedLocalDeviceID()
+		resp.PeerDeviceID = d.derivedPeerDeviceID()
 		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: resp})
 	case http.MethodPost:
-		var req TunnelConfigPayload
+		var req TunnelConfigUpdatePayload
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid json body")
 			return
 		}
 		updated, err := d.upsertTunnelConfig(req)
+		if err == nil {
+			updated.LocalDeviceID = d.derivedLocalDeviceID()
+			updated.PeerDeviceID = d.derivedPeerDeviceID()
+		}
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", err.Error())
 			return
 		}
+		d.sessionMgr.ApplyConfig(updated)
 		d.recordOpsAudit(r, readOperator(r), "UPDATE_TUNNEL_CONFIG", updated)
 		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: updated})
 	default:
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
 	}
+}
+
+func (d *handlerDeps) handleTunnelSessionActions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
+		return
+	}
+	var req tunnelSessionActionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid json body")
+		return
+	}
+	action := strings.ToLower(strings.TrimSpace(req.Action))
+	switch action {
+	case "register_now":
+		d.sessionMgr.TriggerRegister()
+	case "reregister":
+		d.sessionMgr.TriggerReregister()
+	case "heartbeat_once":
+		d.sessionMgr.TriggerHeartbeat()
+	default:
+		writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", "action must be register_now, reregister or heartbeat_once")
+		return
+	}
+	state := d.sessionMgr.Snapshot()
+	d.recordOpsAudit(r, readOperator(r), "TUNNEL_SESSION_ACTION", map[string]any{"action": action, "state": state})
+	writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: tunnelSessionActionResponse{Action: action, State: state}})
 }
 
 func (d handlerDeps) handlePeers(w http.ResponseWriter, r *http.Request) {
@@ -1900,6 +2112,13 @@ func (d handlerDeps) handleStartupSummary(w http.ResponseWriter, r *http.Request
 	if strings.TrimSpace(summary.DataSources.Capability) == "" {
 		summary.DataSources.Capability = "derived_from_network_mode"
 	}
+	session := d.sessionMgr.Snapshot()
+	summary.RegistrationStatus = session.RegistrationStatus
+	summary.HeartbeatStatus = session.HeartbeatStatus
+	summary.LastRegisterTime = session.LastRegisterTime
+	summary.LastHeartbeatTime = session.LastHeartbeatTime
+	summary.LastFailureReason = session.LastFailureReason
+	summary.NextRetryTime = session.NextRetryTime
 	if d.nodeStore != nil {
 		compat := d.compatibilitySnapshot(r.Context())
 		summary.CurrentNetworkMode = compat.CurrentNetworkMode
@@ -1955,14 +2174,17 @@ func (d handlerDeps) handleSystemStatus(w http.ResponseWriter, r *http.Request) 
 		mappingAbnormalTotal = mappingTotal
 		latestMappingErrorReason = reason
 	}
+	session := d.sessionMgr.Snapshot()
 	resp := SystemStatusResponse{
 		TunnelStatus:             tunnelStatus,
 		ConnectionReason:         reason,
 		NetworkMode:              status.NetworkMode,
-		RegistrationStatus:       d.tunnelConfig.RegistrationStatus,
-		HeartbeatStatus:          d.tunnelConfig.HeartbeatStatus,
-		LastRegisterTime:         d.tunnelConfig.LastRegisterTime,
-		LastHeartbeatTime:        d.tunnelConfig.LastHeartbeatTime,
+		RegistrationStatus:       session.RegistrationStatus,
+		HeartbeatStatus:          session.HeartbeatStatus,
+		LastRegisterTime:         session.LastRegisterTime,
+		LastHeartbeatTime:        session.LastHeartbeatTime,
+		LastFailureReason:        session.LastFailureReason,
+		NextRetryTime:            session.NextRetryTime,
 		MappingTotal:             mappingTotal,
 		MappingAbnormalTotal:     mappingAbnormalTotal,
 		LatestMappingErrorReason: latestMappingErrorReason,

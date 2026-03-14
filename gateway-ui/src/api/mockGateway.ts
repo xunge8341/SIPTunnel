@@ -29,18 +29,22 @@ import type {
   SystemStatusPayload,
   NodeConfigPayload,
   TunnelConfigPayload,
+  TunnelConfigUpdatePayload,
   ConfigTransferPayload,
   ConfigTransferImportResult
 } from '../types/gateway'
 
 const wait = (ms = 200) => new Promise((resolve) => setTimeout(resolve, ms))
 
+const capabilityDescriptionsFromCapability = (capability: ReturnType<typeof deriveTunnelCapability>) => {
+  const items = buildTunnelCapabilityItems(capability)
+  const supported = items.filter((item) => item.supported).map((item) => item.description)
+  return supported.length > 0 ? supported : ['当前网络模式下暂无可用扩展能力']
+}
 
-let tunnelConfigState: TunnelConfigPayload = {
+let tunnelConfigState: Omit<TunnelConfigPayload, 'local_device_id' | 'peer_device_id'> = {
   channel_protocol: 'GB/T 28181',
   connection_initiator: 'LOCAL',
-  local_device_id: '34020000001320000001',
-  peer_device_id: '34020000002000000001',
   heartbeat_interval_sec: 60,
   register_retry_count: 3,
   register_retry_interval_sec: 10,
@@ -51,9 +55,9 @@ let tunnelConfigState: TunnelConfigPayload = {
   supported_capabilities: ['支持小请求体（典型 SIP JSON 负载）', '支持大响应体回传', '支持流式响应'],
   request_channel: 'SIP',
   response_channel: 'RTP',
-  network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
-  capability: deriveTunnelCapability({ network_mode: 'A_TO_B_SIP__B_TO_A_RTP' }),
-  capability_items: buildTunnelCapabilityItems(deriveTunnelCapability({ network_mode: 'A_TO_B_SIP__B_TO_A_RTP' }))
+  network_mode: 'SENDER_SIP__RECEIVER_RTP',
+  capability: deriveTunnelCapability({ network_mode: 'SENDER_SIP__RECEIVER_RTP' }),
+  capability_items: buildTunnelCapabilityItems(deriveTunnelCapability({ network_mode: 'SENDER_SIP__RECEIVER_RTP' }))
 }
 
 
@@ -118,7 +122,7 @@ let localNodeState: LocalNodeConfig = {
   node_id: 'gateway-a-01',
   node_name: 'Gateway A',
   node_role: 'gateway',
-  network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+  network_mode: 'SENDER_SIP__RECEIVER_RTP',
   sip_listen_ip: '0.0.0.0',
   sip_listen_port: 5060,
   sip_transport: 'UDP',
@@ -137,7 +141,7 @@ let peerNodeState: PeerNodeConfig[] = [
     peer_media_ip: '10.20.0.20',
     peer_media_port_start: 32000,
     peer_media_port_end: 32100,
-    supported_network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+    supported_network_mode: 'SENDER_SIP__RECEIVER_RTP',
     enabled: true
   }
 ]
@@ -250,7 +254,7 @@ export async function fetchStartupSummaryMock(): Promise<StartupSummaryPayload> 
   await wait()
   return {
     node_id: 'gateway-a-01',
-    network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+    network_mode: 'SENDER_SIP__RECEIVER_RTP',
     capability: {
       supports_large_request_body: false,
       supports_large_response_body: true,
@@ -305,7 +309,7 @@ export async function fetchSystemStatusMock(): Promise<SystemStatusPayload> {
   return {
     tunnel_status: 'connected',
     connection_reason: 'SIP 控制面握手成功，RTP 回传链路可用',
-    network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+    network_mode: 'SENDER_SIP__RECEIVER_RTP',
     registration_status: 'registered',
     heartbeat_status: 'healthy',
     last_register_time: '2026-03-14T10:00:00Z',
@@ -431,11 +435,22 @@ export async function deleteMappingMock(id: string): Promise<void> {
 export async function testMappingMock(): Promise<MappingTestPayload> {
   await wait()
   return {
+    passed: false,
+    status: 'failed',
+    failure_stage: '对端可达',
+    stages: [
+      { key: 'local_listening', name: '本地监听可用', status: 'passed', passed: true, detail: 'SIP 监听正常；RTP 端口池可用。' },
+      { key: 'registration', name: '注册状态正常', status: 'passed', passed: true, detail: '当前注册状态：registered' },
+      { key: 'heartbeat', name: '心跳状态正常', status: 'passed', passed: true, detail: '当前心跳状态：healthy' },
+      { key: 'peer_reachability', name: '对端可达', status: 'failed', passed: false, detail: 'TCP 探测 10.20.0.20:5060 失败', blocking_reason: 'i/o timeout', suggested_action: '检查对端进程、ACL 与路由。' },
+      { key: 'session_ready', name: '会话已准备', status: 'blocked', passed: false, detail: '会话准备要求：注册正常 + 心跳正常 + 对端可达。', blocking_reason: '对端不可达', suggested_action: '按前置阶段提示恢复会话条件后重试。' },
+      { key: 'mapping_forward', name: '映射转发准备就绪', status: 'blocked', passed: false, detail: '会话尚未准备完成，暂不执行转发准备判定', blocking_reason: '依赖阶段“会话已准备”未通过', suggested_action: '先恢复注册/心跳/对端可达后重试。' }
+    ],
     signaling_request: '成功',
-    response_channel: '异常',
+    response_channel: '正常',
     registration_status: '正常',
-    failure_reason: '响应通道异常，RTP 端口池可用性不足。',
-    suggested_action: '检查 RTP 端口池占用并确认对端媒体可达。'
+    failure_reason: 'i/o timeout',
+    suggested_action: '检查对端进程、ACL 与路由。'
   }
 }
 
@@ -830,8 +845,8 @@ export async function downloadConfigTemplateMock(): Promise<ConfigTransferPayloa
     tunnel_config: {
       channel_protocol: 'GB/T 28181',
       connection_initiator: 'LOCAL',
-      local_device_id: '34020000001320000001',
-      peer_device_id: '34020000002000000001',
+      local_device_id: 'gateway-a-template',
+      peer_device_id: 'gateway-b-template',
       heartbeat_interval_sec: 60,
       register_retry_count: 3,
       register_retry_interval_sec: 10,
@@ -842,13 +857,13 @@ export async function downloadConfigTemplateMock(): Promise<ConfigTransferPayloa
       supported_capabilities: ['支持小请求体（典型 SIP JSON 负载）', '支持大响应体回传', '支持流式响应'],
       request_channel: 'SIP',
       response_channel: 'RTP',
-      network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+      network_mode: 'SENDER_SIP__RECEIVER_RTP',
       capability: deriveTunnelCapability({
-        network_mode: 'A_TO_B_SIP__B_TO_A_RTP'
+        network_mode: 'SENDER_SIP__RECEIVER_RTP'
       }),
       capability_items: buildTunnelCapabilityItems(
         deriveTunnelCapability({
-          network_mode: 'A_TO_B_SIP__B_TO_A_RTP'
+          network_mode: 'SENDER_SIP__RECEIVER_RTP'
         })
       )
     },
@@ -871,17 +886,20 @@ export async function downloadConfigTemplateMock(): Promise<ConfigTransferPayloa
 
 export async function fetchTunnelConfigMock(): Promise<TunnelConfigPayload> {
   await wait()
-  return JSON.parse(JSON.stringify(tunnelConfigState))
+  const primaryPeer = peerNodeState[0]
+  return {
+    ...JSON.parse(JSON.stringify(tunnelConfigState)),
+    local_device_id: localNodeState.node_id,
+    peer_device_id: primaryPeer?.peer_node_id ?? ''
+  }
 }
 
-export async function saveTunnelConfigMock(payload: TunnelConfigPayload): Promise<TunnelConfigPayload> {
+export async function saveTunnelConfigMock(payload: TunnelConfigUpdatePayload): Promise<TunnelConfigPayload> {
   await wait()
   const capability = deriveTunnelCapability(payload)
   tunnelConfigState = {
     channel_protocol: payload.channel_protocol,
     connection_initiator: payload.connection_initiator,
-    local_device_id: payload.local_device_id,
-    peer_device_id: payload.peer_device_id,
     heartbeat_interval_sec: payload.heartbeat_interval_sec,
     register_retry_count: payload.register_retry_count,
     register_retry_interval_sec: payload.register_retry_interval_sec,
@@ -889,14 +907,19 @@ export async function saveTunnelConfigMock(payload: TunnelConfigPayload): Promis
     last_register_time: payload.last_register_time,
     last_heartbeat_time: payload.last_heartbeat_time,
     heartbeat_status: payload.heartbeat_status,
-    supported_capabilities: payload.supported_capabilities,
+    supported_capabilities: capabilityDescriptionsFromCapability(capability),
     request_channel: 'SIP',
     response_channel: 'RTP',
     network_mode: payload.network_mode,
     capability,
     capability_items: buildTunnelCapabilityItems(capability)
   }
-  return JSON.parse(JSON.stringify(tunnelConfigState))
+  const primaryPeer = peerNodeState[0]
+  return {
+    ...JSON.parse(JSON.stringify(tunnelConfigState)),
+    local_device_id: localNodeState.node_id,
+    peer_device_id: primaryPeer?.peer_node_id ?? ''
+  }
 }
 
 

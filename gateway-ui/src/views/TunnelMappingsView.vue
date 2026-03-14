@@ -1,34 +1,37 @@
 <template>
   <a-space direction="vertical" size="middle" style="width: 100%">
-    <a-card title="映射规则查询">
+    <a-card title="HTTP 映射隧道查询">
       <a-form layout="inline">
-        <a-form-item label="规则ID">
-          <a-input v-model:value="keyword" allow-clear placeholder="输入规则ID" />
+        <a-form-item label="映射ID">
+          <a-input v-model:value="keyword" allow-clear placeholder="输入映射ID" />
         </a-form-item>
         <a-form-item>
           <a-space>
-            <a-button type="primary" @click="openCreate">新建规则</a-button>
-            <a-button :loading="testingMapping" @click="runMappingTest">测试规则</a-button>
+            <a-button type="primary" @click="openCreate">新建隧道映射</a-button>
+            <a-button :loading="testingMapping" @click="runMappingTest">测试隧道映射</a-button>
           </a-space>
         </a-form-item>
       </a-form>
     </a-card>
 
-    <a-card title="全局承载策略（只读）">
+    <a-card title="全局传输推导（只读）">
       <a-alert
         type="info"
         show-icon
-        message="能力矩阵由后端实时返回（网络模式全局约束）"
-        description="用于指导映射规则配置：超出当前网络模式能力的配置会提示告警并在保存时拦截。"
+        message="能力矩阵由后端实时返回（受网络模式全局约束）"
+        description="transport 由网络模式全局推导，不按单条映射配置。超出能力矩阵的配置会告警并在保存时拦截。"
         style="margin-bottom: 12px"
       />
       <a-descriptions bordered :column="2" size="small">
-        <a-descriptions-item label="网络模式">{{ startupSummary?.network_mode ?? '-' }}</a-descriptions-item>
+        <a-descriptions-item label="网络模式">{{ networkModeProfile?.shortLabel ?? startupSummary?.network_mode ?? '-' }}</a-descriptions-item>
+        <a-descriptions-item label="发送端 / 接收端">{{ networkModeProfile?.flowLabel ?? '-' }}</a-descriptions-item>
         <a-descriptions-item label="能力摘要">{{ capabilitySummaryText }}</a-descriptions-item>
-        <a-descriptions-item label="request_meta_transport">{{ startupSummary?.transport_plan.request_meta_transport ?? '-' }}</a-descriptions-item>
-        <a-descriptions-item label="request_body_transport">{{ startupSummary?.transport_plan.request_body_transport ?? '-' }}</a-descriptions-item>
-        <a-descriptions-item label="response_meta_transport">{{ startupSummary?.transport_plan.response_meta_transport ?? '-' }}</a-descriptions-item>
-        <a-descriptions-item label="response_body_transport">{{ startupSummary?.transport_plan.response_body_transport ?? '-' }}</a-descriptions-item>
+        <a-descriptions-item label="请求元数据 transport（全局推导）">{{ startupSummary?.transport_plan.request_meta_transport ?? '-' }}</a-descriptions-item>
+        <a-descriptions-item label="请求体 transport（全局推导）">{{ startupSummary?.transport_plan.request_body_transport ?? '-' }}</a-descriptions-item>
+        <a-descriptions-item label="响应元数据 transport（全局推导）">{{ startupSummary?.transport_plan.response_meta_transport ?? '-' }}</a-descriptions-item>
+        <a-descriptions-item label="响应体 transport（全局推导）">{{ startupSummary?.transport_plan.response_body_transport ?? '-' }}</a-descriptions-item>
+        <a-descriptions-item label="请求方向">{{ networkModeProfile?.requestDirection ?? '-' }}</a-descriptions-item>
+        <a-descriptions-item label="响应方向">{{ networkModeProfile?.responseDirection ?? '-' }}</a-descriptions-item>
       </a-descriptions>
 
       <a-table
@@ -53,25 +56,43 @@
         type="error"
         show-icon
         :message="mappingBindingError"
-        description="映射规则当前按单对单模式运行：必须且仅能有一个启用的对端节点。"
+        description="隧道映射当前按单对单模式运行：必须且仅能有一个启用的对端节点。"
         style="margin-bottom: 12px"
       />
       <a-descriptions bordered :column="2" size="small">
         <a-descriptions-item label="peer_node_id">{{ boundPeer?.peer_node_id ?? '-' }}</a-descriptions-item>
         <a-descriptions-item label="peer_name">{{ boundPeer?.peer_name ?? '-' }}</a-descriptions-item>
         <a-descriptions-item label="peer_signaling">{{ boundPeerEndpoint }}</a-descriptions-item>
-        <a-descriptions-item label="映射绑定策略">映射规则自动绑定唯一启用对端（不可编辑）</a-descriptions-item>
+        <a-descriptions-item label="映射绑定策略">隧道映射自动绑定唯一启用对端（不可编辑）</a-descriptions-item>
       </a-descriptions>
     </a-card>
 
-    <a-card title="映射规则列表">
+    <a-card title="HTTP 映射隧道列表">
       <a-alert
         v-if="mappingTestResult"
         :type="mappingTestPassed ? 'success' : 'error'"
         show-icon
-        :message="`规则测试：信令请求 ${mappingTestResult.signaling_request}，响应通道 ${mappingTestResult.response_channel}，注册状态 ${mappingTestResult.registration_status}`"
+        :message="mappingTestSummary"
+        :description="mappingTestResult.failure_reason ? `阻塞原因：${mappingTestResult.failure_reason}` : undefined"
         style="margin-bottom: 12px"
       />
+      <a-table
+        v-if="mappingTestResult"
+        size="small"
+        :pagination="false"
+        :columns="mappingTestColumns"
+        :data-source="mappingTestResult.stages"
+        row-key="key"
+        style="margin-bottom: 12px"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'status'">
+            <a-tag :color="mappingStageColor(record.status)">{{ mappingStageLabel(record.status) }}</a-tag>
+          </template>
+          <template v-else-if="column.key === 'blocking_reason'">{{ record.blocking_reason || '-' }}</template>
+          <template v-else-if="column.key === 'suggested_action'">{{ record.suggested_action || '-' }}</template>
+        </template>
+      </a-table>
       <a-alert v-if="warnings.length" type="warning" show-icon :message="warnings.join('；')" style="margin-bottom: 12px" />
       <a-table :columns="columns" :data-source="filteredMappings" row-key="mapping_id" :pagination="false">
         <template #bodyCell="{ column, record, index }">
@@ -108,7 +129,7 @@
       <a-alert
         type="warning"
         show-icon
-        message="当前映射规则配置超出网络模式能力"
+        message="当前隧道映射配置超出网络模式能力"
         :description="editorBlockingIssues.join('；')"
         style="margin-bottom: 12px"
         v-if="editorBlockingIssues.length"
@@ -122,17 +143,35 @@
         v-if="editorAdvisoryWarnings.length"
       />
       <a-form layout="vertical">
-        <a-form-item label="规则ID">
+        <a-form-item label="映射ID（兼容旧 route/api_code 标识）">
           <a-input v-model:value="editing.mapping_id" :disabled="editingMode === 'edit'" />
         </a-form-item>
-        <a-form-item label="本端入口 IP" extra="填写本端业务入口地址。">
+        <a-form-item extra="填写本端节点对外暴露的 HTTP 入口地址。">
+          <template #label>
+            <a-space size="small">
+              本端入口 IP
+              <a-tooltip>
+                <template #title>本端入口 = 本端节点监听的 HTTP 入口，不是 route/api_code 规则字段。</template>
+                <a-typography-text type="secondary">ⓘ</a-typography-text>
+              </a-tooltip>
+            </a-space>
+          </template>
           <a-input v-model:value="editing.local_bind_ip" />
         </a-form-item>
-        <a-form-item label="本端入口端口" extra="监听端口范围 1-65535。">
+        <a-form-item label="本端入口端口" extra="本端节点监听端口范围 1-65535。">
           <a-input-number v-model:value="editing.local_bind_port" :min="1" :max="65535" style="width: 100%" />
         </a-form-item>
 
-        <a-form-item label="对端目标 IP" extra="填写对端服务可达地址。">
+        <a-form-item extra="填写对端节点上的目标 HTTP 服务地址。">
+          <template #label>
+            <a-space size="small">
+              对端目标 IP
+              <a-tooltip>
+                <template #title>对端目标 = 对端节点上的 HTTP 服务目标地址，不是可执行模板名。</template>
+                <a-typography-text type="secondary">ⓘ</a-typography-text>
+              </a-tooltip>
+            </a-space>
+          </template>
           <a-input v-model:value="editing.remote_target_ip" />
         </a-form-item>
         <a-form-item label="对端目标端口" extra="目标端口范围 1-65535。">
@@ -145,7 +184,7 @@
         <a-form-item label="响应超时（毫秒）" extra="控制响应等待时长，超时后自动失败返回。">
           <a-input-number v-model:value="editing.response_timeout_ms" :min="1" style="width: 100%" />
         </a-form-item>
-        <a-form-item label="请求体大小上限（字节）" extra="系统按动作类型自动选择命令或文件传输链路。">
+        <a-form-item label="请求体大小上限（字节）" extra="系统按网络模式全局推导 transport；route/api_code/template 仅作为兼容术语（deprecated）。">
           <a-input-number v-model:value="editing.max_request_body_bytes" :min="1" style="width: 100%" />
         </a-form-item>
         <a-form-item label="响应体大小上限（字节）" extra="建议与对端能力矩阵保持一致。">
@@ -154,10 +193,10 @@
         <a-form-item label="启用状态">
           <a-switch v-model:checked="editing.enabled" />
         </a-form-item>
-        <a-form-item label="本端入口路径" extra="用于拼接本端入口完整请求路径。">
+        <a-form-item label="本端入口路径" extra="用于拼接本端节点入口完整请求路径。">
           <a-input v-model:value="editing.local_base_path" />
         </a-form-item>
-        <a-form-item label="对端目标路径" extra="用于拼接对端目标完整请求路径。">
+        <a-form-item label="对端目标路径" extra="用于拼接对端节点目标完整请求路径。">
           <a-input v-model:value="editing.remote_base_path" />
         </a-form-item>
         <a-form-item>
@@ -184,6 +223,7 @@ import { message } from 'ant-design-vue'
 import { gatewayApi } from '../api/gateway'
 import type { CapabilityItem, MappingTestPayload, PeerBinding, StartupSummaryPayload, TunnelMapping } from '../types/gateway'
 import { buildCapabilityMatrix, evaluateMappingCapability } from '../utils/capability'
+import { getNetworkModeProfile } from '../utils/networkMode'
 
 const keyword = ref('')
 const drawerVisible = ref(false)
@@ -217,6 +257,8 @@ const emptyMapping = (): TunnelMapping => ({
 const editing = reactive<TunnelMapping>(emptyMapping())
 
 const endpointText = (ip: string, port: number, path: string) => `${ip}:${port}${path}`
+const networkModeProfile = computed(() => getNetworkModeProfile(startupSummary.value?.network_mode ?? ""))
+
 const capabilitySummaryText = computed(() => {
   if (!startupSummary.value) return '-'
   return `支持: ${startupSummary.value.capability_summary.supported.join(', ') || '-'}；不支持: ${startupSummary.value.capability_summary.unsupported.join(', ') || '-'}`
@@ -243,10 +285,36 @@ const boundPeerEndpoint = computed(() => {
 const editorBlockingIssues = computed(() => editorCapabilityEvaluation.value.blockingIssues)
 const editorAdvisoryWarnings = computed(() => editorCapabilityEvaluation.value.advisoryWarnings)
 
-const mappingTestPassed = computed(() => {
-  if (!mappingTestResult.value) return false
-  return mappingTestResult.value.signaling_request === '成功' && mappingTestResult.value.response_channel === '正常' && mappingTestResult.value.registration_status === '正常'
+const mappingTestPassed = computed(() => mappingTestResult.value?.passed ?? false)
+
+const mappingTestSummary = computed(() => {
+  if (!mappingTestResult.value) return ''
+  const failed = mappingTestResult.value.stages.find((item) => !item.passed)
+  if (!failed) {
+    return '映射联调测试通过：本地监听、注册、心跳、对端可达、会话准备和映射转发均已就绪。'
+  }
+  return `映射联调测试未通过：卡在“${failed.name}”阶段。`
 })
+
+const mappingTestColumns = [
+  { title: '阶段', dataIndex: 'name', key: 'name' },
+  { title: '结果', key: 'status' },
+  { title: '详情', dataIndex: 'detail', key: 'detail' },
+  { title: '阻塞原因', key: 'blocking_reason' },
+  { title: '建议动作', key: 'suggested_action' }
+]
+
+const mappingStageLabel = (status: 'passed' | 'failed' | 'blocked') => {
+  if (status === 'passed') return '通过'
+  if (status === 'blocked') return '阻塞'
+  return '失败'
+}
+
+const mappingStageColor = (status: 'passed' | 'failed' | 'blocked') => {
+  if (status === 'passed') return 'success'
+  if (status === 'blocked') return 'warning'
+  return 'error'
+}
 
 const columns = [
   { title: '序号', key: 'index' },
@@ -295,7 +363,7 @@ const filteredMappings = computed(() => {
   return mappings.value.filter((item) => item.mapping_id.toLowerCase().includes(k))
 })
 
-const drawerTitle = computed(() => (editingMode.value === 'create' ? '新建映射规则' : '编辑映射规则'))
+const drawerTitle = computed(() => (editingMode.value === 'create' ? '新建隧道映射' : '编辑隧道映射'))
 
 const inferMappingRuntimeStatus = (
   item: TunnelMapping,
@@ -364,9 +432,9 @@ const runMappingTest = async () => {
   try {
     mappingTestResult.value = await gatewayApi.testMapping()
     if (mappingTestPassed.value) {
-      message.success('映射规则测试通过，链路状态正常')
+      message.success('隧道映射联调测试通过，链路阶段全部就绪')
     } else {
-      message.warning('映射规则测试未通过，请根据异常原因与建议动作排查')
+      message.warning(`隧道映射联调测试未通过，阻塞阶段：${mappingTestResult.value.failure_stage || '未知'}`)
     }
   } finally {
     testingMapping.value = false

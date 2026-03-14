@@ -61,7 +61,7 @@ describe('gatewayApi config transfer', () => {
         supported_capabilities: ['支持小请求体（典型 SIP JSON 负载）'],
         request_channel: 'SIP',
         response_channel: 'RTP',
-        network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+        network_mode: 'SENDER_SIP__RECEIVER_RTP',
         capability: {
           supports_small_request_body: true,
           supports_large_request_body: false,

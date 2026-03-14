@@ -14,14 +14,21 @@
 
     <a-row :gutter="[16, 16]">
       <a-col :span="24">
-        <a-card title="注册与链路状态总览">
+        <a-card title="注册与隧道链路状态总览">
           <a-row :gutter="[16, 16]">
             <a-col :xs="24" :sm="12" :lg="4"><a-statistic title="注册状态" :value="registrationLabel" /></a-col>
             <a-col :xs="24" :sm="12" :lg="4"><a-statistic title="心跳状态" :value="heartbeatLabel" /></a-col>
             <a-col :xs="24" :sm="12" :lg="6"><a-statistic title="最近注册时间" :value="formatTime(systemStatus.last_register_time)" /></a-col>
             <a-col :xs="24" :sm="12" :lg="6"><a-statistic title="最近心跳时间" :value="formatTime(systemStatus.last_heartbeat_time)" /></a-col>
-            <a-col :xs="24" :sm="12" :lg="4"><a-statistic title="映射规则总数 / 异常数" :value="mappingStats" /></a-col>
+            <a-col :xs="24" :sm="12" :lg="4"><a-statistic title="隧道映射总数 / 异常数" :value="mappingStats" /></a-col>
           </a-row>
+          <a-alert
+            type="info"
+            show-icon
+            style="margin-top: 12px"
+            message="transport 来源说明"
+            description="transport 由网络模式全局推导，不按单条隧道映射配置。"
+          />
           <a-alert type="error" show-icon style="margin-top: 12px" message="异常原因" :description="latestReason" />
         </a-card>
       </a-col>
