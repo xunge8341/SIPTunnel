@@ -79,7 +79,10 @@ let mappingState: TunnelMapping[] = [
     description: '用于订单写入与状态更新。',
     updated_at: '2026-03-14T09:00:00Z',
     link_status: 'connected',
-    status_reason: 'GB/T 28181 注册正常，心跳稳定，响应通道已建立。'
+    link_status_text: '已连接',
+    status_reason: 'GB/T 28181 注册正常，心跳稳定，响应通道已建立。',
+    failure_reason: '链路状态正常。',
+    suggested_action: '无需处理，持续观察运行指标。'
   },
   {
     mapping_id: 'map-query',
@@ -101,8 +104,11 @@ let mappingState: TunnelMapping[] = [
     require_streaming_response: false,
     description: '用于只读查询。',
     updated_at: '2026-03-14T09:10:00Z',
-    link_status: 'degraded',
-    status_reason: '对端节点瞬时不可达，最近一次健康探测失败。'
+    link_status: 'abnormal',
+    link_status_text: '异常',
+    status_reason: '对端节点瞬时不可达，最近一次健康探测失败。',
+    failure_reason: '对端节点瞬时不可达，最近一次健康探测失败。',
+    suggested_action: '检查对端可达性并重试链路测试。'
   }
 ]
 
@@ -425,8 +431,11 @@ export async function deleteMappingMock(id: string): Promise<void> {
 export async function testMappingMock(): Promise<MappingTestPayload> {
   await wait()
   return {
-    sip_request: 'success',
-    rtp_channel: 'fail'
+    signaling_request: '成功',
+    response_channel: '异常',
+    registration_status: '正常',
+    failure_reason: '响应通道异常，RTP 端口池可用性不足。',
+    suggested_action: '检查 RTP 端口池占用并确认对端媒体可达。'
   }
 }
 

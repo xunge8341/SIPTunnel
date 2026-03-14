@@ -30,7 +30,7 @@ const stubs = {
   'a-alert': { props: ['message'], template: '<div>{{ message }}<slot /></div>' },
   'a-table': {
     props: ['dataSource', 'columns'],
-    template: '<div><span v-for="col in (columns || [])" :key="col.key">{{ col.title }}</span><div v-for="item in (dataSource || [])" :key="item.mapping_id || item.key">{{ item.label || item.mapping_id }}</div></div>'
+    template: '<div><span v-for="col in (columns || [])" :key="col.key">{{ col.title }}</span><div v-for="item in (dataSource || [])" :key="item.mapping_id || item.key">{{ item.label || item.mapping_id }} {{ item.status_reason }} {{ item.failure_reason }} {{ item.suggested_action }} {{ item.link_status_text }}</div></div>'
   },
   'a-switch': { template: '<input type="checkbox" />' },
   'a-tag': { template: '<span><slot /></span>' },
@@ -61,14 +61,14 @@ describe('TunnelMappingsView', () => {
           local_bind_ip: '10.0.0.1', local_bind_port: 18080, local_base_path: '/a',
           remote_target_ip: '10.0.0.2', remote_target_port: 8080, remote_base_path: '/b',
           allowed_methods: ['*'], connect_timeout_ms: 500, request_timeout_ms: 1000, response_timeout_ms: 2000,
-          max_request_body_bytes: 1024, max_response_body_bytes: 2048, require_streaming_response: false, description: '', updated_at: '2026-03-14T09:00:00Z', link_status: 'degraded', status_reason: '心跳超时'
+          max_request_body_bytes: 1024, max_response_body_bytes: 2048, require_streaming_response: false, description: '', updated_at: '2026-03-14T09:00:00Z', link_status: 'interrupted', link_status_text: '异常', status_reason: '心跳超时', failure_reason: '心跳超时', suggested_action: '检查网络抖动'
         }
       ],
       warnings: [],
       bound_peer: { peer_node_id: 'peer-b', peer_name: 'Peer B', peer_signaling_ip: '10.20.0.20', peer_signaling_port: 5060 }
     })
     vi.mocked(gatewayApi.fetchStartupSummary).mockResolvedValue(startupSummaryPayload as never)
-    vi.mocked(gatewayApi.testMapping).mockResolvedValue({ sip_request: 'success', rtp_channel: 'fail' })
+    vi.mocked(gatewayApi.testMapping).mockResolvedValue({ signaling_request: '成功', response_channel: '异常', registration_status: '正常', failure_reason: '响应通道异常', suggested_action: '检查 RTP 端口池' })
     vi.mocked(gatewayApi.fetchSystemStatus).mockResolvedValue({
       tunnel_status: 'degraded',
       connection_reason: '对端不可达',
@@ -89,7 +89,8 @@ describe('TunnelMappingsView', () => {
 
     expect(wrapper.text()).toContain('序号')
     expect(wrapper.text()).toContain('映射链路状态')
-    expect(wrapper.text()).toContain('状态原因')
+    expect(wrapper.text()).toContain('异常原因')
+    expect(wrapper.text()).toContain('建议动作')
     expect(wrapper.text()).toContain('更新时间')
     expect(wrapper.text()).not.toContain('名称')
     expect(wrapper.text()).not.toContain('对端节点')
@@ -127,6 +128,8 @@ describe('TunnelMappingsView', () => {
     expect(indexRemark).toBeGreaterThan(indexEnabled)
 
     expect(wrapper.find('.stub-row').exists()).toBe(false)
+    expect(wrapper.text()).toContain('心跳超时')
+    expect(wrapper.text()).toContain('检查网络抖动')
   })
 
   it('uses default allowed_methods on save', async () => {

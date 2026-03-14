@@ -158,6 +158,9 @@ func TestMappingRuntimeEnableDisableAndStatusWriteback(t *testing.T) {
 	if !strings.Contains(listRR.Body.String(), `"mapping_id":"map-runtime"`) || !strings.Contains(listRR.Body.String(), `"link_status":"listening"`) {
 		t.Fatalf("expected runtime status writeback in list body=%s", listRR.Body.String())
 	}
+	if !strings.Contains(listRR.Body.String(), `"link_status_text":"监听中"`) || !strings.Contains(listRR.Body.String(), `"suggested_action"`) {
+		t.Fatalf("expected chinese status diagnostics in list body=%s", listRR.Body.String())
+	}
 
 	disableBody := strings.Replace(body, `"enabled":true`, `"enabled":false`, 1)
 	updateReq := httptest.NewRequest(http.MethodPut, "/api/mappings/map-runtime", bytes.NewBufferString(disableBody))
@@ -237,11 +240,17 @@ func TestMappingTestEndpoint(t *testing.T) {
 	if payload.Code != "OK" {
 		t.Fatalf("unexpected code: %s", payload.Code)
 	}
-	if payload.Data.SIPRequest != "fail" {
-		t.Fatalf("expected sip_request fail in test environment, got %s", payload.Data.SIPRequest)
+	if payload.Data.SignalingRequest != "失败" {
+		t.Fatalf("expected signaling_request=失败 in test environment, got %s", payload.Data.SignalingRequest)
 	}
-	if payload.Data.RTPChannel != "success" {
-		t.Fatalf("expected rtp_channel success, got %s", payload.Data.RTPChannel)
+	if payload.Data.ResponseChannel != "正常" {
+		t.Fatalf("expected response_channel=正常, got %s", payload.Data.ResponseChannel)
+	}
+	if payload.Data.RegistrationStatus != "未注册" {
+		t.Fatalf("expected registration_status=未注册, got %s", payload.Data.RegistrationStatus)
+	}
+	if payload.Data.FailureReason == "" || payload.Data.SuggestedAction == "" {
+		t.Fatalf("expected failure diagnostics, got %+v", payload.Data)
 	}
 }
 

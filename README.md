@@ -29,7 +29,7 @@ SIPTunnel 同时支持两种产品模式，文档与 UI 必须明确区分：
 - 生产基线：限流、审计日志、trace 字段透传和结构化日志。
 - 网络模式能力矩阵：`NetworkMode -> Capability` 由后端统一推导，覆盖系统信息 API、启动摘要与诊断导出（见 `docs/README.md#网络模式与能力矩阵`）。
 - 映射能力联动校验：`TunnelMapping` 保存/更新会按当前 `NetworkMode/Capability` 校验 `max_request_body_bytes`、`max_response_body_bytes`、`allowed_methods`（默认 `[*]`，即全部允许）与 `require_streaming_response`，并在 API/selfcheck/诊断暴露 warnings 或 errors。
-- 映射运行时主链路：`enabled=true` 时后端会自动监听 `local_bind_ip:local_bind_port`；`enabled=false` 或删除映射会自动释放监听。监听状态会回写到映射列表/状态页（`disabled/listening/start_failed/interrupted`）并附带失败原因（含中文端口冲突提示）。
+- 映射运行时主链路：`enabled=true` 时后端会自动监听 `local_bind_ip:local_bind_port`；`enabled=false` 或删除映射会自动释放监听。监听状态会回写到映射列表/状态页（后端状态字段：`disabled/listening/connected/interrupted/start_failed`；统一中文展示：`未启用/监听中/已连接/异常/启动失败`），并附带异常原因与建议动作（含中文端口冲突提示）。
 
 
 ### 映射规则配置瘦身（当前产品要求）
@@ -45,6 +45,25 @@ SIPTunnel 同时支持两种产品模式，文档与 UI 必须明确区分：
   - `name`、`peer_node_id` 不再作为映射编辑必填项；
   - `peer_node_id` 在后端按“唯一启用对端节点”自动绑定：无对端或多对端冲突时，映射保存会返回明确错误。
 
+
+
+### 映射状态术语表（前后端统一）
+
+| 后端字段值 | UI 展示 | 运维含义 |
+| --- | --- | --- |
+| `disabled` | 未启用 | 规则未启用，不参与链路。 |
+| `listening` | 监听中 | 本端监听就绪，等待业务流量。 |
+| `connected` | 已连接 | 链路可用。 |
+| `interrupted` / `abnormal` | 异常 | 运行中断或健康检查失败。 |
+| `start_failed` | 启动失败 | 启动监听失败（常见端口冲突）。 |
+
+规则测试统一字段：
+
+- `signaling_request`：成功 / 失败
+- `response_channel`：正常 / 异常
+- `registration_status`：正常 / 未注册
+- `failure_reason`：异常原因
+- `suggested_action`：建议动作
 ## 如何启动
 
 ### 一键本地启动（推荐）

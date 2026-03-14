@@ -106,8 +106,11 @@ type MappingWithWarnings struct {
 }
 
 type MappingTestResponse struct {
-	SIPRequest string `json:"sip_request"`
-	RTPChannel string `json:"rtp_channel"`
+	SignalingRequest   string `json:"signaling_request"`
+	ResponseChannel    string `json:"response_channel"`
+	RegistrationStatus string `json:"registration_status"`
+	FailureReason      string `json:"failure_reason,omitempty"`
+	SuggestedAction    string `json:"suggested_action,omitempty"`
 }
 
 type mappingListResponse struct {
@@ -119,8 +122,11 @@ type mappingListResponse struct {
 
 type TunnelMappingView struct {
 	TunnelMapping
-	LinkStatus   string `json:"link_status,omitempty"`
-	StatusReason string `json:"status_reason,omitempty"`
+	LinkStatus      string `json:"link_status,omitempty"`
+	LinkStatusText  string `json:"link_status_text,omitempty"`
+	StatusReason    string `json:"status_reason,omitempty"`
+	FailureReason   string `json:"failure_reason,omitempty"`
+	SuggestedAction string `json:"suggested_action,omitempty"`
 }
 
 type PeerBinding struct {
@@ -1032,18 +1038,31 @@ func (d handlerDeps) handleMappingTest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	status := d.networkStatusFunc(r.Context())
-	sipStatus := "fail"
-	rtpStatus := "fail"
+	sipPassed := d.checkSIPControlPath(r.Context(), status).Passed
+	rtpPassed := d.checkRTPPortPool(status).Passed
+	d.mu.RLock()
+	registrationStatus := strings.ToLower(strings.TrimSpace(d.tunnelConfig.RegistrationStatus))
+	d.mu.RUnlock()
+	registrationNormal := registrationStatus == "registered"
 
-	if d.checkSIPControlPath(r.Context(), status).Passed {
-		sipStatus = "success"
-	}
-	if d.checkRTPPortPool(status).Passed {
-		rtpStatus = "success"
+	result := MappingTestResponse{
+		SignalingRequest:   boolLabel(sipPassed, "成功", "失败"),
+		ResponseChannel:    boolLabel(rtpPassed, "正常", "异常"),
+		RegistrationStatus: boolLabel(registrationNormal, "正常", "未注册"),
 	}
 
-	result := MappingTestResponse{SIPRequest: sipStatus, RTPChannel: rtpStatus}
-	d.recordOpsAudit(r, readOperator(r), "RUN_MAPPING_TEST", map[string]any{"sip_request": sipStatus, "rtp_channel": rtpStatus})
+	if !sipPassed {
+		result.FailureReason = "信令请求未通过，当前节点未完成控制链路健康校验。"
+		result.SuggestedAction = "优先检查 SIP 注册、对端信令地址和监听端口，再重试规则测试。"
+	} else if !rtpPassed {
+		result.FailureReason = "响应通道异常，RTP 端口池不可用或端口不足。"
+		result.SuggestedAction = "检查 RTP 端口池占用、对端媒体可达性，并确认端口范围配置。"
+	} else if !registrationNormal {
+		result.FailureReason = "注册状态未就绪，映射规则无法稳定收发控制消息。"
+		result.SuggestedAction = "检查注册鉴权参数与心跳状态，确认后再执行映射联调。"
+	}
+
+	d.recordOpsAudit(r, readOperator(r), "RUN_MAPPING_TEST", map[string]any{"signaling_request": result.SignalingRequest, "response_channel": result.ResponseChannel, "registration_status": result.RegistrationStatus})
 	writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: result})
 }
 
@@ -1078,17 +1097,54 @@ func (d handlerDeps) decorateMappingWithRuntime(item TunnelMapping, runtime map[
 	view := TunnelMappingView{TunnelMapping: item}
 	if rs, ok := runtime[item.MappingID]; ok {
 		view.LinkStatus = rs.State
-		view.StatusReason = rs.Reason
+		view.LinkStatusText, view.StatusReason, view.SuggestedAction = mappingStatusDiagnosis(rs.State, rs.Reason)
+		view.FailureReason = view.StatusReason
 		return view
 	}
 	if item.Enabled {
 		view.LinkStatus = mappingStateStartFailed
-		view.StatusReason = "监听状态未知，请检查运行时管理器"
+		view.LinkStatusText, view.StatusReason, view.SuggestedAction = mappingStatusDiagnosis(mappingStateStartFailed, "监听状态未知，请检查运行时管理器")
+		view.FailureReason = view.StatusReason
 		return view
 	}
 	view.LinkStatus = mappingStateDisabled
-	view.StatusReason = "映射未启用"
+	view.LinkStatusText, view.StatusReason, view.SuggestedAction = mappingStatusDiagnosis(mappingStateDisabled, "映射未启用")
+	view.FailureReason = view.StatusReason
 	return view
+}
+
+func mappingStatusDiagnosis(state, reason string) (statusText, failureReason, suggestedAction string) {
+	trimmedReason := strings.TrimSpace(reason)
+	switch state {
+	case mappingStateDisabled:
+		return "未启用", "映射规则未启用。", "按需开启规则后再观察链路状态。"
+	case mappingStateListening:
+		return "监听中", "本端入口监听已建立，等待对端完成业务连接。", "可发起联调请求，确认信令请求与响应通道状态。"
+	case "connected":
+		return "已连接", "映射链路已连接。", "无需处理，持续观察心跳与延迟指标。"
+	case mappingStateInterrupted:
+		if trimmedReason == "" {
+			trimmedReason = "监听线程异常中断。"
+		}
+		return "异常", trimmedReason, "查看节点状态与最近网络错误，恢复后重新启用映射规则。"
+	case mappingStateStartFailed:
+		if trimmedReason == "" {
+			trimmedReason = "映射启动失败。"
+		}
+		return "启动失败", trimmedReason, "检查本端监听地址、端口占用与权限，再执行重启。"
+	default:
+		if trimmedReason == "" {
+			trimmedReason = "映射链路状态异常。"
+		}
+		return "异常", trimmedReason, "检查注册、心跳与对端可达性，定位后再恢复流量。"
+	}
+}
+
+func boolLabel(ok bool, yes, no string) string {
+	if ok {
+		return yes
+	}
+	return no
 }
 
 func (d handlerDeps) handleCapacityRecommendation(w http.ResponseWriter, r *http.Request) {
