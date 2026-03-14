@@ -62,7 +62,7 @@
 - Dashboard 增加成功率、失败率、并发、RTP 丢片率、限流命中次数与最近任务趋势图。
 - 命令任务/文件任务页面提供筛选区、`request_id/trace_id` 查询、状态标签、详情跳转。
 - 任务详情页整合基础信息、状态流转时间线、SIP 事件、RTP 分片统计、HTTP 执行结果、审计记录片段。
-- API 采用双模式适配：`VITE_API_MODE=real` 走真实接口，默认走 mock 数据，便于联调与独立开发。
+- API 采用双模式适配：默认 `VITE_API_MODE=real` 走真实接口；仅当显式设置 `VITE_API_MODE=mock` 时走 mock 数据，避免主路径误用伪数据。
 - 类型集中在 `src/types/gateway.ts`，避免页面层与接口字段耦合。
 
 

@@ -46,6 +46,9 @@ type handlerDeps struct {
 	nodeStore nodeConfigStore
 	mappings  tunnelMappingStore
 
+	nodeConfigSource string
+	mappingSource    string
+
 	lastLinkTest LinkTestReport
 }
 
@@ -104,10 +107,11 @@ type mappingListResponse struct {
 }
 
 type OpsNode struct {
-	NodeID   string `json:"node_id"`
-	Role     string `json:"role"`
-	Status   string `json:"status"`
-	Endpoint string `json:"endpoint"`
+	NodeID     string `json:"node_id"`
+	Role       string `json:"role"`
+	Status     string `json:"status"`
+	Endpoint   string `json:"endpoint"`
+	DataSource string `json:"data_source,omitempty"`
 }
 
 type opsActionRequest struct {
@@ -245,6 +249,14 @@ type HandlerOptions struct {
 	StartupSummaryProvider func(context.Context) startupsummary.Summary
 }
 
+func dataSourceLabel(path, category string) string {
+	cleanPath := strings.TrimSpace(path)
+	if cleanPath == "" {
+		cleanPath = filepath.Join(".", "data", "final")
+	}
+	return fmt.Sprintf("file:%s/%s", filepath.Clean(cleanPath), category)
+}
+
 func NewHandler() http.Handler {
 	h, _, err := NewHandlerWithOptions(HandlerOptions{})
 	if err != nil {
@@ -314,8 +326,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, io.Closer, error)
 		limits:            OpsLimits{RPS: 200, Burst: 400, MaxConcurrent: 100},
 		routes:            map[string]OpsRoute{},
 		mappings:          mappingStore,
-		nodes:             []OpsNode{{NodeID: "gateway-a-01", Role: "gateway", Status: "ready", Endpoint: "10.0.0.11:18080"}},
 		nodeStore:         nodeStore,
+		nodeConfigSource:  dataSourceLabel(dataDir, "node_config.json"),
+		mappingSource:     dataSourceLabel(dataDir, "tunnel_mappings.json"),
 		selfCheckProvider: opts.SelfCheckProvider,
 		networkStatusFunc: opts.NetworkStatusFunc,
 		startupSummaryFn:  opts.StartupSummaryProvider,
@@ -369,7 +382,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, io.Closer, error)
 	}
 	if deps.startupSummaryFn == nil {
 		deps.startupSummaryFn = func(context.Context) startupsummary.Summary {
-			return startupsummary.Summary{NodeID: "gateway-a-01", ConfigSource: "default", UIMode: "external", UIURL: "external", APIURL: "http://127.0.0.1:18080/api"}
+			return startupsummary.Summary{}
 		}
 	}
 	return newMux(deps), joinClosers(logCloser, auditCloser), nil
@@ -981,10 +994,23 @@ func (d handlerDeps) handleNodes(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
 		return
 	}
-	d.mu.RLock()
-	nodes := append([]OpsNode(nil), d.nodes...)
-	d.mu.RUnlock()
-	writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: map[string]any{"items": nodes}})
+	if d.nodeStore == nil {
+		writeError(w, http.StatusNotImplemented, "NODE_STORE_NOT_ENABLED", "node config store not configured")
+		return
+	}
+	local := d.nodeStore.GetLocalNode()
+	nodeSource := d.nodeConfigSource
+	if strings.TrimSpace(nodeSource) == "" {
+		nodeSource = dataSourceLabel("", "node_config.json")
+	}
+	node := OpsNode{
+		NodeID:     local.NodeID,
+		Role:       local.NodeRole,
+		Status:     "configured",
+		Endpoint:   net.JoinHostPort(local.SIPListenIP, strconv.Itoa(local.SIPListenPort)),
+		DataSource: nodeSource,
+	}
+	writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: map[string]any{"items": []OpsNode{node}}})
 }
 
 func (d handlerDeps) handleNode(w http.ResponseWriter, r *http.Request) {
@@ -1309,6 +1335,29 @@ func (d handlerDeps) handleStartupSummary(w http.ResponseWriter, r *http.Request
 		return
 	}
 	summary := d.startupSummaryFn(r.Context())
+	nodeSource := d.nodeConfigSource
+	if strings.TrimSpace(nodeSource) == "" {
+		nodeSource = dataSourceLabel("", "node_config.json")
+	}
+	mappingSource := d.mappingSource
+	if strings.TrimSpace(mappingSource) == "" {
+		mappingSource = dataSourceLabel("", "tunnel_mappings.json")
+	}
+	if strings.TrimSpace(summary.DataSources.NodeConfig) == "" {
+		summary.DataSources.NodeConfig = nodeSource
+	}
+	if strings.TrimSpace(summary.DataSources.Peers) == "" {
+		summary.DataSources.Peers = nodeSource
+	}
+	if strings.TrimSpace(summary.DataSources.Mappings) == "" {
+		summary.DataSources.Mappings = mappingSource
+	}
+	if strings.TrimSpace(summary.DataSources.Mode) == "" {
+		summary.DataSources.Mode = "runtime_network_config"
+	}
+	if strings.TrimSpace(summary.DataSources.Capability) == "" {
+		summary.DataSources.Capability = "derived_from_network_mode"
+	}
 	if d.nodeStore != nil {
 		compat := d.compatibilitySnapshot(r.Context())
 		summary.CurrentNetworkMode = compat.CurrentNetworkMode
@@ -1331,8 +1380,10 @@ func (d handlerDeps) handleDiagnosticsExport(w http.ResponseWriter, r *http.Requ
 		compat = d.compatibilitySnapshot(r.Context())
 	}
 	nodeID := "gateway"
-	if len(d.nodes) > 0 && strings.TrimSpace(d.nodes[0].NodeID) != "" {
-		nodeID = d.nodes[0].NodeID
+	if d.nodeStore != nil {
+		if id := strings.TrimSpace(d.nodeStore.GetLocalNode().NodeID); id != "" {
+			nodeID = id
+		}
 	}
 	generatedAt := time.Now().UTC()
 	jobID := generatedAt.Format("150405")
@@ -1380,6 +1431,7 @@ func (d handlerDeps) handleDiagnosticsExport(w http.ResponseWriter, r *http.Requ
 		"诊断包文件说明（字段已脱敏，可用于人工排障）",
 		"00_startup_summary.json: 统一启动与运行摘要，供日志/API/UI/诊断复用。",
 		"01_transport_config.json: 当前 NetworkMode/Capability/TunnelTransportPlan + SIP/RTP transport 与关键网络参数快照。",
+		"01_transport_config.json.data_sources: 明确 node/peers/mappings/mode/capability 的真实来源。",
 		"02_connection_stats_snapshot.json: SIP/RTP 连接计数与错误累计值。",
 		"03_port_pool_status.json: RTP 端口池使用情况与分配失败累计值。",
 		"04_transport_error_summary.json: 最近 transport 绑定/网络错误摘要。",
@@ -1387,11 +1439,19 @@ func (d handlerDeps) handleDiagnosticsExport(w http.ResponseWriter, r *http.Requ
 		"06_rate_limit_hit_summary.json: 最近 rate limit 命中记录，支持 request_id/trace_id 定向过滤。",
 		"07_profile_entry.json: pprof 采集入口与启用状态（不包含凭据）。",
 	}
+	nodeSource := d.nodeConfigSource
+	if strings.TrimSpace(nodeSource) == "" {
+		nodeSource = dataSourceLabel("", "node_config.json")
+	}
+	mappingSource := d.mappingSource
+	if strings.TrimSpace(mappingSource) == "" {
+		mappingSource = dataSourceLabel("", "tunnel_mappings.json")
+	}
 
 	files := []DiagFile{
 		{Name: "00_startup_summary.json", Description: "统一启动与运行摘要", Content: d.startupSummaryFn(r.Context())},
 		{Name: "README.md", Description: "诊断包文件说明", Content: map[string]any{"filters": map[string]any{"request_id": requestID, "trace_id": traceID}, "files": readmeLines}},
-		{Name: "01_transport_config.json", Description: "当前 transport 配置", Content: map[string]any{"network_mode": status.NetworkMode, "capability": status.Capability, "capability_summary": status.CapabilitySummary, "transport_plan": status.TransportPlan, "current_network_mode": compat.CurrentNetworkMode, "current_capability": compat.CurrentCapability, "compatibility_status": compat.CompatibilityCheck, "sip": map[string]any{"listen_ip": status.SIP.ListenIP, "listen_port": status.SIP.ListenPort, "transport": status.SIP.Transport}, "rtp": map[string]any{"listen_ip": status.RTP.ListenIP, "port_start": status.RTP.PortStart, "port_end": status.RTP.PortEnd, "transport": status.RTP.Transport}, "mappings_capability_validation": d.validateMappingsAgainstCapability(d.mappings.List())}},
+		{Name: "01_transport_config.json", Description: "当前 transport 配置", Content: map[string]any{"network_mode": status.NetworkMode, "capability": status.Capability, "capability_summary": status.CapabilitySummary, "transport_plan": status.TransportPlan, "current_network_mode": compat.CurrentNetworkMode, "current_capability": compat.CurrentCapability, "compatibility_status": compat.CompatibilityCheck, "sip": map[string]any{"listen_ip": status.SIP.ListenIP, "listen_port": status.SIP.ListenPort, "transport": status.SIP.Transport}, "rtp": map[string]any{"listen_ip": status.RTP.ListenIP, "port_start": status.RTP.PortStart, "port_end": status.RTP.PortEnd, "transport": status.RTP.Transport}, "mappings_capability_validation": d.validateMappingsAgainstCapability(d.mappings.List()), "data_sources": map[string]any{"node_config": nodeSource, "peers": nodeSource, "mappings": mappingSource, "mode": "runtime_network_config", "capability": "derived_from_network_mode"}}},
 		{Name: "02_connection_stats_snapshot.json", Description: "连接统计快照", Content: map[string]any{"sip": map[string]any{"current_sessions": status.SIP.CurrentSessions, "current_connections": status.SIP.CurrentConnections, "accepted_connections_total": status.SIP.AcceptedConnectionsTotal, "closed_connections_total": status.SIP.ClosedConnectionsTotal, "read_timeout_total": status.SIP.ReadTimeoutTotal, "write_timeout_total": status.SIP.WriteTimeoutTotal, "connection_error_total": status.SIP.ConnectionErrorTotal}, "rtp": map[string]any{"active_transfers": status.RTP.ActiveTransfers, "rtp_tcp_sessions_current": status.RTP.TCPSessionsCurrent, "rtp_tcp_sessions_total": status.RTP.TCPSessionsTotal, "rtp_tcp_read_errors_total": status.RTP.TCPReadErrorsTotal, "rtp_tcp_write_errors_total": status.RTP.TCPWriteErrorsTotal}}},
 		{Name: "03_port_pool_status.json", Description: "端口池状态", Content: map[string]any{"used_ports": status.RTP.UsedPorts, "available_ports": status.RTP.AvailablePorts, "rtp_port_pool_total": status.RTP.PortPoolTotal, "rtp_port_pool_used": status.RTP.PortPoolUsed, "rtp_port_alloc_fail_total": status.RTP.PortAllocFailTotal}},
 		{Name: "04_transport_error_summary.json", Description: "最近 transport 错误摘要", Content: map[string]any{"recent_bind_errors": maskStringSlice(status.RecentBindErrors), "recent_network_errors": maskStringSlice(status.RecentNetworkErrors)}},
