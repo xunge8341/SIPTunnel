@@ -29,6 +29,7 @@ const (
 
 var ErrRouteNotAllowed = errors.New("api_code not allowed by route whitelist")
 
+// Deprecated: RouteConfig is the legacy api_code template route model, prefer tunnelmapping.TunnelMapping.
 type RouteConfig struct {
 	APICode       string            `yaml:"api_code" json:"api_code"`
 	TargetService string            `yaml:"target_service" json:"target_service"`
