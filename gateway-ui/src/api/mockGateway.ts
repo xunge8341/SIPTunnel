@@ -29,18 +29,22 @@ import type {
   SystemStatusPayload,
   NodeConfigPayload,
   TunnelConfigPayload,
+  TunnelConfigUpdatePayload,
   ConfigTransferPayload,
   ConfigTransferImportResult
 } from '../types/gateway'
 
 const wait = (ms = 200) => new Promise((resolve) => setTimeout(resolve, ms))
 
+const capabilityDescriptionsFromCapability = (capability: ReturnType<typeof deriveTunnelCapability>) => {
+  const items = buildTunnelCapabilityItems(capability)
+  const supported = items.filter((item) => item.supported).map((item) => item.description)
+  return supported.length > 0 ? supported : ['当前网络模式下暂无可用扩展能力']
+}
 
-let tunnelConfigState: TunnelConfigPayload = {
+let tunnelConfigState: Omit<TunnelConfigPayload, 'local_device_id' | 'peer_device_id'> = {
   channel_protocol: 'GB/T 28181',
   connection_initiator: 'LOCAL',
-  local_device_id: '34020000001320000001',
-  peer_device_id: '34020000002000000001',
   heartbeat_interval_sec: 60,
   register_retry_count: 3,
   register_retry_interval_sec: 10,
@@ -830,8 +834,8 @@ export async function downloadConfigTemplateMock(): Promise<ConfigTransferPayloa
     tunnel_config: {
       channel_protocol: 'GB/T 28181',
       connection_initiator: 'LOCAL',
-      local_device_id: '34020000001320000001',
-      peer_device_id: '34020000002000000001',
+      local_device_id: 'gateway-a-template',
+      peer_device_id: 'gateway-b-template',
       heartbeat_interval_sec: 60,
       register_retry_count: 3,
       register_retry_interval_sec: 10,
@@ -871,17 +875,20 @@ export async function downloadConfigTemplateMock(): Promise<ConfigTransferPayloa
 
 export async function fetchTunnelConfigMock(): Promise<TunnelConfigPayload> {
   await wait()
-  return JSON.parse(JSON.stringify(tunnelConfigState))
+  const primaryPeer = peerNodeState[0]
+  return {
+    ...JSON.parse(JSON.stringify(tunnelConfigState)),
+    local_device_id: localNodeState.node_id,
+    peer_device_id: primaryPeer?.peer_node_id ?? ''
+  }
 }
 
-export async function saveTunnelConfigMock(payload: TunnelConfigPayload): Promise<TunnelConfigPayload> {
+export async function saveTunnelConfigMock(payload: TunnelConfigUpdatePayload): Promise<TunnelConfigPayload> {
   await wait()
   const capability = deriveTunnelCapability(payload)
   tunnelConfigState = {
     channel_protocol: payload.channel_protocol,
     connection_initiator: payload.connection_initiator,
-    local_device_id: payload.local_device_id,
-    peer_device_id: payload.peer_device_id,
     heartbeat_interval_sec: payload.heartbeat_interval_sec,
     register_retry_count: payload.register_retry_count,
     register_retry_interval_sec: payload.register_retry_interval_sec,
@@ -889,14 +896,19 @@ export async function saveTunnelConfigMock(payload: TunnelConfigPayload): Promis
     last_register_time: payload.last_register_time,
     last_heartbeat_time: payload.last_heartbeat_time,
     heartbeat_status: payload.heartbeat_status,
-    supported_capabilities: payload.supported_capabilities,
+    supported_capabilities: capabilityDescriptionsFromCapability(capability),
     request_channel: 'SIP',
     response_channel: 'RTP',
     network_mode: payload.network_mode,
     capability,
     capability_items: buildTunnelCapabilityItems(capability)
   }
-  return JSON.parse(JSON.stringify(tunnelConfigState))
+  const primaryPeer = peerNodeState[0]
+  return {
+    ...JSON.parse(JSON.stringify(tunnelConfigState)),
+    local_device_id: localNodeState.node_id,
+    peer_device_id: primaryPeer?.peer_node_id ?? ''
+  }
 }
 
 

@@ -25,16 +25,22 @@
 
         <a-row :gutter="12">
           <a-col :span="12">
-            <a-form-item label="本端设备编号">
-              <a-input v-model:value="draft.local_device_id" placeholder="例如：34020000001320000001" />
+            <a-form-item label="本端设备编号（来源：节点配置）">
+              <a-input :value="draft.local_device_id || '未配置'" disabled />
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="对端设备编号">
-              <a-input v-model:value="draft.peer_device_id" placeholder="例如：34020000002000000001" />
+            <a-form-item label="对端设备编号（来源：节点配置）">
+              <a-input :value="draft.peer_device_id || '未配置'" disabled />
             </a-form-item>
           </a-col>
         </a-row>
+        <a-alert
+          type="info"
+          show-icon
+          style="margin-bottom: 12px"
+          message="设备编码由节点配置统一维护，通道配置仅展示，不可编辑。"
+        />
 
         <a-row :gutter="12">
           <a-col :span="8">
@@ -99,7 +105,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { gatewayApi } from '../api/gateway'
-import type { TunnelConfigPayload } from '../types/gateway'
+import type { TunnelConfigPayload, TunnelConfigUpdatePayload } from '../types/gateway'
 import { deriveTunnelCapability } from '../utils/tunnelConfig'
 
 const saving = ref(false)
@@ -167,7 +173,19 @@ const load = async () => {
 const save = async () => {
   saving.value = true
   try {
-    await gatewayApi.saveTunnelConfig(JSON.parse(JSON.stringify(draft)))
+    const payload: TunnelConfigUpdatePayload = {
+      channel_protocol: draft.channel_protocol,
+      connection_initiator: draft.connection_initiator,
+      heartbeat_interval_sec: draft.heartbeat_interval_sec,
+      register_retry_count: draft.register_retry_count,
+      register_retry_interval_sec: draft.register_retry_interval_sec,
+      registration_status: draft.registration_status,
+      last_register_time: draft.last_register_time,
+      last_heartbeat_time: draft.last_heartbeat_time,
+      heartbeat_status: draft.heartbeat_status,
+      network_mode: draft.network_mode
+    }
+    await gatewayApi.saveTunnelConfig(payload)
     message.success('GB/T 28181 注册与心跳配置保存成功')
     await load()
   } finally {

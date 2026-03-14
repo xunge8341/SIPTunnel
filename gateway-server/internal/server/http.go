@@ -210,8 +210,9 @@ type NodeConfigPayload struct {
 }
 
 type TunnelConfigPayload struct {
-	ChannelProtocol          string                  `json:"channel_protocol"`
-	ConnectionInitiator      string                  `json:"connection_initiator"`
+	ChannelProtocol     string `json:"channel_protocol"`
+	ConnectionInitiator string `json:"connection_initiator"`
+	// Device IDs are derived from node configuration and are read-only in tunnel config.
 	LocalDeviceID            string                  `json:"local_device_id"`
 	PeerDeviceID             string                  `json:"peer_device_id"`
 	HeartbeatIntervalSec     int                     `json:"heartbeat_interval_sec"`
@@ -227,6 +228,19 @@ type TunnelConfigPayload struct {
 	NetworkMode              config.NetworkMode      `json:"network_mode"`
 	Capability               config.Capability       `json:"capability"`
 	CapabilityItems          []config.CapabilityItem `json:"capability_items"`
+}
+
+type TunnelConfigUpdatePayload struct {
+	ChannelProtocol          string             `json:"channel_protocol"`
+	ConnectionInitiator      string             `json:"connection_initiator"`
+	HeartbeatIntervalSec     int                `json:"heartbeat_interval_sec"`
+	RegisterRetryCount       int                `json:"register_retry_count"`
+	RegisterRetryIntervalSec int                `json:"register_retry_interval_sec"`
+	RegistrationStatus       string             `json:"registration_status"`
+	LastRegisterTime         string             `json:"last_register_time"`
+	LastHeartbeatTime        string             `json:"last_heartbeat_time"`
+	HeartbeatStatus          string             `json:"heartbeat_status"`
+	NetworkMode              config.NetworkMode `json:"network_mode"`
 }
 
 type SIPNetworkStatus struct {
@@ -1408,8 +1422,6 @@ func defaultTunnelConfigPayload(mode config.NetworkMode) TunnelConfigPayload {
 	return TunnelConfigPayload{
 		ChannelProtocol:          "GB/T 28181",
 		ConnectionInitiator:      "LOCAL",
-		LocalDeviceID:            "gateway-local",
-		PeerDeviceID:             "gateway-peer",
 		HeartbeatIntervalSec:     60,
 		RegisterRetryCount:       3,
 		RegisterRetryIntervalSec: 10,
@@ -1452,22 +1464,14 @@ func capabilityDescriptions(capability config.Capability) []string {
 	return desc
 }
 
-func (d *handlerDeps) upsertTunnelConfig(req TunnelConfigPayload) (TunnelConfigPayload, error) {
+func (d *handlerDeps) upsertTunnelConfig(req TunnelConfigUpdatePayload) (TunnelConfigPayload, error) {
 	channelProtocol := strings.ToUpper(strings.TrimSpace(req.ChannelProtocol))
 	connectionInitiator := strings.ToUpper(strings.TrimSpace(req.ConnectionInitiator))
-	localDeviceID := strings.TrimSpace(req.LocalDeviceID)
-	peerDeviceID := strings.TrimSpace(req.PeerDeviceID)
 	if channelProtocol == "" {
 		return TunnelConfigPayload{}, fmt.Errorf("channel_protocol is required")
 	}
 	if connectionInitiator != "LOCAL" && connectionInitiator != "PEER" {
 		return TunnelConfigPayload{}, fmt.Errorf("connection_initiator must be LOCAL or PEER")
-	}
-	if localDeviceID == "" {
-		return TunnelConfigPayload{}, fmt.Errorf("local_device_id is required")
-	}
-	if peerDeviceID == "" {
-		return TunnelConfigPayload{}, fmt.Errorf("peer_device_id is required")
 	}
 	if req.HeartbeatIntervalSec <= 0 {
 		return TunnelConfigPayload{}, fmt.Errorf("heartbeat_interval_sec must be greater than 0")
@@ -1494,8 +1498,6 @@ func (d *handlerDeps) upsertTunnelConfig(req TunnelConfigPayload) (TunnelConfigP
 	updated := TunnelConfigPayload{
 		ChannelProtocol:          channelProtocol,
 		ConnectionInitiator:      connectionInitiator,
-		LocalDeviceID:            localDeviceID,
-		PeerDeviceID:             peerDeviceID,
 		HeartbeatIntervalSec:     req.HeartbeatIntervalSec,
 		RegisterRetryCount:       req.RegisterRetryCount,
 		RegisterRetryIntervalSec: req.RegisterRetryIntervalSec,
@@ -1516,6 +1518,24 @@ func (d *handlerDeps) upsertTunnelConfig(req TunnelConfigPayload) (TunnelConfigP
 	return updated, nil
 }
 
+func (d handlerDeps) derivedLocalDeviceID() string {
+	if d.nodeStore == nil {
+		return ""
+	}
+	return strings.TrimSpace(d.nodeStore.GetLocalNode().NodeID)
+}
+
+func (d handlerDeps) derivedPeerDeviceID() string {
+	if d.nodeStore == nil {
+		return ""
+	}
+	peers := d.nodeStore.ListPeers()
+	if len(peers) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(peers[0].PeerNodeID)
+}
+
 func (d *handlerDeps) handleTunnelConfig(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -1525,14 +1545,20 @@ func (d *handlerDeps) handleTunnelConfig(w http.ResponseWriter, r *http.Request)
 		if resp.NetworkMode.Normalize() == "" {
 			resp = defaultTunnelConfigPayload(config.DefaultNetworkMode())
 		}
+		resp.LocalDeviceID = d.derivedLocalDeviceID()
+		resp.PeerDeviceID = d.derivedPeerDeviceID()
 		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: resp})
 	case http.MethodPost:
-		var req TunnelConfigPayload
+		var req TunnelConfigUpdatePayload
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid json body")
 			return
 		}
 		updated, err := d.upsertTunnelConfig(req)
+		if err == nil {
+			updated.LocalDeviceID = d.derivedLocalDeviceID()
+			updated.PeerDeviceID = d.derivedPeerDeviceID()
+		}
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", err.Error())
 			return
