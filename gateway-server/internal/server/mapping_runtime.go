@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"siptunnel/internal/tunnelmapping"
@@ -161,11 +162,12 @@ type mappingRuntimeRunner struct {
 }
 
 type mappingRuntimeManager struct {
-	mu       sync.RWMutex
-	listenFn func(network, address string) (net.Listener, error)
-	forward  mappingForwarder
-	runners  map[string]*mappingRuntimeRunner
-	status   map[string]mappingRuntimeStatus
+	mu         sync.RWMutex
+	listenFn   func(network, address string) (net.Listener, error)
+	forward    mappingForwarder
+	runners    map[string]*mappingRuntimeRunner
+	status     map[string]mappingRuntimeStatus
+	requestSeq uint64
 }
 
 func newMappingRuntimeManager(forward mappingForwarder) *mappingRuntimeManager {
@@ -274,18 +276,19 @@ func (m *mappingRuntimeManager) syncOneLocked(item TunnelMapping) {
 	r := &mappingRuntimeRunner{id: item.MappingID, endpoint: endpoint, mapping: item, listener: ln}
 	r.server = &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		start := time.Now()
+		requestID := fmt.Sprintf("mreq-%d", atomic.AddUint64(&m.requestSeq, 1))
 		m.beginForward(r.id)
 		prepared, err := m.forward.PrepareForward(req.Context(), r.mapping, req)
 		if err != nil {
-			m.endForward(r.id, false, "转发准备失败："+err.Error())
-			log.Printf("mapping-runtime audit mapping=%s method=%s path=%s result=prepare_error err=%v", r.id, req.Method, req.URL.String(), err)
+			m.endForward(r.id, false, "转发准备失败(upstream)："+err.Error())
+			log.Printf("mapping-runtime request_id=%s mapping=%s direction=upstream method=%s path=%s result=prepare_error err=%v", requestID, r.id, req.Method, req.URL.String(), err)
 			http.Error(w, "请求转发准备失败："+err.Error(), http.StatusBadGateway)
 			return
 		}
 		resp, err := m.forward.ExecuteForward(req.Context(), prepared)
 		if err != nil {
-			m.endForward(r.id, false, "转发失败："+err.Error())
-			log.Printf("mapping-runtime audit mapping=%s method=%s path=%s result=error err=%v", r.id, req.Method, req.URL.String(), err)
+			m.endForward(r.id, false, "转发失败(upstream)："+err.Error())
+			log.Printf("mapping-runtime request_id=%s mapping=%s direction=upstream method=%s path=%s result=error err=%v", requestID, r.id, req.Method, req.URL.String(), err)
 			http.Error(w, "请求转发到对端失败："+err.Error(), http.StatusBadGateway)
 			return
 		}
@@ -293,13 +296,13 @@ func (m *mappingRuntimeManager) syncOneLocked(item TunnelMapping) {
 		copyHeaders(w.Header(), resp.Header)
 		w.WriteHeader(resp.StatusCode)
 		if _, copyErr := io.Copy(w, resp.Body); copyErr != nil {
-			m.endForward(r.id, false, "回传响应失败："+copyErr.Error())
-			log.Printf("mapping-runtime audit mapping=%s method=%s path=%s status=%d result=copy_error err=%v", r.id, req.Method, req.URL.String(), resp.StatusCode, copyErr)
+			m.endForward(r.id, false, "回传响应失败(downstream)："+copyErr.Error())
+			log.Printf("mapping-runtime request_id=%s mapping=%s direction=downstream method=%s path=%s status=%d result=copy_error err=%v", requestID, r.id, req.Method, req.URL.String(), resp.StatusCode, copyErr)
 			return
 		}
 		elapsed := time.Since(start)
 		m.endForward(r.id, true, fmt.Sprintf("最近转发成功：status=%d duration=%s", resp.StatusCode, elapsed.Round(time.Millisecond)))
-		log.Printf("mapping-runtime audit mapping=%s method=%s path=%s status=%d duration_ms=%d", r.id, req.Method, req.URL.String(), resp.StatusCode, elapsed.Milliseconds())
+		log.Printf("mapping-runtime request_id=%s mapping=%s direction=downstream method=%s path=%s status=%d duration_ms=%d", requestID, r.id, req.Method, req.URL.String(), resp.StatusCode, elapsed.Milliseconds())
 	})}
 	m.runners[item.MappingID] = r
 	m.status[item.MappingID] = mappingRuntimeStatus{State: mappingStateListening, Reason: "监听中"}

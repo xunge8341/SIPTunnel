@@ -123,3 +123,39 @@ func TestTunnelMappingStoreLoadLegacyRouteConfig(t *testing.T) {
 		t.Fatalf("unexpected migrated mapping: %+v", item)
 	}
 }
+
+func TestTunnelMappingStoreCreateAutoIncrementIDAndCursorPersist(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "tunnel_mappings.json")
+	store, err := NewTunnelMappingStore(path)
+	if err != nil {
+		t.Fatalf("new store failed: %v", err)
+	}
+	m1 := sampleMapping("")
+	created1, err := store.Create(m1)
+	if err != nil {
+		t.Fatalf("create1 failed: %v", err)
+	}
+	if created1.MappingID != "1" {
+		t.Fatalf("expected first auto id=1, got %s", created1.MappingID)
+	}
+	m2 := sampleMapping("")
+	created2, err := store.Create(m2)
+	if err != nil {
+		t.Fatalf("create2 failed: %v", err)
+	}
+	if created2.MappingID != "2" {
+		t.Fatalf("expected second auto id=2, got %s", created2.MappingID)
+	}
+	reloaded, err := NewTunnelMappingStore(path)
+	if err != nil {
+		t.Fatalf("reload failed: %v", err)
+	}
+	m3 := sampleMapping("")
+	created3, err := reloaded.Create(m3)
+	if err != nil {
+		t.Fatalf("create3 failed: %v", err)
+	}
+	if created3.MappingID != "3" {
+		t.Fatalf("expected third auto id=3 after reload, got %s", created3.MappingID)
+	}
+}
