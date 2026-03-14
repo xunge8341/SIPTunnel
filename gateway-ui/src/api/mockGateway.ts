@@ -24,10 +24,63 @@ import type {
   PeerNodeConfig,
   NodeNetworkStatusPayload,
   SystemStatusPayload,
-  NodeConfigPayload
+  NodeConfigPayload,
+  TunnelConfigPayload
 } from '../types/gateway'
 
 const wait = (ms = 200) => new Promise((resolve) => setTimeout(resolve, ms))
+
+
+const deriveTunnelCapability = (networkMode: string): TunnelConfigPayload['capability'] => {
+  switch (networkMode) {
+    case 'A_B_BIDIR_SIP__BIDIR_RTP':
+      return {
+        supports_small_request_body: true,
+        supports_large_request_body: true,
+        supports_large_response_body: true,
+        supports_streaming_response: true,
+        supports_bidirectional_http_tunnel: true,
+        supports_transparent_http_proxy: true
+      }
+    case 'A_TO_B_SIP__B_TO_A_RTP':
+    case 'A_B_BIDIR_SIP__B_TO_A_RTP':
+      return {
+        supports_small_request_body: true,
+        supports_large_request_body: false,
+        supports_large_response_body: true,
+        supports_streaming_response: true,
+        supports_bidirectional_http_tunnel: false,
+        supports_transparent_http_proxy: false
+      }
+    default:
+      return {
+        supports_small_request_body: false,
+        supports_large_request_body: false,
+        supports_large_response_body: false,
+        supports_streaming_response: false,
+        supports_bidirectional_http_tunnel: false,
+        supports_transparent_http_proxy: false
+      }
+  }
+}
+
+const toCapabilityItems = (capability: TunnelConfigPayload['capability']) => [
+  { key: 'supports_small_request_body', supported: capability.supports_small_request_body, description: '支持小请求体（典型 SIP 载荷范围）' },
+  { key: 'supports_large_request_body', supported: capability.supports_large_request_body, description: '支持大请求体上传' },
+  { key: 'supports_large_response_body', supported: capability.supports_large_response_body, description: '支持大响应体回传' },
+  { key: 'supports_streaming_response', supported: capability.supports_streaming_response, description: '支持流式响应/分块回传' },
+  { key: 'supports_bidirectional_http_tunnel', supported: capability.supports_bidirectional_http_tunnel, description: '支持双向 HTTP 隧道' },
+  { key: 'supports_transparent_http_proxy', supported: capability.supports_transparent_http_proxy, description: '支持透明 HTTP 代理' }
+]
+
+let tunnelConfigState: TunnelConfigPayload = {
+  channel_protocol: 'GB28181',
+  request_channel: 'SIP',
+  response_channel: 'RTP',
+  network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+  capability: deriveTunnelCapability('A_TO_B_SIP__B_TO_A_RTP'),
+  capability_items: toCapabilityItems(deriveTunnelCapability('A_TO_B_SIP__B_TO_A_RTP'))
+}
 
 
 let mappingState: TunnelMapping[] = [
@@ -706,6 +759,26 @@ export async function retryDiagnosticExportMock(jobId: string): Promise<Diagnost
   record.job.downloadUrl = undefined
   record.job.sections = diagnosticSectionsTemplate.map((item) => ({ ...item, done: false }))
   return cloneJob(record.job)
+}
+
+
+export async function fetchTunnelConfigMock(): Promise<TunnelConfigPayload> {
+  await wait()
+  return JSON.parse(JSON.stringify(tunnelConfigState))
+}
+
+export async function saveTunnelConfigMock(payload: TunnelConfigPayload): Promise<TunnelConfigPayload> {
+  await wait()
+  const capability = deriveTunnelCapability(payload.network_mode)
+  tunnelConfigState = {
+    channel_protocol: payload.channel_protocol,
+    request_channel: payload.request_channel,
+    response_channel: payload.response_channel,
+    network_mode: payload.network_mode,
+    capability,
+    capability_items: toCapabilityItems(capability)
+  }
+  return JSON.parse(JSON.stringify(tunnelConfigState))
 }
 
 

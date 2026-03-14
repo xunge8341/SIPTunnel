@@ -27,7 +27,9 @@ import {
   fetchNodeNetworkStatusMock,
   fetchSystemStatusMock,
   fetchNodeConfigMock,
-  saveNodeConfigMock
+  saveNodeConfigMock,
+  fetchTunnelConfigMock,
+  saveTunnelConfigMock
 } from './mockGateway'
 import type {
   CommandTask,
@@ -58,7 +60,8 @@ import type {
   PeerNodeConfig,
   NodeNetworkStatusPayload,
   SystemStatusPayload,
-  NodeConfigPayload
+  NodeConfigPayload,
+  TunnelConfigPayload
 } from '../types/gateway'
 
 const useMockMode = () => ((import.meta.env.VITE_API_MODE ?? 'real').toLowerCase() === 'mock')
@@ -300,6 +303,21 @@ export const gatewayApi = {
       return fetchSystemStatusMock()
     }
     return unwrap(request<SystemStatusPayload>('/system/status', { method: 'GET' }))
+  },
+
+
+  async fetchTunnelConfig() {
+    if (useMockMode()) {
+      return fetchTunnelConfigMock()
+    }
+    return unwrap(request<TunnelConfigPayload>('/tunnel/config', { method: 'GET' }))
+  },
+
+  async saveTunnelConfig(payload: TunnelConfigPayload) {
+    if (useMockMode()) {
+      return saveTunnelConfigMock(payload)
+    }
+    return unwrap(request<TunnelConfigPayload>('/tunnel/config', { method: 'POST', body: payload }))
   },
 
 

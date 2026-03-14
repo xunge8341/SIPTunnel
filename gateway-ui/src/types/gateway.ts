@@ -301,6 +301,32 @@ export interface PeerNodeConfig {
   enabled: boolean
 }
 
+
+
+export interface TunnelConfigCapabilityItem {
+  key: string
+  supported: boolean
+  description: string
+}
+
+export interface TunnelConfigCapability {
+  supports_small_request_body: boolean
+  supports_large_request_body: boolean
+  supports_large_response_body: boolean
+  supports_streaming_response: boolean
+  supports_bidirectional_http_tunnel: boolean
+  supports_transparent_http_proxy: boolean
+}
+
+export interface TunnelConfigPayload {
+  channel_protocol: string
+  request_channel: string
+  response_channel: string
+  network_mode: string
+  capability: TunnelConfigCapability
+  capability_items: TunnelConfigCapabilityItem[]
+}
+
 export interface NodeConfigEndpoint {
   node_ip: string
   signaling_port: number

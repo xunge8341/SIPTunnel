@@ -696,3 +696,29 @@ func TestSystemStatusEndpoint(t *testing.T) {
 		t.Fatalf("unexpected ops action: %s", events[0].OpsAction)
 	}
 }
+
+func TestTunnelConfigEndpointGetAndPost(t *testing.T) {
+	h, _, _ := buildTestHandler(t)
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/tunnel/config", nil)
+	getRR := httptest.NewRecorder()
+	h.ServeHTTP(getRR, getReq)
+	if getRR.Code != http.StatusOK || !strings.Contains(getRR.Body.String(), "capability_items") {
+		t.Fatalf("GET /api/tunnel/config failed code=%d body=%s", getRR.Code, getRR.Body.String())
+	}
+
+	postBody := `{"channel_protocol":"GB28181","request_channel":"SIP","response_channel":"RTP","network_mode":"A_B_BIDIR_SIP__BIDIR_RTP"}`
+	postReq := httptest.NewRequest(http.MethodPost, "/api/tunnel/config", bytes.NewBufferString(postBody))
+	postRR := httptest.NewRecorder()
+	h.ServeHTTP(postRR, postReq)
+	if postRR.Code != http.StatusOK || !strings.Contains(postRR.Body.String(), "supports_large_request_body") {
+		t.Fatalf("POST /api/tunnel/config failed code=%d body=%s", postRR.Code, postRR.Body.String())
+	}
+
+	getAfterReq := httptest.NewRequest(http.MethodGet, "/api/tunnel/config", nil)
+	getAfterRR := httptest.NewRecorder()
+	h.ServeHTTP(getAfterRR, getAfterReq)
+	if getAfterRR.Code != http.StatusOK || !strings.Contains(getAfterRR.Body.String(), "A_B_BIDIR_SIP__BIDIR_RTP") {
+		t.Fatalf("GET after POST /api/tunnel/config failed code=%d body=%s", getAfterRR.Code, getAfterRR.Body.String())
+	}
+}

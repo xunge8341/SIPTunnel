@@ -50,6 +50,7 @@ type handlerDeps struct {
 	mappingSource    string
 
 	lastLinkTest LinkTestReport
+	tunnelConfig TunnelConfigPayload
 }
 
 type nodeConfigStore interface {
@@ -166,6 +167,15 @@ type NodeConfigEndpoint struct {
 type NodeConfigPayload struct {
 	LocalNode NodeConfigEndpoint `json:"local_node"`
 	PeerNode  NodeConfigEndpoint `json:"peer_node"`
+}
+
+type TunnelConfigPayload struct {
+	ChannelProtocol string                  `json:"channel_protocol"`
+	RequestChannel  string                  `json:"request_channel"`
+	ResponseChannel string                  `json:"response_channel"`
+	NetworkMode     config.NetworkMode      `json:"network_mode"`
+	Capability      config.Capability       `json:"capability"`
+	CapabilityItems []config.CapabilityItem `json:"capability_items"`
 }
 
 type SIPNetworkStatus struct {
@@ -360,6 +370,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, io.Closer, error)
 		selfCheckProvider: opts.SelfCheckProvider,
 		networkStatusFunc: opts.NetworkStatusFunc,
 		startupSummaryFn:  opts.StartupSummaryProvider,
+		tunnelConfig:      defaultTunnelConfigPayload(config.DefaultNetworkMode()),
 	}
 	if deps.networkStatusFunc == nil {
 		defaults := config.DefaultNetworkConfig()
@@ -465,6 +476,7 @@ func newMux(deps handlerDeps) http.Handler {
 	mux.HandleFunc("/api/node/network-status", deps.handleNodeNetworkStatus)
 	mux.HandleFunc("/api/node", deps.handleNode)
 	mux.HandleFunc("/api/node/config", deps.handleNodeConfig)
+	mux.HandleFunc("/api/tunnel/config", deps.handleTunnelConfig)
 	mux.HandleFunc("/api/peers", deps.handlePeers)
 	mux.HandleFunc("/api/peers/", deps.handlePeers)
 	mux.HandleFunc("/api/ops/link-test", deps.handleLinkTest)
@@ -1159,6 +1171,79 @@ func (d handlerDeps) handleNodeConfig(w http.ResponseWriter, r *http.Request) {
 		}
 		d.recordOpsAudit(r, readOperator(r), "UPDATE_NODE_CONFIG_AND_RESTART_TUNNEL", resp)
 		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "节点配置已保存并重启隧道", Data: map[string]any{"config": resp, "tunnel_restarted": true}})
+	default:
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
+	}
+}
+
+func defaultTunnelConfigPayload(mode config.NetworkMode) TunnelConfigPayload {
+	normalized := mode.Normalize()
+	capability := config.DeriveCapability(normalized)
+	return TunnelConfigPayload{
+		ChannelProtocol: "GB28181",
+		RequestChannel:  "SIP",
+		ResponseChannel: "RTP",
+		NetworkMode:     normalized,
+		Capability:      capability,
+		CapabilityItems: capability.Matrix(),
+	}
+}
+
+func (d *handlerDeps) upsertTunnelConfig(req TunnelConfigPayload) (TunnelConfigPayload, error) {
+	channelProtocol := strings.ToUpper(strings.TrimSpace(req.ChannelProtocol))
+	requestChannel := strings.ToUpper(strings.TrimSpace(req.RequestChannel))
+	responseChannel := strings.ToUpper(strings.TrimSpace(req.ResponseChannel))
+	if channelProtocol == "" {
+		return TunnelConfigPayload{}, fmt.Errorf("channel_protocol is required")
+	}
+	if requestChannel == "" {
+		return TunnelConfigPayload{}, fmt.Errorf("request_channel is required")
+	}
+	if responseChannel == "" {
+		return TunnelConfigPayload{}, fmt.Errorf("response_channel is required")
+	}
+	mode := req.NetworkMode.Normalize()
+	if err := mode.Validate(); err != nil {
+		return TunnelConfigPayload{}, err
+	}
+	capability := config.DeriveCapability(mode)
+	updated := TunnelConfigPayload{
+		ChannelProtocol: channelProtocol,
+		RequestChannel:  requestChannel,
+		ResponseChannel: responseChannel,
+		NetworkMode:     mode,
+		Capability:      capability,
+		CapabilityItems: capability.Matrix(),
+	}
+	d.mu.Lock()
+	d.tunnelConfig = updated
+	d.mu.Unlock()
+	return updated, nil
+}
+
+func (d *handlerDeps) handleTunnelConfig(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		d.mu.RLock()
+		resp := d.tunnelConfig
+		d.mu.RUnlock()
+		if resp.NetworkMode.Normalize() == "" {
+			resp = defaultTunnelConfigPayload(config.DefaultNetworkMode())
+		}
+		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: resp})
+	case http.MethodPost:
+		var req TunnelConfigPayload
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid json body")
+			return
+		}
+		updated, err := d.upsertTunnelConfig(req)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", err.Error())
+			return
+		}
+		d.recordOpsAudit(r, readOperator(r), "UPDATE_TUNNEL_CONFIG", updated)
+		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: updated})
 	default:
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
 	}
