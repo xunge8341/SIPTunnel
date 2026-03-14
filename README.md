@@ -293,8 +293,9 @@ startup summary:
 .\scripts\embed-ui.ps1
 ```
 
-> 失败即中止：`embed-ui.ps1` 会在 `npm run build` 后显式检查 `$LASTEXITCODE`。
-> 一旦前端构建失败，脚本会抛出 `UI build failed with exit code ...` 并立即退出（非零退出码），不会继续复制旧 `dist`，也不会覆盖 `gateway-server/internal/server/embedded-ui`。脚本还会校验本次构建 nonce 标记，拒绝嵌入陈旧产物。
+> 失败即中止：`embed-ui.ps1/.sh` 会先清理旧 `dist`，并在 `npm run build` 成功后写入本次构建 nonce。
+> 嵌入阶段会校验 nonce 一致性，并生成 `gateway-server/internal/server/embedded-ui/.siptunnel-ui-embed.json` 元数据（包含 `embedded_at_utc`、内容哈希、UI 源文件最新时间）。
+> 如果构建失败或标记不一致，脚本立即退出，不会继续复制旧资源。
 
 2) 在 `gateway-server/configs/config.yaml` 中设置：
 
@@ -768,11 +769,27 @@ go run ./cmd/gatewayctl link test
 
 ### 默认单文件编译
 
-- Linux/macOS：`./scripts/build.sh`
-- Windows（PowerShell）：`./scripts/build.ps1`
+- Linux/macOS：`./scripts/build.sh [native|matrix] [delivery|dev]`
+- Windows（PowerShell）：`./scripts/build.ps1 -Mode <native|matrix> -UiPolicy <delivery|dev>`
+
+默认 `UiPolicy=delivery`：构建前强制校验 `embedded-ui/.siptunnel-ui-embed.json`、当前嵌入目录内容哈希、以及“UI 源文件最新修改时间 <= 嵌入时间”。任一校验失败会中止打包，防止旧 UI 被误打进交付包。
+
+`dev` 模式用于本地后端快速编译（不带 UI 交付约束），会显式打印 `skip embedded UI guard`。
 
 默认在 `dist/bin/<os>/<arch>/` 输出当前平台单可执行文件；如需一次构建多平台可使用 `matrix` 模式。
 
+
+
+### 交付版推荐顺序（带 UI 保护）
+
+1. 先执行 `./scripts/embed-ui.sh`（Windows 用 `./scripts/embed-ui.ps1`）构建并嵌入 UI。
+2. 再执行 `./scripts/build.sh native delivery`（Windows 用 `./scripts/build.ps1 -UiPolicy delivery`）。
+3. 构建日志会输出：
+   - UI 是否最新（latest check）
+   - UI 嵌入时间（`embedded_at_utc`）
+   - 哈希校验结果（expected/actual + PASS/FAIL）
+
+若 UI 未成功构建/嵌入，交付模式构建会被阻断。
 
 ### 后端多架构构建（linux/amd64 + linux/arm64）
 
