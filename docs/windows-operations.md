@@ -99,9 +99,17 @@ notepad .\configs\config.yaml
 Set-Location C:\SIPTunnel
 .\scripts\embed-ui.ps1
 
-# 2) 编辑配置，开启 embedded 模式
+# 2) 交付版后端构建（默认强制校验 UI 嵌入元数据）
+.\scripts\build.ps1 -Mode native -UiPolicy delivery
+
+# 3) 编辑配置，开启 embedded 模式
 notepad .\gateway-server\configs\config.yaml
 ```
+
+说明：
+- `embed-ui.ps1` 成功后会生成 `gateway-server\internal\server\embedded-ui\.siptunnel-ui-embed.json`。
+- `build.ps1 -UiPolicy delivery` 会校验嵌入哈希、嵌入时间、UI 最新修改时间；校验失败会拒绝继续打包。
+- 本地开发可用 `-UiPolicy dev` 跳过该保护（不建议用于交付包）。
 
 `config.yaml` 关键项：
 
