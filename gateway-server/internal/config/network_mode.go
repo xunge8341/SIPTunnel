@@ -8,11 +8,19 @@ import (
 type NetworkMode string
 
 const (
-	NetworkModeAToBSIPBToARTP      NetworkMode = "A_TO_B_SIP__B_TO_A_RTP"
-	NetworkModeABBiDirSIPBiDirRTP  NetworkMode = "A_B_BIDIR_SIP__BIDIR_RTP"
-	NetworkModeABBiDirSIPBToARTP   NetworkMode = "A_B_BIDIR_SIP__B_TO_A_RTP"
+	// 新模型：按发送端 / 接收端表达链路能力。
+	NetworkModeSenderSIPReceiverRTP    NetworkMode = "SENDER_SIP__RECEIVER_RTP"
+	NetworkModeSenderSIPReceiverSIPRTP NetworkMode = "SENDER_SIP__RECEIVER_SIP_RTP"
+	NetworkModeSenderSIPRTPReceiverAll NetworkMode = "SENDER_SIP_RTP__RECEIVER_SIP_RTP"
+
 	NetworkModeReservedPlaceholder NetworkMode = "RESERVED_PLACEHOLDER"
 )
+
+var legacyNetworkModeAlias = map[NetworkMode]NetworkMode{
+	"A_TO_B_SIP__B_TO_A_RTP":    NetworkModeSenderSIPReceiverRTP,
+	"A_B_BIDIR_SIP__B_TO_A_RTP": NetworkModeSenderSIPReceiverSIPRTP,
+	"A_B_BIDIR_SIP__BIDIR_RTP":  NetworkModeSenderSIPRTPReceiverAll,
+}
 
 type Capability struct {
 	SupportsSmallRequestBody        bool `json:"supports_small_request_body"`
@@ -30,15 +38,18 @@ type CapabilityItem struct {
 }
 
 func DefaultNetworkMode() NetworkMode {
-	return NetworkModeAToBSIPBToARTP
+	return NetworkModeSenderSIPReceiverRTP
 }
 
 func (m NetworkMode) Normalize() NetworkMode {
-	normalized := strings.ToUpper(strings.TrimSpace(string(m)))
+	normalized := NetworkMode(strings.ToUpper(strings.TrimSpace(string(m))))
 	if normalized == "" {
 		return DefaultNetworkMode()
 	}
-	return NetworkMode(normalized)
+	if mapped, ok := legacyNetworkModeAlias[normalized]; ok {
+		return mapped
+	}
+	return normalized
 }
 
 func (m NetworkMode) Validate() error {
@@ -54,12 +65,12 @@ func (m NetworkMode) Validate() error {
 
 func (m NetworkMode) Description() string {
 	switch m.Normalize() {
-	case NetworkModeAToBSIPBToARTP:
-		return "A->B 仅 SIP 小报文，B->A RTP 回传大载荷；适合小请求 + 大响应"
-	case NetworkModeABBiDirSIPBiDirRTP:
-		return "A/B 双向 SIP + 双向 RTP；可支持双向大载荷与透明代理类能力"
-	case NetworkModeABBiDirSIPBToARTP:
-		return "A/B 双向 SIP，但 RTP 仅 B->A；支持双向小请求，受限于上行大载荷"
+	case NetworkModeSenderSIPReceiverRTP:
+		return "发送端(SIP上级域): SIP --> | <-- RTP : 接收端(SIP下级域)；适合小请求 + 大响应"
+	case NetworkModeSenderSIPReceiverSIPRTP:
+		return "发送端(SIP上级域): SIP --> | <-- SIP&RTP : 接收端(SIP下级域)；双向小报文 + 下行大载荷"
+	case NetworkModeSenderSIPRTPReceiverAll:
+		return "发送端(SIP上级域): SIP&RTP --> | <-- SIP&RTP : 接收端(SIP下级域)；双向大载荷"
 	default:
 		if strings.HasPrefix(string(m.Normalize()), "RESERVED_") {
 			return "预留网络模式：尚未定义稳定能力边界"
@@ -70,7 +81,7 @@ func (m NetworkMode) Description() string {
 
 func DeriveCapability(mode NetworkMode) Capability {
 	switch mode.Normalize() {
-	case NetworkModeAToBSIPBToARTP:
+	case NetworkModeSenderSIPReceiverRTP:
 		return Capability{
 			SupportsSmallRequestBody:        true,
 			SupportsLargeRequestBody:        false,
@@ -79,7 +90,7 @@ func DeriveCapability(mode NetworkMode) Capability {
 			SupportsBidirectionalHTTPTunnel: false,
 			SupportsTransparentHTTPProxy:    false,
 		}
-	case NetworkModeABBiDirSIPBiDirRTP:
+	case NetworkModeSenderSIPRTPReceiverAll:
 		return Capability{
 			SupportsSmallRequestBody:        true,
 			SupportsLargeRequestBody:        true,
@@ -88,7 +99,7 @@ func DeriveCapability(mode NetworkMode) Capability {
 			SupportsBidirectionalHTTPTunnel: true,
 			SupportsTransparentHTTPProxy:    true,
 		}
-	case NetworkModeABBiDirSIPBToARTP:
+	case NetworkModeSenderSIPReceiverSIPRTP:
 		return Capability{
 			SupportsSmallRequestBody:        true,
 			SupportsLargeRequestBody:        false,
@@ -136,7 +147,7 @@ func (c Capability) UnsupportedFeatures() []string {
 }
 
 var knownNetworkModes = map[NetworkMode]struct{}{
-	NetworkModeAToBSIPBToARTP:     {},
-	NetworkModeABBiDirSIPBiDirRTP: {},
-	NetworkModeABBiDirSIPBToARTP:  {},
+	NetworkModeSenderSIPReceiverRTP:    {},
+	NetworkModeSenderSIPReceiverSIPRTP: {},
+	NetworkModeSenderSIPRTPReceiverAll: {},
 }

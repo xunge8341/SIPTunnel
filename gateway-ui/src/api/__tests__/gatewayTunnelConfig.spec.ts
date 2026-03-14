@@ -31,7 +31,7 @@ describe('gatewayApi tunnel config', () => {
       last_register_time: '2026-03-14T10:00:00Z',
       last_heartbeat_time: '2026-03-14T10:00:30Z',
       heartbeat_status: 'healthy',
-      network_mode: 'A_TO_B_SIP__B_TO_A_RTP'
+      network_mode: 'SENDER_SIP__RECEIVER_RTP'
     } satisfies TunnelConfigUpdatePayload
     await gatewayApi.saveTunnelConfig(payload)
     expect(requestMock).toHaveBeenCalledWith('/tunnel/config', { method: 'POST', body: payload })

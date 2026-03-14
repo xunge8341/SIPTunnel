@@ -46,7 +46,7 @@ describe('DashboardView', () => {
 
     vi.mocked(gatewayApi.fetchStartupSummary).mockResolvedValue({
       node_id: 'gateway-a-01',
-      network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+      network_mode: 'SENDER_SIP__RECEIVER_RTP',
       capability: {
         supports_large_request_body: false,
         supports_large_response_body: true,
@@ -93,7 +93,7 @@ describe('DashboardView', () => {
     vi.mocked(gatewayApi.fetchSystemStatus).mockResolvedValue({
       tunnel_status: 'connected',
       connection_reason: 'SIP 控制面与 RTP 文件面链路正常',
-      network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+      network_mode: 'SENDER_SIP__RECEIVER_RTP',
       registration_status: 'registered',
       heartbeat_status: 'healthy',
       last_register_time: '2026-03-14T10:00:00Z',

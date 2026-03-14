@@ -2,7 +2,7 @@ import { buildTunnelCapabilityItems, deriveTunnelCapability } from '../tunnelCon
 
 describe('tunnelConfig utils', () => {
   it('derives capability for classic SIP request + RTP response mode', () => {
-    const capability = deriveTunnelCapability({ network_mode: 'A_TO_B_SIP__B_TO_A_RTP' })
+    const capability = deriveTunnelCapability({ network_mode: 'SENDER_SIP__RECEIVER_RTP' })
 
     expect(capability.supports_small_request_body).toBe(true)
     expect(capability.supports_large_request_body).toBe(false)
@@ -11,7 +11,7 @@ describe('tunnelConfig utils', () => {
   })
 
   it('derives bidirectional capability for full-duplex mode', () => {
-    const capability = deriveTunnelCapability({ network_mode: 'A_B_BIDIR_SIP__BIDIR_RTP' })
+    const capability = deriveTunnelCapability({ network_mode: 'SENDER_SIP_RTP__RECEIVER_SIP_RTP' })
 
     expect(capability.supports_large_request_body).toBe(true)
     expect(capability.supports_bidirectional_http_tunnel).toBe(true)

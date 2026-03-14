@@ -5,14 +5,16 @@
         <a-form-item label="通道协议">
           <a-input :value="draft.channel_protocol" disabled />
         </a-form-item>
-        <a-form-item label="连接发起方">
-          <a-radio-group v-model:value="draft.connection_initiator">
-            <a-radio-button value="LOCAL">本端</a-radio-button>
-            <a-radio-button value="PEER">对端</a-radio-button>
-          </a-radio-group>
+        <a-form-item label="发送端 / 接收端角色（只读）">
+          <a-space direction="vertical" style="width: 100%">
+            <a-alert type="info" show-icon :message="networkModeProfile?.senderRole ?? '发送端角色未知'" />
+            <a-alert type="info" show-icon :message="networkModeProfile?.receiverRole ?? '接收端角色未知'" />
+            <a-typography-text type="secondary">{{ networkModeProfile?.requestDirection ?? '-' }}</a-typography-text>
+            <a-typography-text type="secondary">{{ networkModeProfile?.responseDirection ?? '-' }}</a-typography-text>
+          </a-space>
         </a-form-item>
         <a-form-item label="网络模式（只读）">
-          <a-input :value="networkModeLabel" disabled />
+          <a-input :value="networkModeProfile?.flowLabel ?? networkModeLabel" disabled />
         </a-form-item>
 
         <a-form-item label="本端设备编号（来源：节点配置）">
@@ -85,13 +87,14 @@ import { message } from 'ant-design-vue'
 import { gatewayApi } from '../api/gateway'
 import type { TunnelConfigPayload, TunnelConfigUpdatePayload } from '../types/gateway'
 import { deriveTunnelCapability } from '../utils/tunnelConfig'
+import { getNetworkModeProfile } from '../utils/networkMode'
 
 const saving = ref(false)
 
 const networkModeLabels: Record<string, string> = {
-  A_TO_B_SIP__B_TO_A_RTP: 'A 到 B 单向 SIP，B 到 A 单向 RTP',
-  A_B_BIDIR_SIP__BIDIR_RTP: 'A 与 B 双向 SIP + 双向 RTP',
-  A_B_BIDIR_SIP__B_TO_A_RTP: 'A 与 B 双向 SIP，B 到 A 单向 RTP'
+  SENDER_SIP__RECEIVER_RTP: '模式1：SIP --> | <-- RTP',
+  SENDER_SIP__RECEIVER_SIP_RTP: '模式2：SIP --> | <-- SIP&RTP',
+  SENDER_SIP_RTP__RECEIVER_SIP_RTP: '模式3：SIP&RTP --> | <-- SIP&RTP'
 }
 
 const draft = reactive<TunnelConfigPayload>({
@@ -109,8 +112,8 @@ const draft = reactive<TunnelConfigPayload>({
   supported_capabilities: [],
   request_channel: 'SIP',
   response_channel: 'RTP',
-  network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
-  capability: deriveTunnelCapability({ network_mode: 'A_TO_B_SIP__B_TO_A_RTP' }),
+  network_mode: 'SENDER_SIP__RECEIVER_RTP',
+  capability: deriveTunnelCapability({ network_mode: 'SENDER_SIP__RECEIVER_RTP' }),
   capability_items: []
 })
 
@@ -121,6 +124,7 @@ const heartbeatTagColor = computed(() => {
 })
 
 const networkModeLabel = computed(() => networkModeLabels[draft.network_mode] ?? draft.network_mode)
+const networkModeProfile = computed(() => getNetworkModeProfile(draft.network_mode))
 
 const formatDateTime = (value: string) => {
   if (!value) return '暂无'

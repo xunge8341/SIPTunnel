@@ -447,7 +447,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, io.Closer, error)
 			}
 			mode := defaults.Mode.Normalize()
 			capability := config.DeriveCapability(mode)
-			transportPlan := config.ResolveTransportPlan(mode, capability)
+			transportPlan := config.ResolveTransportPlan(mode)
 			return NodeNetworkStatus{
 				NetworkMode:   mode,
 				Capability:    capability,

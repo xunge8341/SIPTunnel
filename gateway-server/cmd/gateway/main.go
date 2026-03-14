@@ -305,7 +305,7 @@ func buildStartupSummary(nodeID string, cfgLoad configLoadResult, uiCfg config.U
 
 	mode := networkCfg.Mode.Normalize()
 	capability := config.DeriveCapability(mode)
-	transportPlan := config.ResolveTransportPlan(mode, capability)
+	transportPlan := config.ResolveTransportPlan(mode)
 
 	return startupsummary.Summary{
 		NodeID:      nodeID,
