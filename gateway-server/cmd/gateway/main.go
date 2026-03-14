@@ -302,6 +302,7 @@ func buildStartupSummary(nodeID string, cfgLoad configLoadResult, uiCfg config.U
 
 	mode := networkCfg.Mode.Normalize()
 	capability := config.DeriveCapability(mode)
+	transportPlan := config.ResolveTransportPlan(mode, capability)
 
 	return startupsummary.Summary{
 		NodeID:      nodeID,
@@ -312,6 +313,7 @@ func buildStartupSummary(nodeID string, cfgLoad configLoadResult, uiCfg config.U
 			Unsupported: capability.UnsupportedFeatures(),
 			Items:       capability.Matrix(),
 		},
+		TransportPlan:       transportPlan,
 		ConfigPath:          cfgLoad.Path,
 		ConfigSource:        string(cfgLoad.Source),
 		RunMode:             runMode,

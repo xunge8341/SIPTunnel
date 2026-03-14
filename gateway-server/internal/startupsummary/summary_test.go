@@ -14,6 +14,7 @@ func TestSummaryToLogText(t *testing.T) {
 		NetworkMode:         config.NetworkModeAToBSIPBToARTP,
 		Capability:          config.DeriveCapability(config.NetworkModeAToBSIPBToARTP),
 		CapabilitySummary:   CapabilitySummary{Supported: []string{"supports_small_request_body", "supports_large_response_body", "supports_streaming_response"}, Unsupported: []string{"supports_large_request_body", "supports_bidirectional_http_tunnel", "supports_transparent_http_proxy"}, Items: config.DeriveCapability(config.NetworkModeAToBSIPBToARTP).Matrix()},
+		TransportPlan:       config.ResolveTransportPlan(config.NetworkModeAToBSIPBToARTP, config.DeriveCapability(config.NetworkModeAToBSIPBToARTP)),
 		ConfigPath:          "./configs/config.yaml",
 		ConfigSource:        "cli",
 		RunMode:             "dev",
@@ -47,6 +48,7 @@ func TestSummaryToLogText(t *testing.T) {
 		"network_mode: A_TO_B_SIP__B_TO_A_RTP",
 		"capability_supported: supports_small_request_body,supports_large_response_body,supports_streaming_response",
 		"capability_unsupported: supports_large_request_body,supports_bidirectional_http_tunnel,supports_transparent_http_proxy",
+		"transport_plan: req_meta=sip_control req_body=sip_body_only resp_meta=sip_control resp_body=rtp_stream req_limit=65535 resp_limit=-1",
 		"sip_listen: ip=10.0.0.2 port=5060 transport=TCP",
 		"rtp_listen: ip=10.0.0.2 port_range=20000-20100 transport=UDP",
 		"storage_dirs: temp=./data/temp final=./data/final audit=./data/audit log=./data/logs",
@@ -65,6 +67,7 @@ func ExampleSummary_ToLogText() {
 		NetworkMode:       config.NetworkModeABBiDirSIPBiDirRTP,
 		Capability:        config.DeriveCapability(config.NetworkModeABBiDirSIPBiDirRTP),
 		CapabilitySummary: CapabilitySummary{Supported: config.DeriveCapability(config.NetworkModeABBiDirSIPBiDirRTP).SupportedFeatures(), Unsupported: config.DeriveCapability(config.NetworkModeABBiDirSIPBiDirRTP).UnsupportedFeatures(), Items: config.DeriveCapability(config.NetworkModeABBiDirSIPBiDirRTP).Matrix()},
+		TransportPlan:     config.ResolveTransportPlan(config.NetworkModeABBiDirSIPBiDirRTP, config.DeriveCapability(config.NetworkModeABBiDirSIPBiDirRTP)),
 		ConfigPath:        "./configs/config.yaml",
 		ConfigSource:      "env",
 		RunMode:           "prod",
@@ -95,6 +98,7 @@ func ExampleSummary_ToLogText() {
 	// - network_mode: A_B_BIDIR_SIP__BIDIR_RTP
 	// - capability_supported: supports_small_request_body,supports_large_request_body,supports_large_response_body,supports_streaming_response,supports_bidirectional_http_tunnel,supports_transparent_http_proxy
 	// - capability_unsupported: -
+	// - transport_plan: req_meta=sip_control req_body=sip_or_rtp_auto resp_meta=sip_control resp_body=rtp_stream req_limit=-1 resp_limit=-1
 	// - sip_listen: ip=0.0.0.0 port=5060 transport=TCP
 	// - rtp_listen: ip=0.0.0.0 port_range=20000-20100 transport=UDP
 	// - storage_dirs: temp=./data/temp final=./data/final audit=./data/audit log=./data/logs
