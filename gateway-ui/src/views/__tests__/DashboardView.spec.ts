@@ -130,7 +130,7 @@ describe('DashboardView', () => {
     expect(wrapper.text()).toContain('注册状态')
     expect(wrapper.text()).toContain('心跳状态')
     expect(wrapper.text()).toContain('最近注册时间')
-    expect(wrapper.text()).toContain('映射规则总数 / 异常数')
+    expect(wrapper.text()).toContain('隧道映射总数 / 异常数')
     expect(wrapper.text()).toContain('能力矩阵')
     expect(wrapper.findAll('circle')).toHaveLength(2)
   })

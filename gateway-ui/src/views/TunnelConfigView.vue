@@ -1,11 +1,20 @@
 <template>
   <a-space direction="vertical" size="middle" style="width: 100%">
-    <a-card title="通道配置（GB/T 28181 注册与心跳）">
+    <a-card title="HTTP 映射隧道配置（GB/T 28181 注册与心跳）">
       <a-form layout="vertical">
-        <a-form-item label="通道协议">
+        <a-form-item label="通道协议（控制面）">
           <a-input :value="draft.channel_protocol" disabled />
         </a-form-item>
-        <a-form-item label="发送端 / 接收端角色（只读）">
+        <a-form-item>
+          <template #label>
+            <a-space size="small">
+              当前节点角色（发送端 / 接收端，只读）
+              <a-tooltip>
+                <template #title>角色由网络模式决定：本端与对端在请求/响应方向上各自承担发送端或接收端职责。</template>
+                <a-typography-text type="secondary">ⓘ</a-typography-text>
+              </a-tooltip>
+            </a-space>
+          </template>
           <a-space direction="vertical" style="width: 100%">
             <a-alert type="info" show-icon :message="networkModeProfile?.senderRole ?? '发送端角色未知'" />
             <a-alert type="info" show-icon :message="networkModeProfile?.receiverRole ?? '接收端角色未知'" />
@@ -13,7 +22,16 @@
             <a-typography-text type="secondary">{{ networkModeProfile?.responseDirection ?? '-' }}</a-typography-text>
           </a-space>
         </a-form-item>
-        <a-form-item label="网络模式（只读）">
+        <a-form-item>
+          <template #label>
+            <a-space size="small">
+              网络模式（只读）
+              <a-tooltip>
+                <template #title>网络模式是全局约束，决定能力矩阵与 transport 推导，不能按单条映射覆盖。</template>
+                <a-typography-text type="secondary">ⓘ</a-typography-text>
+              </a-tooltip>
+            </a-space>
+          </template>
           <a-input :value="networkModeProfile?.flowLabel ?? networkModeLabel" disabled />
         </a-form-item>
 
@@ -93,7 +111,7 @@
         type="info"
         show-icon
         style="margin-top: 12px"
-        message="SIP 请求通道与 RTP 响应通道已由系统自动推导，无需运维单独编辑。"
+        message="transport 来源：由网络模式全局推导（SIP 请求通道 + RTP 响应通道），无需逐条映射配置。"
       />
     </a-card>
   </a-space>

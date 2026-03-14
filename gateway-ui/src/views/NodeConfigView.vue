@@ -1,15 +1,15 @@
 <template>
-  <a-card title="节点配置">
+  <a-card title="节点配置（HTTP 映射隧道）">
     <a-form layout="vertical">
-      <a-alert type="info" show-icon message="节点配置按角色拆分：本端维护接收端监听参数，对端维护发送端接入参数。" style="margin-bottom: 12px" />
-      <a-divider orientation="left">接收端（SIP下级域 / 本端节点）</a-divider>
+      <a-alert type="info" show-icon message="节点配置按“本端节点 / 对端节点”拆分；角色由网络模式推导，不再按 route/api_code 术语区分。" style="margin-bottom: 12px" />
+      <a-divider orientation="left">本端节点（本端入口监听）</a-divider>
       <a-form-item label="节点IP"><a-input v-model:value="draft.local_node.node_ip" /></a-form-item>
       <a-form-item label="信令端口"><a-input-number v-model:value="draft.local_node.signaling_port" :min="1" :max="65535" style="width: 100%" /></a-form-item>
       <a-form-item label="设备编号"><a-input v-model:value="draft.local_node.device_id" /></a-form-item>
       <a-form-item label="RTP起始端口"><a-input-number v-model:value="draft.local_node.rtp_port_start" :min="1" :max="65535" style="width: 100%" /></a-form-item>
       <a-form-item label="RTP结束端口"><a-input-number v-model:value="draft.local_node.rtp_port_end" :min="1" :max="65535" style="width: 100%" /></a-form-item>
 
-      <a-divider orientation="left">发送端（SIP上级域 / 对端节点）</a-divider>
+      <a-divider orientation="left">对端节点（对端目标接入）</a-divider>
       <a-form-item label="节点IP"><a-input v-model:value="draft.peer_node.node_ip" /></a-form-item>
       <a-form-item label="信令端口"><a-input-number v-model:value="draft.peer_node.signaling_port" :min="1" :max="65535" style="width: 100%" /></a-form-item>
       <a-form-item label="设备编号"><a-input v-model:value="draft.peer_node.device_id" /></a-form-item>
