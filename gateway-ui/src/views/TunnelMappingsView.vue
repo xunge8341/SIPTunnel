@@ -120,32 +120,48 @@
         <a-form-item label="规则ID">
           <a-input v-model:value="editing.mapping_id" :disabled="editingMode === 'edit'" />
         </a-form-item>
-        <a-form-item label="启用"><a-switch v-model:checked="editing.enabled" /></a-form-item>
-        <a-row :gutter="12">
-          <a-col :span="8"><a-form-item label="本端 IP"><a-input v-model:value="editing.local_bind_ip" /></a-form-item></a-col>
-          <a-col :span="8"><a-form-item label="本端端口"><a-input-number v-model:value="editing.local_bind_port" :min="1" :max="65535" style="width: 100%" /></a-form-item></a-col>
-          <a-col :span="8"><a-form-item label="本端路径"><a-input v-model:value="editing.local_base_path" /></a-form-item></a-col>
-        </a-row>
-        <a-row :gutter="12">
-          <a-col :span="8"><a-form-item label="对端 IP"><a-input v-model:value="editing.remote_target_ip" /></a-form-item></a-col>
-          <a-col :span="8"><a-form-item label="对端端口"><a-input-number v-model:value="editing.remote_target_port" :min="1" :max="65535" style="width: 100%" /></a-form-item></a-col>
-          <a-col :span="8"><a-form-item label="对端路径"><a-input v-model:value="editing.remote_base_path" /></a-form-item></a-col>
-        </a-row>
-        <a-row :gutter="12">
-          <a-col :span="12"><a-form-item label="请求超时（毫秒）"><a-input-number v-model:value="editing.request_timeout_ms" :min="1" style="width: 100%" /></a-form-item></a-col>
-          <a-col :span="12"><a-form-item label="响应超时（毫秒）"><a-input-number v-model:value="editing.response_timeout_ms" :min="1" style="width: 100%" /></a-form-item></a-col>
-        </a-row>
-        <a-row :gutter="12">
-          <a-col :span="12"><a-form-item label="请求体大小上限（字节）"><a-input-number v-model:value="editing.max_request_body_bytes" :min="1" style="width: 100%" /></a-form-item></a-col>
-          <a-col :span="12"><a-form-item label="响应体大小上限（字节）"><a-input-number v-model:value="editing.max_response_body_bytes" :min="1" style="width: 100%" /></a-form-item></a-col>
-        </a-row>
+        <a-form-item label="本端入口 IP" extra="填写本端业务入口地址。">
+          <a-input v-model:value="editing.local_bind_ip" />
+        </a-form-item>
+        <a-form-item label="本端入口端口" extra="监听端口范围 1-65535。">
+          <a-input-number v-model:value="editing.local_bind_port" :min="1" :max="65535" style="width: 100%" />
+        </a-form-item>
+
+        <a-form-item label="对端目标 IP" extra="填写对端服务可达地址。">
+          <a-input v-model:value="editing.remote_target_ip" />
+        </a-form-item>
+        <a-form-item label="对端目标端口" extra="目标端口范围 1-65535。">
+          <a-input-number v-model:value="editing.remote_target_port" :min="1" :max="65535" style="width: 100%" />
+        </a-form-item>
+
+        <a-form-item label="请求超时（毫秒）" extra="控制请求等待时长，建议按链路质量设置。">
+          <a-input-number v-model:value="editing.request_timeout_ms" :min="1" style="width: 100%" />
+        </a-form-item>
+        <a-form-item label="响应超时（毫秒）" extra="控制响应等待时长，超时后自动失败返回。">
+          <a-input-number v-model:value="editing.response_timeout_ms" :min="1" style="width: 100%" />
+        </a-form-item>
+        <a-form-item label="请求体大小上限（字节）" extra="系统按动作类型自动选择命令或文件传输链路。">
+          <a-input-number v-model:value="editing.max_request_body_bytes" :min="1" style="width: 100%" />
+        </a-form-item>
+        <a-form-item label="响应体大小上限（字节）" extra="建议与对端能力矩阵保持一致。">
+          <a-input-number v-model:value="editing.max_response_body_bytes" :min="1" style="width: 100%" />
+        </a-form-item>
+        <a-form-item label="启用状态">
+          <a-switch v-model:checked="editing.enabled" />
+        </a-form-item>
+        <a-form-item label="本端入口路径" extra="用于拼接本端入口完整请求路径。">
+          <a-input v-model:value="editing.local_base_path" />
+        </a-form-item>
+        <a-form-item label="对端目标路径" extra="用于拼接对端目标完整请求路径。">
+          <a-input v-model:value="editing.remote_base_path" />
+        </a-form-item>
         <a-form-item>
           <template #label>
             流式响应（仅在当前网络模式支持时可启用）
           </template>
           <a-switch v-model:checked="editing.require_streaming_response" />
         </a-form-item>
-        <a-form-item label="说明"><a-textarea v-model:value="editing.description" :rows="3" /></a-form-item>
+        <a-form-item label="备注"><a-textarea v-model:value="editing.description" :rows="3" /></a-form-item>
       </a-form>
       <template #footer>
         <a-space style="width: 100%; justify-content: flex-end">
