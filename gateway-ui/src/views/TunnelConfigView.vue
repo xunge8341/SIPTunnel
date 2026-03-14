@@ -1,6 +1,6 @@
 <template>
   <a-space direction="vertical" size="middle" style="width: 100%">
-    <a-card title="M32 隧道配置页面">
+    <a-card title="通道配置">
       <a-form layout="vertical">
         <a-row :gutter="12">
           <a-col :span="12">
@@ -64,9 +64,9 @@ const channelOptions = [
   { label: 'HTTP', value: 'HTTP' }
 ]
 const networkModeOptions = [
-  { label: 'A->B SIP, B->A RTP', value: 'A_TO_B_SIP__B_TO_A_RTP' },
-  { label: 'A/B 双向 SIP + 双向 RTP', value: 'A_B_BIDIR_SIP__BIDIR_RTP' },
-  { label: 'A/B 双向 SIP, B->A RTP', value: 'A_B_BIDIR_SIP__B_TO_A_RTP' }
+  { label: 'A 到 B 单向 SIP，B 到 A 单向 RTP', value: 'A_TO_B_SIP__B_TO_A_RTP' },
+  { label: 'A 与 B 双向 SIP + 双向 RTP', value: 'A_B_BIDIR_SIP__BIDIR_RTP' },
+  { label: 'A 与 B 双向 SIP，B 到 A 单向 RTP', value: 'A_B_BIDIR_SIP__B_TO_A_RTP' }
 ]
 
 const draft = reactive<TunnelConfigPayload>({
@@ -112,7 +112,7 @@ const save = async () => {
       capability_items: buildTunnelCapabilityItems(capability)
     }
     await gatewayApi.saveTunnelConfig(payload)
-    message.success('隧道配置保存成功，能力矩阵已更新')
+    message.success('通道配置保存成功，能力矩阵已更新')
     await load()
   } finally {
     saving.value = false

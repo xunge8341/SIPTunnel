@@ -30,7 +30,7 @@ const router = createRouter({
           path: 'dashboard',
           name: 'dashboard',
           component: DashboardView,
-          meta: { title: 'Dashboard', description: '系统关键指标与运行状态总览。' }
+          meta: { title: '首页', description: '系统关键指标与运行状态总览。' }
         },
         {
           path: 'command-tasks',
@@ -61,14 +61,14 @@ const router = createRouter({
           path: 'node-config',
           name: 'node-config',
           component: NodeConfigView,
-          meta: { title: 'M31 节点配置', description: '统一配置本端和对端节点，并触发隧道重启。' }
+          meta: { title: '节点配置', description: '统一配置本端和对端节点，并触发通道重启。' }
         },
 
         {
           path: 'tunnel-config',
           name: 'tunnel-config',
           component: TunnelConfigView,
-          meta: { title: 'M32 隧道配置', description: '配置 GB28181 通道协议、请求/响应通道与网络模式，并自动生成能力矩阵。' }
+          meta: { title: '通道配置', description: '配置 GB28181 通道协议、请求/响应通道与网络模式，并自动生成能力矩阵。' }
         },
         {
           path: 'local-node-config',
@@ -92,7 +92,7 @@ const router = createRouter({
           path: 'tunnel-mappings',
           name: 'tunnel-mappings',
           component: TunnelMappingsView,
-          meta: { title: '隧道映射', description: '维护隧道映射（本端入口 -> 对端目标）核心字段，展示网络模式能力矩阵，并对超能力配置进行告警/拦截。' }
+          meta: { title: '映射规则', description: '维护映射规则（本端入口 -> 对端目标）核心字段，展示网络模式能力矩阵，并对超能力配置进行告警/拦截。' }
         },
         {
           path: 'rate-limits',
@@ -116,13 +116,13 @@ const router = createRouter({
           path: 'ops-tools',
           name: 'ops-tools',
           component: OpsToolsView,
-          meta: { title: 'M36 运维工具', description: '网络诊断、端口检测、隧道测试、配置校验。' }
+          meta: { title: '运维工具', description: '网络诊断、端口检测、通道测试、配置校验。' }
         },
         {
           path: 'config-transfer',
           name: 'config-transfer',
           component: ConfigTransferView,
-          meta: { title: 'M37 配置导入导出', description: '支持配置 JSON 导出、导入与模板下载。' }
+          meta: { title: '配置导入导出', description: '支持配置 JSON 导出、导入与模板下载。' }
         },
         {
           path: 'audit-logs',

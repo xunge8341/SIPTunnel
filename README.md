@@ -3,7 +3,7 @@
 SIPTunnel 是跨安全边界业务交换网关，当前仓库为 monorepo 结构：
 
 - `gateway-server/`：Go 网关服务（SIP/RTP/签名验签/防重放/任务状态机/HTTP 映射/审计与可观测）
-- `gateway-ui/`：Vue3 运维前端（Dashboard、任务、网络配置、本端节点配置、对端节点配置、配置治理、M37 配置导入导出、隧道映射、限流、审计）
+- `gateway-ui/`：Vue3 运维前端（首页、节点配置、通道配置、映射规则、日志、运维工具等）
 - `deploy/`：部署相关脚本与清单（预留）
 - `scripts/`：仓库级开发脚本（启动/测试/格式化/lint）
 
@@ -812,11 +812,11 @@ cd gateway-ui && npm run test -- --run
 
 ## 运维页面覆盖
 
-- Dashboard：成功率/失败率/并发等指标总览（值班动作见 `docs/oncall-handbook.md`）
+- 首页：成功率/失败率/并发等指标总览（值班动作见 `docs/oncall-handbook.md`）
 - 命令任务与文件任务：过滤、分页、详情跳转（故障处置见 `docs/runbook.md`）
 - 任务详情：基础信息、状态流转、SIP/RTP/HTTP执行结果（诊断导出见 `gatewayctl diag export`）
 - 限流策略：在线查看/更新全局限流（变更前后请执行 `docs/runbook.md` 的链路自检）
-- 隧道映射：按 TunnelMapping 编辑核心业务映射（不在页面逐条编辑 transport，发布/回滚流程见 `docs/operations.md`）
+- 映射规则：按 TunnelMapping 编辑核心业务映射（不在页面逐条编辑 transport，发布/回滚流程见 `docs/operations.md`）
 - 本端节点配置：集中维护 `node_id/node_name/node_role/network_mode` 与 SIP/RTP 监听参数，并展示当前 NetworkMode/Capability 摘要。
 - 对端节点配置：维护 peer signaling/media 地址范围、`supported_network_mode` 与启停状态，支持增删改查。
 - 审计日志：查询与详情查看（升级研发前需附带审计与诊断信息）

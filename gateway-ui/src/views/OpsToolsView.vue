@@ -2,9 +2,9 @@
   <a-space direction="vertical" size="middle" style="width: 100%">
     <a-card>
       <a-space direction="vertical" size="small">
-        <a-typography-title :level="5" style="margin: 0">M36 运维工具</a-typography-title>
+        <a-typography-title :level="5" style="margin: 0">运维工具</a-typography-title>
         <a-typography-text type="secondary">
-          提供网络诊断、端口检测、隧道测试、配置校验四类运维能力，辅助快速定位 SIP/RTP/配置问题。
+          提供网络诊断、端口检测、通道测试、配置校验四类运维能力，辅助快速定位 SIP/RTP/配置问题。
         </a-typography-text>
       </a-space>
     </a-card>
@@ -58,10 +58,10 @@
         </a-card>
       </a-tab-pane>
 
-      <a-tab-pane key="tunnel" tab="隧道测试">
+      <a-tab-pane key="tunnel" tab="通道测试">
         <a-card>
           <a-space direction="vertical" style="width: 100%">
-            <a-button type="primary" @click="runTunnelTest">执行隧道测试</a-button>
+            <a-button type="primary" @click="runTunnelTest">执行通道测试</a-button>
             <a-steps :current="tunnelProgress" size="small" :items="tunnelSteps" />
             <a-alert type="success" show-icon :message="tunnelResult" />
           </a-space>
@@ -78,7 +78,7 @@
                   <a-space style="width: 100%; justify-content: space-between">
                     <span>{{ item.name }}</span>
                     <a-tag :color="item.level === 'pass' ? 'green' : item.level === 'warn' ? 'gold' : 'red'">
-                      {{ item.level.toUpperCase() }}
+                      {{ levelTextMap[item.level] }}
                     </a-tag>
                   </a-space>
                 </a-list-item>
@@ -102,6 +102,12 @@ interface PortResult {
 interface ConfigCheck {
   name: string
   level: 'pass' | 'warn' | 'fail'
+}
+
+const levelTextMap: Record<ConfigCheck['level'], string> = {
+  pass: '正常',
+  warn: '异常',
+  fail: '异常'
 }
 
 const activeTool = ref('network')
@@ -136,7 +142,7 @@ const tunnelSteps = [
 ]
 
 const tunnelProgress = ref(0)
-const tunnelResult = ref('尚未执行隧道测试')
+const tunnelResult = ref('尚未执行通道测试')
 
 const configChecks = ref<ConfigCheck[]>([
   { name: 'api_code 映射合法性', level: 'pass' },
@@ -166,7 +172,7 @@ const runPortCheck = () => {
 
 const runTunnelTest = () => {
   tunnelProgress.value = 3
-  tunnelResult.value = '隧道测试通过：控制面与文件面链路均可用。'
+  tunnelResult.value = '通道测试通过：控制面与文件面链路均可用。'
 }
 
 const runConfigValidation = () => {

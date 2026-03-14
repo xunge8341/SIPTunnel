@@ -1,5 +1,5 @@
 <template>
-  <a-card title="M31 节点配置页面">
+  <a-card title="节点配置">
     <a-form layout="vertical">
       <a-divider orientation="left">本端节点</a-divider>
       <a-row :gutter="12">
@@ -21,7 +21,7 @@
     </a-form>
     <a-space>
       <a-button @click="load">重载</a-button>
-      <a-button type="primary" :loading="saving" @click="save">保存并重启隧道</a-button>
+      <a-button type="primary" :loading="saving" @click="save">保存并重启通道</a-button>
     </a-space>
   </a-card>
 </template>
@@ -49,7 +49,7 @@ const save = async () => {
   try {
     const result = await gatewayApi.saveNodeConfig(JSON.parse(JSON.stringify(draft)))
     if (result.tunnel_restarted) {
-      message.success('节点配置已保存并重启隧道')
+      message.success('节点配置已保存并重启通道')
     }
     await load()
   } finally {
