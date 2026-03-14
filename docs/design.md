@@ -6,6 +6,7 @@
 
 - `SIPBusinessMessage` 通过 JSON Body 承载完整业务参数（payload/meta/audit）。
 - Header 只镜像索引字段，避免双写一致性问题扩散。
+- `task.status` 在异常态（`failed/cancelled/dead_lettered/retry_wait`）必须包含 `status_reason`，用于一线诊断与回溯。
 
 ## 2. 文件面（RTP）
 

@@ -257,9 +257,10 @@ func (m *FileAccepted) UnmarshalJSON(data []byte) error {
 
 type TaskStatus struct {
 	Header
-	TaskID   string `json:"task_id"`
-	Status   string `json:"status"`
-	Progress int    `json:"progress"`
+	TaskID       string `json:"task_id"`
+	Status       string `json:"status"`
+	StatusReason string `json:"status_reason,omitempty"`
+	Progress     int    `json:"progress"`
 }
 
 func (m TaskStatus) Validate() error {
@@ -272,10 +273,22 @@ func (m TaskStatus) Validate() error {
 	if strings.TrimSpace(m.Status) == "" {
 		return fmt.Errorf("status is required")
 	}
+	if isAbnormalStatus(m.Status) && strings.TrimSpace(m.StatusReason) == "" {
+		return fmt.Errorf("status_reason is required for abnormal status")
+	}
 	if m.Progress < 0 || m.Progress > 100 {
 		return fmt.Errorf("progress must be in [0,100]")
 	}
 	return nil
+}
+
+func isAbnormalStatus(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "failed", "cancelled", "dead_lettered", "retry_wait":
+		return true
+	default:
+		return false
+	}
 }
 
 func (m TaskStatus) MarshalJSON() ([]byte, error) {

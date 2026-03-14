@@ -109,10 +109,11 @@ func TestMessageMarshalUnmarshalAndValidate(t *testing.T) {
 		{
 			name: "task.status",
 			msg: TaskStatus{
-				Header:   validHeader(MessageTypeTaskStatus),
-				TaskID:   "task-1",
-				Status:   "running",
-				Progress: 50,
+				Header:       validHeader(MessageTypeTaskStatus),
+				TaskID:       "task-1",
+				Status:       "running",
+				StatusReason: "",
+				Progress:     50,
 			},
 			newMsgPtr: func() any { return &TaskStatus{} },
 		},
@@ -179,6 +180,26 @@ func TestMessageRequiredFieldValidation(t *testing.T) {
 	}
 	if err := status.Validate(); err == nil || !strings.Contains(err.Error(), "progress") {
 		t.Fatalf("expected progress validation error, got %v", err)
+	}
+
+	abnormal := TaskStatus{
+		Header:   validHeader(MessageTypeTaskStatus),
+		TaskID:   "task-1",
+		Status:   "failed",
+		Progress: 80,
+	}
+	if err := abnormal.Validate(); err == nil || !strings.Contains(err.Error(), "status_reason") {
+		t.Fatalf("expected status_reason validation error, got %v", err)
+	}
+
+	if _, err := json.Marshal(TaskStatus{
+		Header:       validHeader(MessageTypeTaskStatus),
+		TaskID:       "task-1",
+		Status:       "failed",
+		StatusReason: "未建立RTP通道",
+		Progress:     80,
+	}); err != nil {
+		t.Fatalf("expected abnormal status with reason to marshal, got %v", err)
 	}
 
 	rt := FileRetransmitRequest{
