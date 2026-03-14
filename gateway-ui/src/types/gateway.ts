@@ -276,8 +276,11 @@ export interface TunnelMapping {
   require_streaming_response: boolean
   description: string
   updated_at?: string
-  link_status?: 'connected' | 'disconnected' | 'degraded' | 'disabled' | 'listening' | 'start_failed' | 'interrupted'
+  link_status?: 'connected' | 'disabled' | 'listening' | 'start_failed' | 'interrupted' | 'abnormal'
+  link_status_text?: '未启用' | '监听中' | '已连接' | '异常' | '启动失败'
   status_reason?: string
+  failure_reason?: string
+  suggested_action?: string
 }
 
 export interface TunnelMappingListPayload {
@@ -293,8 +296,11 @@ export interface TunnelMappingSavePayload {
 }
 
 export interface MappingTestPayload {
-  sip_request: 'success' | 'fail'
-  rtp_channel: 'success' | 'fail'
+  signaling_request: '成功' | '失败'
+  response_channel: '正常' | '异常'
+  registration_status: '正常' | '未注册'
+  failure_reason?: string
+  suggested_action?: string
 }
 
 export interface OpsNode {

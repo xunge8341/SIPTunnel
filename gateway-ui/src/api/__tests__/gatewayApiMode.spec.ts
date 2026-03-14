@@ -26,7 +26,7 @@ describe('gatewayApi mode switch', () => {
 
 
   it('calls real mapping test endpoint when VITE_API_MODE is unset', async () => {
-    requestMock.mockResolvedValue({ data: { sip_request: 'success', rtp_channel: 'fail' } })
+    requestMock.mockResolvedValue({ data: { signaling_request: '成功', response_channel: '异常', registration_status: '正常' } })
     const { gatewayApi } = await loadApi()
     await gatewayApi.testMapping()
     expect(requestMock).toHaveBeenCalledWith('/mapping/test', { method: 'POST' })

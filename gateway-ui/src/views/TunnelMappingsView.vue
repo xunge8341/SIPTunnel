@@ -69,7 +69,7 @@
         v-if="mappingTestResult"
         :type="mappingTestPassed ? 'success' : 'error'"
         show-icon
-        :message="`规则测试：SIP 请求 ${mappingTestResult.sip_request}，RTP 通道 ${mappingTestResult.rtp_channel}`"
+        :message="`规则测试：信令请求 ${mappingTestResult.signaling_request}，响应通道 ${mappingTestResult.response_channel}，注册状态 ${mappingTestResult.registration_status}`"
         style="margin-bottom: 12px"
       />
       <a-alert v-if="warnings.length" type="warning" show-icon :message="warnings.join('；')" style="margin-bottom: 12px" />
@@ -87,9 +87,10 @@
             <a-tag :color="record.enabled ? 'green' : 'default'">{{ record.enabled ? '已启用' : '未启用' }}</a-tag>
           </template>
           <template v-else-if="column.key === 'link_status'">
-            <a-tag :color="mappingLinkColor(record.link_status)">{{ mappingLinkText(record.link_status) }}</a-tag>
+            <a-tag :color="mappingLinkColor(record.link_status, record.link_status_text)">{{ mappingLinkText(record.link_status, record.link_status_text) }}</a-tag>
           </template>
-          <template v-else-if="column.key === 'status_reason'">{{ mappingReasonText(record.status_reason) }}</template>
+          <template v-else-if="column.key === 'status_reason'">{{ mappingReasonText(record.failure_reason || record.status_reason) }}</template>
+          <template v-else-if="column.key === 'suggested_action'">{{ mappingActionText(record.suggested_action) }}</template>
           <template v-else-if="column.key === 'updated_at'">{{ record.updated_at || '-' }}</template>
           <template v-else-if="column.key === 'action'">
             <a-space>
@@ -244,7 +245,7 @@ const editorAdvisoryWarnings = computed(() => editorCapabilityEvaluation.value.a
 
 const mappingTestPassed = computed(() => {
   if (!mappingTestResult.value) return false
-  return mappingTestResult.value.sip_request === 'success' && mappingTestResult.value.rtp_channel === 'success'
+  return mappingTestResult.value.signaling_request === '成功' && mappingTestResult.value.response_channel === '正常' && mappingTestResult.value.registration_status === '正常'
 })
 
 const columns = [
@@ -254,33 +255,38 @@ const columns = [
   { title: '协议', key: 'protocol' },
   { title: '状态', key: 'status' },
   { title: '映射链路状态', key: 'link_status' },
-  { title: '状态原因', key: 'status_reason' },
+  { title: '异常原因', key: 'status_reason' },
+  { title: '建议动作', key: 'suggested_action' },
   { title: '更新时间', key: 'updated_at' },
   { title: '操作', key: 'action' }
 ]
 
-const mappingLinkText = (status?: TunnelMapping['link_status']) => {
+const mappingLinkText = (status?: TunnelMapping['link_status'], text?: TunnelMapping['link_status_text']) => {
+  if (text) return text
   if (status === 'listening') return '监听中'
   if (status === 'start_failed') return '启动失败'
-  if (status === 'interrupted') return '异常中断'
+  if (status === 'interrupted' || status === 'abnormal') return '异常'
   if (status === 'disabled') return '未启用'
-  if (status === 'connected') return '正常'
-  if (status === 'disconnected') return '未连接'
+  if (status === 'connected') return '已连接'
   return '异常'
 }
 
-const mappingLinkColor = (status?: TunnelMapping['link_status']) => {
-  if (status === 'listening') return 'success'
-  if (status === 'disabled') return 'default'
-  if (status === 'start_failed' || status === 'interrupted') return 'error'
-  if (status === 'connected') return 'success'
-  if (status === 'disconnected') return 'default'
+const mappingLinkColor = (status?: TunnelMapping['link_status'], text?: TunnelMapping['link_status_text']) => {
+  const normalized = text || mappingLinkText(status)
+  if (normalized === '未启用') return 'default'
+  if (normalized === '监听中' || normalized === '已连接') return 'success'
+  if (normalized === '启动失败' || normalized === '异常') return 'error'
   return 'error'
 }
 
 const mappingReasonText = (reason?: string) => {
   if (reason && reason.trim()) return reason
-  return '未上报原因，请优先检查注册状态、心跳状态和对端可达性。'
+  return '原因未上报，请检查注册状态、心跳状态和对端可达性。'
+}
+
+const mappingActionText = (action?: string) => {
+  if (action && action.trim()) return action
+  return '建议先执行链路测试，再按节点状态页面提示逐项排查。'
 }
 
 const filteredMappings = computed(() => {
@@ -294,29 +300,36 @@ const drawerTitle = computed(() => (editingMode.value === 'create' ? '新建映�
 const inferMappingRuntimeStatus = (
   item: TunnelMapping,
   systemStatus?: { tunnel_status: string; registration_status?: string; heartbeat_status?: string; connection_reason?: string; peer_binding_error?: string }
-): Pick<TunnelMapping, 'link_status' | 'status_reason'> => {
+): Pick<TunnelMapping, 'link_status' | 'link_status_text' | 'status_reason' | 'failure_reason' | 'suggested_action'> => {
   if (item.link_status && item.status_reason) {
-    return { link_status: item.link_status, status_reason: item.status_reason }
+    return {
+      link_status: item.link_status,
+      link_status_text: item.link_status_text,
+      status_reason: item.status_reason,
+      failure_reason: item.failure_reason ?? item.status_reason,
+      suggested_action: item.suggested_action
+    }
   }
   if (!item.enabled) {
-    return { link_status: 'disabled', status_reason: '规则未启用。' }
+    return { link_status: 'disabled', link_status_text: '未启用', status_reason: '规则未启用。', failure_reason: '规则未启用。', suggested_action: '按需开启规则后再观察链路状态。' }
   }
   if (!systemStatus) {
-    return { link_status: 'degraded', status_reason: '未获取到系统状态。' }
+    return { link_status: 'abnormal', link_status_text: '异常', status_reason: '未获取到系统状态。', failure_reason: '未获取到系统状态。', suggested_action: '先检查网关服务状态，再刷新页面重试。' }
   }
   if (systemStatus.peer_binding_error) {
-    return { link_status: 'degraded', status_reason: '未建立响应通道：' + systemStatus.peer_binding_error }
+    return { link_status: 'abnormal', link_status_text: '异常', status_reason: '未建立响应通道：' + systemStatus.peer_binding_error, failure_reason: '未建立响应通道：' + systemStatus.peer_binding_error, suggested_action: '确保仅启用一个对端节点并核对对端信令配置。' }
   }
   if (systemStatus.registration_status !== 'registered') {
-    return { link_status: 'degraded', status_reason: '未注册，GB/T 28181 注册尚未完成。' }
+    return { link_status: 'abnormal', link_status_text: '异常', status_reason: '未注册，GB/T 28181 注册尚未完成。', failure_reason: '未注册，GB/T 28181 注册尚未完成。', suggested_action: '检查注册参数和认证信息，确认注册成功后再联调。' }
   }
   if (systemStatus.heartbeat_status !== 'healthy') {
-    return { link_status: 'degraded', status_reason: '心跳超时，等待下一次心跳恢复。' }
+    return { link_status: 'abnormal', link_status_text: '异常', status_reason: '心跳超时，等待下一次心跳恢复。', failure_reason: '心跳超时，等待下一次心跳恢复。', suggested_action: '检查网络抖动和心跳周期配置，恢复后再观察。' }
   }
   if (systemStatus.tunnel_status !== 'connected') {
-    return { link_status: 'degraded', status_reason: systemStatus.connection_reason || '对端不可达。' }
+    const reason = systemStatus.connection_reason || '对端不可达。'
+    return { link_status: 'abnormal', link_status_text: '异常', status_reason: reason, failure_reason: reason, suggested_action: '检查对端可达性与链路策略，再执行规则测试。' }
   }
-  return { link_status: 'connected', status_reason: '链路正常。' }
+  return { link_status: 'connected', link_status_text: '已连接', status_reason: '链路正常。', failure_reason: '链路正常。', suggested_action: '无需处理，持续关注运行指标。' }
 }
 
 const openCreate = () => {
@@ -351,9 +364,9 @@ const runMappingTest = async () => {
   try {
     mappingTestResult.value = await gatewayApi.testMapping()
     if (mappingTestPassed.value) {
-      message.success('映射规则测试通过，通道可用')
+      message.success('映射规则测试通过，链路状态正常')
     } else {
-      message.warning('映射规则测试未通过，请检查 SIP/RTP 链路')
+      message.warning('映射规则测试未通过，请根据异常原因与建议动作排查')
     }
   } finally {
     testingMapping.value = false

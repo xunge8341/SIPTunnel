@@ -48,7 +48,7 @@ describe('gatewayApi mappings adapter', () => {
 
   it('supports mapping test in mock mode', async () => {
     const result = await gatewayApi.testMapping()
-    expect(result).toEqual({ sip_request: 'success', rtp_channel: 'fail' })
+    expect(result).toEqual({ signaling_request: '成功', response_channel: '异常', registration_status: '正常', failure_reason: '响应通道异常，RTP 端口池可用性不足。', suggested_action: '检查 RTP 端口池占用并确认对端媒体可达。' })
   })
 
 })

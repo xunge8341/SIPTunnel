@@ -63,7 +63,7 @@ describe('NodeStatusView', () => {
     vi.mocked(gatewayApi.fetchMappings).mockResolvedValue({
       items: [
         { mapping_id: 'map-1', enabled: true, local_bind_ip: '1.1.1.1', local_bind_port: 80, local_base_path: '/', remote_target_ip: '2.2.2.2', remote_target_port: 80, remote_base_path: '/', connect_timeout_ms: 100, request_timeout_ms: 100, response_timeout_ms: 100, max_request_body_bytes: 1024, max_response_body_bytes: 1024, require_streaming_response: false, description: '', link_status: 'connected', status_reason: '正常' },
-        { mapping_id: 'map-2', enabled: true, local_bind_ip: '1.1.1.2', local_bind_port: 81, local_base_path: '/', remote_target_ip: '2.2.2.3', remote_target_port: 81, remote_base_path: '/', connect_timeout_ms: 100, request_timeout_ms: 100, response_timeout_ms: 100, max_request_body_bytes: 1024, max_response_body_bytes: 1024, require_streaming_response: false, description: '', link_status: 'degraded', status_reason: '心跳超时' }
+        { mapping_id: 'map-2', enabled: true, local_bind_ip: '1.1.1.2', local_bind_port: 81, local_base_path: '/', remote_target_ip: '2.2.2.3', remote_target_port: 81, remote_base_path: '/', connect_timeout_ms: 100, request_timeout_ms: 100, response_timeout_ms: 100, max_request_body_bytes: 1024, max_response_body_bytes: 1024, require_streaming_response: false, description: '', link_status: 'abnormal', status_reason: '心跳超时' }
       ]
     })
     vi.mocked(gatewayApi.createDiagnosticExport).mockResolvedValue({
