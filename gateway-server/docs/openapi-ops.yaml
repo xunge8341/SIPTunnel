@@ -51,6 +51,11 @@ paths:
   /api/mappings:
     get: { summary: List tunnel mappings (primary model), responses: { '200': { description: OK } } }
     post: { summary: Create tunnel mapping, responses: { '201': { description: Created }, '400': { description: Invalid argument }, '409': { description: Mapping exists } } }
+  /api/mapping/test:
+    post:
+      summary: Test mapping rule connectivity (SIP request + RTP channel)
+      responses:
+        '200': { description: OK }
   /api/mappings/{id}:
     put:
       summary: Update tunnel mapping

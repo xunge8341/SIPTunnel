@@ -21,6 +21,7 @@ import type {
   TunnelMapping,
   TunnelMappingListPayload,
   TunnelMappingSavePayload,
+  MappingTestPayload,
   NodeDetailPayload,
   LocalNodeConfig,
   PeerNodeConfig,
@@ -391,6 +392,15 @@ export async function deleteMappingMock(id: string): Promise<void> {
   mappingState = mappingState.filter((item) => item.mapping_id !== id)
 }
 
+
+
+export async function testMappingMock(): Promise<MappingTestPayload> {
+  await wait()
+  return {
+    sip_request: 'success',
+    rtp_channel: 'fail'
+  }
+}
 
 let networkConfigState: NetworkConfigPayload = {
   sip: {

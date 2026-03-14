@@ -102,6 +102,11 @@ type MappingWithWarnings struct {
 	Warnings []string      `json:"warnings,omitempty"`
 }
 
+type MappingTestResponse struct {
+	SIPRequest string `json:"sip_request"`
+	RTPChannel string `json:"rtp_channel"`
+}
+
 type mappingListResponse struct {
 	Items    []TunnelMapping `json:"items"`
 	Warnings []string        `json:"warnings,omitempty"`
@@ -467,6 +472,7 @@ func newMux(deps handlerDeps) http.Handler {
 	mux.HandleFunc("/api/limits", deps.handleLimits)
 	mux.HandleFunc("/api/mappings", deps.handleMappings)
 	mux.HandleFunc("/api/mappings/", deps.handleMappings)
+	mux.HandleFunc("/api/mapping/test", deps.handleMappingTest)
 	mux.HandleFunc("/api/routes", deps.handleRoutes)
 	mux.HandleFunc("/api/nodes", deps.handleNodes)
 	mux.HandleFunc("/api/audits", deps.handleAudits)
@@ -955,6 +961,28 @@ func (d handlerDeps) handleMappings(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
 	}
+}
+
+func (d handlerDeps) handleMappingTest(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
+		return
+	}
+
+	status := d.networkStatusFunc(r.Context())
+	sipStatus := "fail"
+	rtpStatus := "fail"
+
+	if d.checkSIPControlPath(r.Context(), status).Passed {
+		sipStatus = "success"
+	}
+	if d.checkRTPPortPool(status).Passed {
+		rtpStatus = "success"
+	}
+
+	result := MappingTestResponse{SIPRequest: sipStatus, RTPChannel: rtpStatus}
+	d.recordOpsAudit(r, readOperator(r), "RUN_MAPPING_TEST", map[string]any{"sip_request": sipStatus, "rtp_channel": rtpStatus})
+	writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: result})
 }
 
 func (d handlerDeps) listLegacyRoutesFromMappings() []OpsRoute {

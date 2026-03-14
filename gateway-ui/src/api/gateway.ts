@@ -29,7 +29,8 @@ import {
   fetchNodeConfigMock,
   saveNodeConfigMock,
   fetchTunnelConfigMock,
-  saveTunnelConfigMock
+  saveTunnelConfigMock,
+  testMappingMock
 } from './mockGateway'
 import type {
   CommandTask,
@@ -61,7 +62,8 @@ import type {
   NodeNetworkStatusPayload,
   SystemStatusPayload,
   NodeConfigPayload,
-  TunnelConfigPayload
+  TunnelConfigPayload,
+  MappingTestPayload
 } from '../types/gateway'
 
 const useMockMode = () => ((import.meta.env.VITE_API_MODE ?? 'real').toLowerCase() === 'mock')
@@ -422,6 +424,12 @@ export const gatewayApi = {
       return deleteMappingMock(id)
     }
     await unwrap<Record<string, never>>(request(`/mappings/${id}`, { method: 'DELETE' }))
+  },
+  async testMapping() {
+    if (useMockMode()) {
+      return testMappingMock()
+    }
+    return unwrap<MappingTestPayload>(request('/mapping/test', { method: 'POST' }))
   },
   async fetchNodes() {
     const result = await unwrap<{ items: OpsNode[] }>(request('/nodes', { method: 'GET' }))

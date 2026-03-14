@@ -268,6 +268,11 @@ export interface TunnelMappingSavePayload {
   warnings?: string[]
 }
 
+export interface MappingTestPayload {
+  sip_request: 'success' | 'fail'
+  rtp_channel: 'success' | 'fail'
+}
+
 export interface OpsNode {
   node_id: string
   role: string

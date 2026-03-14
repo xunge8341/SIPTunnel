@@ -46,4 +46,11 @@ describe('gatewayApi mappings adapter', () => {
     listed = await gatewayApi.fetchMappings()
     expect(listed.items.find((item) => item.mapping_id === payload.mapping_id)).toBeUndefined()
   })
+
+
+  it('supports mapping test in mock mode', async () => {
+    const result = await gatewayApi.testMapping()
+    expect(result).toEqual({ sip_request: 'success', rtp_channel: 'fail' })
+  })
+
 })
