@@ -101,12 +101,22 @@ type opsActionRequest struct {
 type NodeNetworkStatus struct {
 	NetworkMode         config.NetworkMode               `json:"network_mode"`
 	Capability          config.Capability                `json:"capability"`
+	CurrentNetworkMode  config.NetworkMode               `json:"current_network_mode"`
+	CurrentCapability   config.Capability                `json:"current_capability"`
+	CompatibilityStatus nodeconfig.CheckResult           `json:"compatibility_status"`
 	CapabilitySummary   startupsummary.CapabilitySummary `json:"capability_summary"`
 	TransportPlan       config.TunnelTransportPlan       `json:"transport_plan"`
 	SIP                 SIPNetworkStatus                 `json:"sip"`
 	RTP                 RTPNetworkStatus                 `json:"rtp"`
 	RecentBindErrors    []string                         `json:"recent_bind_errors"`
 	RecentNetworkErrors []string                         `json:"recent_network_errors"`
+}
+
+type NodeDetailResponse struct {
+	LocalNode           nodeconfig.LocalNodeConfig `json:"local_node"`
+	CurrentNetworkMode  config.NetworkMode         `json:"current_network_mode"`
+	CurrentCapability   config.Capability          `json:"current_capability"`
+	CompatibilityStatus nodeconfig.CheckResult     `json:"compatibility_status"`
 }
 
 type SIPNetworkStatus struct {
@@ -795,6 +805,13 @@ func fallbackPositive(v int, fallback int) int {
 	return 1
 }
 
+func (d handlerDeps) compatibilitySnapshot(ctx context.Context) nodeconfig.CompatibilityStatus {
+	status := d.networkStatusFunc(ctx)
+	local := d.nodeStore.GetLocalNode()
+	peers := d.nodeStore.ListPeers()
+	return nodeconfig.EvaluateCompatibility(local, peers, status.NetworkMode, status.Capability)
+}
+
 func (d handlerDeps) handleNodes(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
@@ -813,11 +830,17 @@ func (d handlerDeps) handleNode(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.Method {
 	case http.MethodGet:
-		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: d.nodeStore.GetLocalNode()})
+		compat := d.compatibilitySnapshot(r.Context())
+		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: NodeDetailResponse{LocalNode: d.nodeStore.GetLocalNode(), CurrentNetworkMode: compat.CurrentNetworkMode, CurrentCapability: compat.CurrentCapability, CompatibilityStatus: compat.CompatibilityCheck}})
 	case http.MethodPut:
 		var req nodeconfig.LocalNodeConfig
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid json body")
+			return
+		}
+		status := d.networkStatusFunc(r.Context())
+		if req.NetworkMode.Normalize() != status.NetworkMode.Normalize() {
+			writeError(w, http.StatusBadRequest, "NETWORK_MODE_MISMATCH", fmt.Sprintf("local node network_mode=%s must match current network_mode=%s", req.NetworkMode.Normalize(), status.NetworkMode.Normalize()))
 			return
 		}
 		updated, err := d.nodeStore.UpdateLocalNode(req)
@@ -856,6 +879,11 @@ func (d handlerDeps) handlePeers(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid json body")
 			return
 		}
+		status := d.networkStatusFunc(r.Context())
+		if req.SupportedNetworkMode.Normalize() != status.NetworkMode.Normalize() {
+			writeError(w, http.StatusBadRequest, "PEER_NETWORK_MODE_INCOMPATIBLE", fmt.Sprintf("peer supported_network_mode=%s incompatible with current_network_mode=%s", req.SupportedNetworkMode.Normalize(), status.NetworkMode.Normalize()))
+			return
+		}
 		created, err := d.nodeStore.CreatePeer(req)
 		if err != nil {
 			code := http.StatusBadRequest
@@ -880,6 +908,11 @@ func (d handlerDeps) handlePeers(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		req.PeerNodeID = peerID
+		status := d.networkStatusFunc(r.Context())
+		if req.SupportedNetworkMode.Normalize() != status.NetworkMode.Normalize() {
+			writeError(w, http.StatusBadRequest, "PEER_NETWORK_MODE_INCOMPATIBLE", fmt.Sprintf("peer supported_network_mode=%s incompatible with current_network_mode=%s", req.SupportedNetworkMode.Normalize(), status.NetworkMode.Normalize()))
+			return
+		}
 		updated, err := d.nodeStore.UpdatePeer(req)
 		if err != nil {
 			code := http.StatusBadRequest
@@ -1011,6 +1044,15 @@ func (d handlerDeps) handleSelfCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	report := d.selfCheckProvider(r.Context())
+	if d.nodeStore != nil {
+		compat := d.compatibilitySnapshot(r.Context())
+		report.Items = append(report.Items,
+			selfcheck.Item{Name: "local_node_config_valid", Level: selfcheck.Level(compat.LocalNodeCheck.Level), Message: compat.LocalNodeCheck.Message, Suggestion: compat.LocalNodeCheck.Suggestion, ActionHint: compat.LocalNodeCheck.ActionHint},
+			selfcheck.Item{Name: "peer_node_config_valid", Level: selfcheck.Level(compat.PeerNodeCheck.Level), Message: compat.PeerNodeCheck.Message, Suggestion: compat.PeerNodeCheck.Suggestion, ActionHint: compat.PeerNodeCheck.ActionHint},
+			selfcheck.Item{Name: "network_mode_compatibility", Level: selfcheck.Level(compat.CompatibilityCheck.Level), Message: compat.CompatibilityCheck.Message, Suggestion: compat.CompatibilityCheck.Suggestion, ActionHint: compat.CompatibilityCheck.ActionHint},
+		)
+		report.Overall, report.Summary = summarizeSelfCheckItems(report.Items)
+	}
 	if level := strings.TrimSpace(r.URL.Query().Get("level")); level != "" {
 		report.Items = filterSelfCheckItemsByLevel(report.Items, level)
 		report.Overall, report.Summary = summarizeSelfCheckItems(report.Items)
@@ -1064,6 +1106,12 @@ func (d handlerDeps) handleNodeNetworkStatus(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	status := d.networkStatusFunc(r.Context())
+	if d.nodeStore != nil {
+		compat := d.compatibilitySnapshot(r.Context())
+		status.CurrentNetworkMode = compat.CurrentNetworkMode
+		status.CurrentCapability = compat.CurrentCapability
+		status.CompatibilityStatus = compat.CompatibilityCheck
+	}
 	d.recordOpsAudit(r, readOperator(r), "QUERY_NODE_NETWORK_STATUS", map[string]any{"path": r.URL.Path})
 	writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: status})
 }
@@ -1078,6 +1126,12 @@ func (d handlerDeps) handleStartupSummary(w http.ResponseWriter, r *http.Request
 		return
 	}
 	summary := d.startupSummaryFn(r.Context())
+	if d.nodeStore != nil {
+		compat := d.compatibilitySnapshot(r.Context())
+		summary.CurrentNetworkMode = compat.CurrentNetworkMode
+		summary.CurrentCapability = compat.CurrentCapability
+		summary.CompatibilityStatus = compat.CompatibilityCheck
+	}
 	writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: summary})
 }
 
@@ -1089,6 +1143,10 @@ func (d handlerDeps) handleDiagnosticsExport(w http.ResponseWriter, r *http.Requ
 	requestID := strings.TrimSpace(r.URL.Query().Get("request_id"))
 	traceID := strings.TrimSpace(r.URL.Query().Get("trace_id"))
 	status := d.networkStatusFunc(r.Context())
+	compat := nodeconfig.CompatibilityStatus{}
+	if d.nodeStore != nil {
+		compat = d.compatibilitySnapshot(r.Context())
+	}
 	nodeID := "gateway"
 	if len(d.nodes) > 0 && strings.TrimSpace(d.nodes[0].NodeID) != "" {
 		nodeID = d.nodes[0].NodeID
@@ -1150,7 +1208,7 @@ func (d handlerDeps) handleDiagnosticsExport(w http.ResponseWriter, r *http.Requ
 	files := []DiagFile{
 		{Name: "00_startup_summary.json", Description: "统一启动与运行摘要", Content: d.startupSummaryFn(r.Context())},
 		{Name: "README.md", Description: "诊断包文件说明", Content: map[string]any{"filters": map[string]any{"request_id": requestID, "trace_id": traceID}, "files": readmeLines}},
-		{Name: "01_transport_config.json", Description: "当前 transport 配置", Content: map[string]any{"network_mode": status.NetworkMode, "capability": status.Capability, "capability_summary": status.CapabilitySummary, "transport_plan": status.TransportPlan, "sip": map[string]any{"listen_ip": status.SIP.ListenIP, "listen_port": status.SIP.ListenPort, "transport": status.SIP.Transport}, "rtp": map[string]any{"listen_ip": status.RTP.ListenIP, "port_start": status.RTP.PortStart, "port_end": status.RTP.PortEnd, "transport": status.RTP.Transport}}},
+		{Name: "01_transport_config.json", Description: "当前 transport 配置", Content: map[string]any{"network_mode": status.NetworkMode, "capability": status.Capability, "capability_summary": status.CapabilitySummary, "transport_plan": status.TransportPlan, "current_network_mode": compat.CurrentNetworkMode, "current_capability": compat.CurrentCapability, "compatibility_status": compat.CompatibilityCheck, "sip": map[string]any{"listen_ip": status.SIP.ListenIP, "listen_port": status.SIP.ListenPort, "transport": status.SIP.Transport}, "rtp": map[string]any{"listen_ip": status.RTP.ListenIP, "port_start": status.RTP.PortStart, "port_end": status.RTP.PortEnd, "transport": status.RTP.Transport}}},
 		{Name: "02_connection_stats_snapshot.json", Description: "连接统计快照", Content: map[string]any{"sip": map[string]any{"current_sessions": status.SIP.CurrentSessions, "current_connections": status.SIP.CurrentConnections, "accepted_connections_total": status.SIP.AcceptedConnectionsTotal, "closed_connections_total": status.SIP.ClosedConnectionsTotal, "read_timeout_total": status.SIP.ReadTimeoutTotal, "write_timeout_total": status.SIP.WriteTimeoutTotal, "connection_error_total": status.SIP.ConnectionErrorTotal}, "rtp": map[string]any{"active_transfers": status.RTP.ActiveTransfers, "rtp_tcp_sessions_current": status.RTP.TCPSessionsCurrent, "rtp_tcp_sessions_total": status.RTP.TCPSessionsTotal, "rtp_tcp_read_errors_total": status.RTP.TCPReadErrorsTotal, "rtp_tcp_write_errors_total": status.RTP.TCPWriteErrorsTotal}}},
 		{Name: "03_port_pool_status.json", Description: "端口池状态", Content: map[string]any{"used_ports": status.RTP.UsedPorts, "available_ports": status.RTP.AvailablePorts, "rtp_port_pool_total": status.RTP.PortPoolTotal, "rtp_port_pool_used": status.RTP.PortPoolUsed, "rtp_port_alloc_fail_total": status.RTP.PortAllocFailTotal}},
 		{Name: "04_transport_error_summary.json", Description: "最近 transport 错误摘要", Content: map[string]any{"recent_bind_errors": maskStringSlice(status.RecentBindErrors), "recent_network_errors": maskStringSlice(status.RecentNetworkErrors)}},

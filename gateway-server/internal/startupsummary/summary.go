@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"siptunnel/internal/config"
+	"siptunnel/internal/nodeconfig"
 )
 
 type Summary struct {
@@ -14,6 +15,9 @@ type Summary struct {
 	Capability          config.Capability          `json:"capability"`
 	CapabilitySummary   CapabilitySummary          `json:"capability_summary"`
 	TransportPlan       config.TunnelTransportPlan `json:"transport_plan"`
+	CurrentNetworkMode  config.NetworkMode         `json:"current_network_mode,omitempty"`
+	CurrentCapability   config.Capability          `json:"current_capability,omitempty"`
+	CompatibilityStatus nodeconfig.CheckResult     `json:"compatibility_status,omitempty"`
 	ConfigPath          string                     `json:"config_path"`
 	ConfigSource        string                     `json:"config_source"`
 	RunMode             string                     `json:"run_mode,omitempty"`
