@@ -49,6 +49,8 @@
 `gateway-server/internal/server/http.go`
 
 - 新增 `/api/tasks`、`/api/limits`、`/api/routes`、`/api/nodes`、`/api/audits` 等运维接口。
+- `TunnelMapping` 现为主业务模型，对应 `/api/mappings` CRUD，用于表达“本端入口(local_bind/local_base_path) ↔ 对端目标(remote_target)”语义。
+- `OpsRoute/RouteConfig` 降级为兼容层，仅保留 `/api/routes`（deprecated）用于历史前端/脚本平滑迁移。
 - 返回体统一为 `{code,message,data}`，任务与审计列表统一携带分页结构。
 - 运维写操作（重试、取消、更新限流、更新路由）会写入审计日志，支持 `request_id/trace_id` 检索。
 - OpenAPI 描述见 `gateway-server/docs/openapi-ops.yaml`。

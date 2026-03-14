@@ -48,9 +48,34 @@ paths:
   /api/limits:
     get: { summary: Get runtime limits, responses: { '200': { description: OK } } }
     put: { summary: Update runtime limits, responses: { '200': { description: OK } } }
+  /api/mappings:
+    get: { summary: List tunnel mappings (primary model), responses: { '200': { description: OK } } }
+    post: { summary: Create tunnel mapping, responses: { '201': { description: Created }, '400': { description: Invalid argument }, '409': { description: Mapping exists } } }
+  /api/mappings/{id}:
+    put:
+      summary: Update tunnel mapping
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+        '400': { description: Invalid argument }
+        '404': { description: Mapping not found }
+    delete:
+      summary: Delete tunnel mapping
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+        '404': { description: Mapping not found }
   /api/routes:
-    get: { summary: List api route templates, responses: { '200': { description: OK } } }
-    put: { summary: Update api route templates, responses: { '200': { description: OK } } }
+    get: { summary: '[Deprecated] List legacy ops routes compatibility view', responses: { '200': { description: OK } } }
+    put: { summary: '[Deprecated] Update legacy ops routes and backfill tunnel mappings', responses: { '200': { description: OK } } }
   /api/nodes:
     get: { summary: List gateway nodes, responses: { '200': { description: OK } } }
   /api/audits:
