@@ -86,10 +86,13 @@ type opsActionRequest struct {
 }
 
 type NodeNetworkStatus struct {
-	SIP                 SIPNetworkStatus `json:"sip"`
-	RTP                 RTPNetworkStatus `json:"rtp"`
-	RecentBindErrors    []string         `json:"recent_bind_errors"`
-	RecentNetworkErrors []string         `json:"recent_network_errors"`
+	NetworkMode         config.NetworkMode               `json:"network_mode"`
+	Capability          config.Capability                `json:"capability"`
+	CapabilitySummary   startupsummary.CapabilitySummary `json:"capability_summary"`
+	SIP                 SIPNetworkStatus                 `json:"sip"`
+	RTP                 RTPNetworkStatus                 `json:"rtp"`
+	RecentBindErrors    []string                         `json:"recent_bind_errors"`
+	RecentNetworkErrors []string                         `json:"recent_network_errors"`
 }
 
 type SIPNetworkStatus struct {
@@ -251,7 +254,16 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, io.Closer, error)
 			if availablePorts < 0 {
 				availablePorts = 0
 			}
+			mode := defaults.Mode.Normalize()
+			capability := config.DeriveCapability(mode)
 			return NodeNetworkStatus{
+				NetworkMode: mode,
+				Capability:  capability,
+				CapabilitySummary: startupsummary.CapabilitySummary{
+					Supported:   capability.SupportedFeatures(),
+					Unsupported: capability.UnsupportedFeatures(),
+					Items:       capability.Matrix(),
+				},
 				SIP: SIPNetworkStatus{
 					ListenIP:           defaults.SIP.ListenIP,
 					ListenPort:         defaults.SIP.ListenPort,
@@ -984,7 +996,7 @@ func (d handlerDeps) handleDiagnosticsExport(w http.ResponseWriter, r *http.Requ
 	readmeLines := []string{
 		"诊断包文件说明（字段已脱敏，可用于人工排障）",
 		"00_startup_summary.json: 统一启动与运行摘要，供日志/API/UI/诊断复用。",
-		"01_transport_config.json: 当前 SIP/RTP transport 与关键网络参数快照。",
+		"01_transport_config.json: 当前 NetworkMode/Capability + SIP/RTP transport 与关键网络参数快照。",
 		"02_connection_stats_snapshot.json: SIP/RTP 连接计数与错误累计值。",
 		"03_port_pool_status.json: RTP 端口池使用情况与分配失败累计值。",
 		"04_transport_error_summary.json: 最近 transport 绑定/网络错误摘要。",
@@ -996,7 +1008,7 @@ func (d handlerDeps) handleDiagnosticsExport(w http.ResponseWriter, r *http.Requ
 	files := []DiagFile{
 		{Name: "00_startup_summary.json", Description: "统一启动与运行摘要", Content: d.startupSummaryFn(r.Context())},
 		{Name: "README.md", Description: "诊断包文件说明", Content: map[string]any{"filters": map[string]any{"request_id": requestID, "trace_id": traceID}, "files": readmeLines}},
-		{Name: "01_transport_config.json", Description: "当前 transport 配置", Content: map[string]any{"sip": map[string]any{"listen_ip": status.SIP.ListenIP, "listen_port": status.SIP.ListenPort, "transport": status.SIP.Transport}, "rtp": map[string]any{"listen_ip": status.RTP.ListenIP, "port_start": status.RTP.PortStart, "port_end": status.RTP.PortEnd, "transport": status.RTP.Transport}}},
+		{Name: "01_transport_config.json", Description: "当前 transport 配置", Content: map[string]any{"network_mode": status.NetworkMode, "capability": status.Capability, "capability_summary": status.CapabilitySummary, "sip": map[string]any{"listen_ip": status.SIP.ListenIP, "listen_port": status.SIP.ListenPort, "transport": status.SIP.Transport}, "rtp": map[string]any{"listen_ip": status.RTP.ListenIP, "port_start": status.RTP.PortStart, "port_end": status.RTP.PortEnd, "transport": status.RTP.Transport}}},
 		{Name: "02_connection_stats_snapshot.json", Description: "连接统计快照", Content: map[string]any{"sip": map[string]any{"current_sessions": status.SIP.CurrentSessions, "current_connections": status.SIP.CurrentConnections, "accepted_connections_total": status.SIP.AcceptedConnectionsTotal, "closed_connections_total": status.SIP.ClosedConnectionsTotal, "read_timeout_total": status.SIP.ReadTimeoutTotal, "write_timeout_total": status.SIP.WriteTimeoutTotal, "connection_error_total": status.SIP.ConnectionErrorTotal}, "rtp": map[string]any{"active_transfers": status.RTP.ActiveTransfers, "rtp_tcp_sessions_current": status.RTP.TCPSessionsCurrent, "rtp_tcp_sessions_total": status.RTP.TCPSessionsTotal, "rtp_tcp_read_errors_total": status.RTP.TCPReadErrorsTotal, "rtp_tcp_write_errors_total": status.RTP.TCPWriteErrorsTotal}}},
 		{Name: "03_port_pool_status.json", Description: "端口池状态", Content: map[string]any{"used_ports": status.RTP.UsedPorts, "available_ports": status.RTP.AvailablePorts, "rtp_port_pool_total": status.RTP.PortPoolTotal, "rtp_port_pool_used": status.RTP.PortPoolUsed, "rtp_port_alloc_fail_total": status.RTP.PortAllocFailTotal}},
 		{Name: "04_transport_error_summary.json", Description: "最近 transport 错误摘要", Content: map[string]any{"recent_bind_errors": maskStringSlice(status.RecentBindErrors), "recent_network_errors": maskStringSlice(status.RecentNetworkErrors)}},

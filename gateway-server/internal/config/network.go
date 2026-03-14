@@ -10,8 +10,9 @@ import (
 )
 
 type NetworkConfig struct {
-	SIP SIPConfig `yaml:"sip"`
-	RTP RTPConfig `yaml:"rtp"`
+	Mode NetworkMode `yaml:"mode"`
+	SIP  SIPConfig   `yaml:"sip"`
+	RTP  RTPConfig   `yaml:"rtp"`
 }
 
 type SIPConfig struct {
@@ -54,6 +55,7 @@ type RTPConfig struct {
 
 func DefaultNetworkConfig() NetworkConfig {
 	return NetworkConfig{
+		Mode: DefaultNetworkMode(),
 		SIP: SIPConfig{
 			Enabled:                true,
 			ListenIP:               "0.0.0.0",
@@ -105,6 +107,10 @@ func ParseNetworkConfigYAML(data []byte) (NetworkConfig, error) {
 
 func (c *NetworkConfig) ApplyDefaults() {
 	defaults := DefaultNetworkConfig()
+	if strings.TrimSpace(string(c.Mode)) == "" {
+		c.Mode = defaults.Mode
+	}
+	c.Mode = c.Mode.Normalize()
 	c.SIP.applyDefaults(defaults.SIP)
 	c.RTP.applyDefaults(defaults.RTP)
 }
@@ -112,6 +118,9 @@ func (c *NetworkConfig) ApplyDefaults() {
 func (c NetworkConfig) Validate() error {
 	var errs []error
 	if err := c.SIP.Validate(); err != nil {
+		errs = append(errs, err)
+	}
+	if err := c.Mode.Validate(); err != nil {
 		errs = append(errs, err)
 	}
 	if err := c.RTP.Validate(); err != nil {

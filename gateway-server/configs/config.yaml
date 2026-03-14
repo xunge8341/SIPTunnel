@@ -59,6 +59,7 @@ ops:
 
 # 兼容旧版配置格式（network.*）
 network:
+  mode: A_TO_B_SIP__B_TO_A_RTP
   sip:
     enabled: true
     listen_ip: 0.0.0.0

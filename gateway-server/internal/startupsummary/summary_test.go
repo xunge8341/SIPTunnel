@@ -4,11 +4,16 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"siptunnel/internal/config"
 )
 
 func TestSummaryToLogText(t *testing.T) {
 	s := Summary{
 		NodeID:              "gateway-a-01",
+		NetworkMode:         config.NetworkModeAToBSIPBToARTP,
+		Capability:          config.DeriveCapability(config.NetworkModeAToBSIPBToARTP),
+		CapabilitySummary:   CapabilitySummary{Supported: []string{"supports_small_request_body", "supports_large_response_body", "supports_streaming_response"}, Unsupported: []string{"supports_large_request_body", "supports_bidirectional_http_tunnel", "supports_transparent_http_proxy"}, Items: config.DeriveCapability(config.NetworkModeAToBSIPBToARTP).Matrix()},
 		ConfigPath:          "./configs/config.yaml",
 		ConfigSource:        "cli",
 		RunMode:             "dev",
@@ -39,6 +44,9 @@ func TestSummaryToLogText(t *testing.T) {
 		"config_candidates: ./configs/config.yaml (cwd)",
 		"ui: mode=embedded url=http://127.0.0.1:18080/",
 		"api_url: http://127.0.0.1:18080/api",
+		"network_mode: A_TO_B_SIP__B_TO_A_RTP",
+		"capability_supported: supports_small_request_body,supports_large_response_body,supports_streaming_response",
+		"capability_unsupported: supports_large_request_body,supports_bidirectional_http_tunnel,supports_transparent_http_proxy",
 		"sip_listen: ip=10.0.0.2 port=5060 transport=TCP",
 		"rtp_listen: ip=10.0.0.2 port_range=20000-20100 transport=UDP",
 		"storage_dirs: temp=./data/temp final=./data/final audit=./data/audit log=./data/logs",
@@ -54,6 +62,9 @@ func TestSummaryToLogText(t *testing.T) {
 func ExampleSummary_ToLogText() {
 	s := Summary{
 		NodeID:            "gateway-a-01",
+		NetworkMode:       config.NetworkModeABBiDirSIPBiDirRTP,
+		Capability:        config.DeriveCapability(config.NetworkModeABBiDirSIPBiDirRTP),
+		CapabilitySummary: CapabilitySummary{Supported: config.DeriveCapability(config.NetworkModeABBiDirSIPBiDirRTP).SupportedFeatures(), Unsupported: config.DeriveCapability(config.NetworkModeABBiDirSIPBiDirRTP).UnsupportedFeatures(), Items: config.DeriveCapability(config.NetworkModeABBiDirSIPBiDirRTP).Matrix()},
 		ConfigPath:        "./configs/config.yaml",
 		ConfigSource:      "env",
 		RunMode:           "prod",
@@ -81,6 +92,9 @@ func ExampleSummary_ToLogText() {
 	// - auto_generated_config: false
 	// - ui: mode=external url=external
 	// - api_url: http://127.0.0.1:18080/api
+	// - network_mode: A_B_BIDIR_SIP__BIDIR_RTP
+	// - capability_supported: supports_small_request_body,supports_large_request_body,supports_large_response_body,supports_streaming_response,supports_bidirectional_http_tunnel,supports_transparent_http_proxy
+	// - capability_unsupported: -
 	// - sip_listen: ip=0.0.0.0 port=5060 transport=TCP
 	// - rtp_listen: ip=0.0.0.0 port_range=20000-20100 transport=UDP
 	// - storage_dirs: temp=./data/temp final=./data/final audit=./data/audit log=./data/logs
