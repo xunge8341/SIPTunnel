@@ -9,14 +9,17 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"siptunnel/internal/config"
+	"siptunnel/internal/nodeconfig"
 	"siptunnel/internal/observability"
 	"siptunnel/internal/repository"
+	filerepo "siptunnel/internal/repository/file"
 	memrepo "siptunnel/internal/repository/memory"
 	"siptunnel/internal/selfcheck"
 	"siptunnel/internal/service"
@@ -35,12 +38,22 @@ type handlerDeps struct {
 	engine            *taskengine.Engine
 	httpClient        *http.Client
 
-	mu     sync.RWMutex
-	limits OpsLimits
-	routes map[string]OpsRoute
-	nodes  []OpsNode
+	mu        sync.RWMutex
+	limits    OpsLimits
+	routes    map[string]OpsRoute
+	nodes     []OpsNode
+	nodeStore nodeConfigStore
 
 	lastLinkTest LinkTestReport
+}
+
+type nodeConfigStore interface {
+	GetLocalNode() nodeconfig.LocalNodeConfig
+	UpdateLocalNode(local nodeconfig.LocalNodeConfig) (nodeconfig.LocalNodeConfig, error)
+	ListPeers() []nodeconfig.PeerNodeConfig
+	CreatePeer(peer nodeconfig.PeerNodeConfig) (nodeconfig.PeerNodeConfig, error)
+	UpdatePeer(peer nodeconfig.PeerNodeConfig) (nodeconfig.PeerNodeConfig, error)
+	DeletePeer(peerNodeID string) error
 }
 
 type responseEnvelope struct {
@@ -192,6 +205,7 @@ type capacityAssessmentRequest struct {
 type HandlerOptions struct {
 	LogDir                 string
 	AuditDir               string
+	DataDir                string
 	SelfCheckProvider      func(context.Context) selfcheck.Report
 	NetworkStatusFunc      func(context.Context) NodeNetworkStatus
 	StartupSummaryProvider func(context.Context) startupsummary.Summary
@@ -230,6 +244,20 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, io.Closer, error)
 		audit = store
 		auditCloser = store
 	}
+	dataDir := strings.TrimSpace(opts.DataDir)
+	if dataDir == "" {
+		dataDir = filepath.Join(".", "data", "final")
+	}
+	nodeStore, err := filerepo.NewNodeConfigStore(filepath.Join(dataDir, "node_config.json"))
+	if err != nil {
+		if logCloser != nil {
+			_ = logCloser.Close()
+		}
+		if auditCloser != nil {
+			_ = auditCloser.Close()
+		}
+		return nil, nil, fmt.Errorf("init node config store: %w", err)
+	}
 	deps := handlerDeps{
 		logger: logger,
 		audit:  audit,
@@ -244,6 +272,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, io.Closer, error)
 			"asset.delete": {APICode: "asset.delete", HTTPMethod: "DELETE", HTTPPath: "/v1/assets", Enabled: true},
 		},
 		nodes:             []OpsNode{{NodeID: "gateway-a-01", Role: "gateway", Status: "ready", Endpoint: "10.0.0.11:18080"}},
+		nodeStore:         nodeStore,
 		selfCheckProvider: opts.SelfCheckProvider,
 		networkStatusFunc: opts.NetworkStatusFunc,
 		startupSummaryFn:  opts.StartupSummaryProvider,
@@ -347,6 +376,9 @@ func newMux(deps handlerDeps) http.Handler {
 	mux.HandleFunc("/api/selfcheck", deps.handleSelfCheck)
 	mux.HandleFunc("/api/startup-summary", deps.handleStartupSummary)
 	mux.HandleFunc("/api/node/network-status", deps.handleNodeNetworkStatus)
+	mux.HandleFunc("/api/node", deps.handleNode)
+	mux.HandleFunc("/api/peers", deps.handlePeers)
+	mux.HandleFunc("/api/peers/", deps.handlePeers)
 	mux.HandleFunc("/api/ops/link-test", deps.handleLinkTest)
 	mux.HandleFunc("/api/diagnostics/export", deps.handleDiagnosticsExport)
 	mux.HandleFunc("/api/capacity/recommendation", deps.handleCapacityRecommendation)
@@ -772,6 +804,113 @@ func (d handlerDeps) handleNodes(w http.ResponseWriter, r *http.Request) {
 	nodes := append([]OpsNode(nil), d.nodes...)
 	d.mu.RUnlock()
 	writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: map[string]any{"items": nodes}})
+}
+
+func (d handlerDeps) handleNode(w http.ResponseWriter, r *http.Request) {
+	if d.nodeStore == nil {
+		writeError(w, http.StatusNotImplemented, "NODE_STORE_NOT_ENABLED", "node config store not configured")
+		return
+	}
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: d.nodeStore.GetLocalNode()})
+	case http.MethodPut:
+		var req nodeconfig.LocalNodeConfig
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid json body")
+			return
+		}
+		updated, err := d.nodeStore.UpdateLocalNode(req)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", err.Error())
+			return
+		}
+		d.recordOpsAudit(r, readOperator(r), "UPDATE_LOCAL_NODE", updated)
+		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: updated})
+	default:
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
+	}
+}
+
+func (d handlerDeps) handlePeers(w http.ResponseWriter, r *http.Request) {
+	if d.nodeStore == nil {
+		writeError(w, http.StatusNotImplemented, "NODE_STORE_NOT_ENABLED", "node config store not configured")
+		return
+	}
+	peerID := strings.TrimSpace(strings.TrimPrefix(r.URL.Path, "/api/peers/"))
+	hasID := peerID != "" && r.URL.Path != "/api/peers"
+	switch r.Method {
+	case http.MethodGet:
+		if hasID {
+			writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "GET /api/peers/{id} not supported; use GET /api/peers")
+			return
+		}
+		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: map[string]any{"items": d.nodeStore.ListPeers()}})
+	case http.MethodPost:
+		if hasID {
+			writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", "POST must target /api/peers")
+			return
+		}
+		var req nodeconfig.PeerNodeConfig
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid json body")
+			return
+		}
+		created, err := d.nodeStore.CreatePeer(req)
+		if err != nil {
+			code := http.StatusBadRequest
+			errCode := "INVALID_ARGUMENT"
+			if errors.Is(err, filerepo.ErrPeerAlreadyExists) {
+				code = http.StatusConflict
+				errCode = "PEER_ALREADY_EXISTS"
+			}
+			writeError(w, code, errCode, err.Error())
+			return
+		}
+		d.recordOpsAudit(r, readOperator(r), "CREATE_PEER_NODE", created)
+		writeJSON(w, http.StatusCreated, responseEnvelope{Code: "OK", Message: "success", Data: created})
+	case http.MethodPut:
+		if !hasID {
+			writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", "PUT must target /api/peers/{peer_node_id}")
+			return
+		}
+		var req nodeconfig.PeerNodeConfig
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid json body")
+			return
+		}
+		req.PeerNodeID = peerID
+		updated, err := d.nodeStore.UpdatePeer(req)
+		if err != nil {
+			code := http.StatusBadRequest
+			errCode := "INVALID_ARGUMENT"
+			if errors.Is(err, filerepo.ErrPeerNotFound) {
+				code = http.StatusNotFound
+				errCode = "PEER_NOT_FOUND"
+			}
+			writeError(w, code, errCode, err.Error())
+			return
+		}
+		d.recordOpsAudit(r, readOperator(r), "UPDATE_PEER_NODE", updated)
+		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: updated})
+	case http.MethodDelete:
+		if !hasID {
+			writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", "DELETE must target /api/peers/{peer_node_id}")
+			return
+		}
+		if err := d.nodeStore.DeletePeer(peerID); err != nil {
+			if errors.Is(err, filerepo.ErrPeerNotFound) {
+				writeError(w, http.StatusNotFound, "PEER_NOT_FOUND", err.Error())
+				return
+			}
+			writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
+			return
+		}
+		d.recordOpsAudit(r, readOperator(r), "DELETE_PEER_NODE", map[string]string{"peer_node_id": peerID})
+		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: map[string]string{"peer_node_id": peerID}})
+	default:
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
+	}
 }
 
 func (d handlerDeps) handleAudits(w http.ResponseWriter, r *http.Request) {

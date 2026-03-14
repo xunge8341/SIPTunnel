@@ -14,6 +14,7 @@ import (
 	"siptunnel/internal/config"
 	"siptunnel/internal/observability"
 	"siptunnel/internal/repository"
+	filerepo "siptunnel/internal/repository/file"
 	memrepo "siptunnel/internal/repository/memory"
 	"siptunnel/internal/selfcheck"
 	"siptunnel/internal/service"
@@ -25,14 +26,19 @@ func buildTestHandler(t *testing.T) (http.Handler, repository.TaskRepository, ob
 	t.Helper()
 	repo := memrepo.NewTaskRepository()
 	audit := observability.NewInMemoryAuditStore()
+	nodeStore, err := filerepo.NewNodeConfigStore(t.TempDir() + "/node_config.json")
+	if err != nil {
+		t.Fatalf("new node config store failed: %v", err)
+	}
 	deps := handlerDeps{
-		logger: observability.NewStructuredLogger(nil),
-		audit:  audit,
-		repo:   repo,
-		engine: taskengine.NewEngine(repo, service.RetryPolicy{MaxAttempts: 3, BaseBackoff: time.Second}),
-		limits: OpsLimits{RPS: 100, Burst: 200, MaxConcurrent: 50},
-		routes: map[string]OpsRoute{"asset.sync": {APICode: "asset.sync", HTTPMethod: "POST", HTTPPath: "/sync", Enabled: true}},
-		nodes:  []OpsNode{{NodeID: "n1", Role: "gateway", Status: "ready", Endpoint: "127.0.0.1:18080"}},
+		logger:    observability.NewStructuredLogger(nil),
+		audit:     audit,
+		repo:      repo,
+		engine:    taskengine.NewEngine(repo, service.RetryPolicy{MaxAttempts: 3, BaseBackoff: time.Second}),
+		limits:    OpsLimits{RPS: 100, Burst: 200, MaxConcurrent: 50},
+		routes:    map[string]OpsRoute{"asset.sync": {APICode: "asset.sync", HTTPMethod: "POST", HTTPPath: "/sync", Enabled: true}},
+		nodes:     []OpsNode{{NodeID: "n1", Role: "gateway", Status: "ready", Endpoint: "127.0.0.1:18080"}},
+		nodeStore: nodeStore,
 		selfCheckProvider: func(_ context.Context) selfcheck.Report {
 			return selfcheck.Report{Overall: selfcheck.LevelInfo, Summary: selfcheck.Summary{Info: 1, Warn: 1, Error: 1}, Items: []selfcheck.Item{{Name: "sample-info", Level: selfcheck.LevelInfo, Message: "ok", Suggestion: "none", ActionHint: "keep"}, {Name: "sample-warn", Level: selfcheck.LevelWarn, Message: "warn", Suggestion: "check", ActionHint: "verify"}, {Name: "sample-error", Level: selfcheck.LevelError, Message: "err", Suggestion: "fix", ActionHint: "recover"}}}
 		},
@@ -381,5 +387,98 @@ func TestDiagnosticsExportEndpointWithFilters(t *testing.T) {
 	filters, ok := readme["filters"].(map[string]any)
 	if !ok || filters["request_id"] != "req-d" || filters["trace_id"] != "trace-d" {
 		t.Fatalf("readme filters mismatch: %#v", readmeFile.Content)
+	}
+}
+
+func TestNodeAndPeerEndpoints(t *testing.T) {
+	h, _, _ := buildTestHandler(t)
+
+	getNode := httptest.NewRequest(http.MethodGet, "/api/node", nil)
+	getNodeRR := httptest.NewRecorder()
+	h.ServeHTTP(getNodeRR, getNode)
+	if getNodeRR.Code != http.StatusOK {
+		t.Fatalf("GET /api/node expected 200 got %d body=%s", getNodeRR.Code, getNodeRR.Body.String())
+	}
+
+	putNodeBody := `{"node_id":"gateway-a-01","node_name":"Gateway-A-Updated","node_role":"gateway","network_mode":"A_TO_B_SIP__B_TO_A_RTP","sip_listen_ip":"10.10.1.10","sip_listen_port":5060,"sip_transport":"TCP","rtp_listen_ip":"10.10.1.10","rtp_port_start":30000,"rtp_port_end":30100,"rtp_transport":"UDP"}`
+	putNode := httptest.NewRequest(http.MethodPut, "/api/node", bytes.NewBufferString(putNodeBody))
+	putNodeRR := httptest.NewRecorder()
+	h.ServeHTTP(putNodeRR, putNode)
+	if putNodeRR.Code != http.StatusOK {
+		t.Fatalf("PUT /api/node expected 200 got %d body=%s", putNodeRR.Code, putNodeRR.Body.String())
+	}
+
+	createPeerBody := `{"peer_node_id":"peer-b-01","peer_name":"Peer B","peer_signaling_ip":"10.20.0.20","peer_signaling_port":5060,"peer_media_ip":"10.20.0.20","peer_media_port_start":32000,"peer_media_port_end":32100,"supported_network_mode":"A_TO_B_SIP__B_TO_A_RTP","enabled":true}`
+	createPeer := httptest.NewRequest(http.MethodPost, "/api/peers", bytes.NewBufferString(createPeerBody))
+	createPeerRR := httptest.NewRecorder()
+	h.ServeHTTP(createPeerRR, createPeer)
+	if createPeerRR.Code != http.StatusCreated {
+		t.Fatalf("POST /api/peers expected 201 got %d body=%s", createPeerRR.Code, createPeerRR.Body.String())
+	}
+
+	listPeers := httptest.NewRequest(http.MethodGet, "/api/peers", nil)
+	listPeersRR := httptest.NewRecorder()
+	h.ServeHTTP(listPeersRR, listPeers)
+	if listPeersRR.Code != http.StatusOK || !strings.Contains(listPeersRR.Body.String(), "peer-b-01") {
+		t.Fatalf("GET /api/peers failed code=%d body=%s", listPeersRR.Code, listPeersRR.Body.String())
+	}
+
+	updatePeerBody := `{"peer_name":"Peer B2","peer_signaling_ip":"10.20.0.20","peer_signaling_port":5061,"peer_media_ip":"10.20.0.21","peer_media_port_start":32010,"peer_media_port_end":32110,"supported_network_mode":"A_TO_B_SIP__B_TO_A_RTP","enabled":false}`
+	updatePeer := httptest.NewRequest(http.MethodPut, "/api/peers/peer-b-01", bytes.NewBufferString(updatePeerBody))
+	updatePeerRR := httptest.NewRecorder()
+	h.ServeHTTP(updatePeerRR, updatePeer)
+	if updatePeerRR.Code != http.StatusOK {
+		t.Fatalf("PUT /api/peers/{id} expected 200 got %d body=%s", updatePeerRR.Code, updatePeerRR.Body.String())
+	}
+
+	deletePeer := httptest.NewRequest(http.MethodDelete, "/api/peers/peer-b-01", nil)
+	deletePeerRR := httptest.NewRecorder()
+	h.ServeHTTP(deletePeerRR, deletePeer)
+	if deletePeerRR.Code != http.StatusOK {
+		t.Fatalf("DELETE /api/peers/{id} expected 200 got %d body=%s", deletePeerRR.Code, deletePeerRR.Body.String())
+	}
+}
+
+func TestNodePeerPersistenceAcrossHandlerRestart(t *testing.T) {
+	dataDir := t.TempDir()
+	h1, closer1, err := NewHandlerWithOptions(HandlerOptions{DataDir: dataDir})
+	if err != nil {
+		t.Fatalf("new handler1 failed: %v", err)
+	}
+	if closer1 != nil {
+		defer closer1.Close()
+	}
+
+	putNodeBody := `{"node_id":"gateway-a-01","node_name":"Persisted Node","node_role":"gateway","network_mode":"A_TO_B_SIP__B_TO_A_RTP","sip_listen_ip":"10.10.1.11","sip_listen_port":5060,"sip_transport":"TCP","rtp_listen_ip":"10.10.1.11","rtp_port_start":30000,"rtp_port_end":30010,"rtp_transport":"UDP"}`
+	rrPut := httptest.NewRecorder()
+	h1.ServeHTTP(rrPut, httptest.NewRequest(http.MethodPut, "/api/node", bytes.NewBufferString(putNodeBody)))
+	if rrPut.Code != http.StatusOK {
+		t.Fatalf("update node failed: %d body=%s", rrPut.Code, rrPut.Body.String())
+	}
+
+	createPeerBody := `{"peer_node_id":"persist-peer","peer_name":"Persist Peer","peer_signaling_ip":"10.20.0.30","peer_signaling_port":5060,"peer_media_ip":"10.20.0.30","peer_media_port_start":33000,"peer_media_port_end":33010,"supported_network_mode":"A_TO_B_SIP__B_TO_A_RTP","enabled":true}`
+	rrCreate := httptest.NewRecorder()
+	h1.ServeHTTP(rrCreate, httptest.NewRequest(http.MethodPost, "/api/peers", bytes.NewBufferString(createPeerBody)))
+	if rrCreate.Code != http.StatusCreated {
+		t.Fatalf("create peer failed: %d body=%s", rrCreate.Code, rrCreate.Body.String())
+	}
+
+	h2, closer2, err := NewHandlerWithOptions(HandlerOptions{DataDir: dataDir})
+	if err != nil {
+		t.Fatalf("new handler2 failed: %v", err)
+	}
+	if closer2 != nil {
+		defer closer2.Close()
+	}
+
+	rrNode := httptest.NewRecorder()
+	h2.ServeHTTP(rrNode, httptest.NewRequest(http.MethodGet, "/api/node", nil))
+	if rrNode.Code != http.StatusOK || !strings.Contains(rrNode.Body.String(), "Persisted Node") {
+		t.Fatalf("persisted node not found code=%d body=%s", rrNode.Code, rrNode.Body.String())
+	}
+	rrPeers := httptest.NewRecorder()
+	h2.ServeHTTP(rrPeers, httptest.NewRequest(http.MethodGet, "/api/peers", nil))
+	if rrPeers.Code != http.StatusOK || !strings.Contains(rrPeers.Body.String(), "persist-peer") {
+		t.Fatalf("persisted peers not found code=%d body=%s", rrPeers.Code, rrPeers.Body.String())
 	}
 }

@@ -120,6 +120,7 @@ func runGatewayStartup(args []string) {
 	handler, closer, err := server.NewHandlerWithOptions(server.HandlerOptions{
 		LogDir:   paths.LogDir,
 		AuditDir: paths.AuditDir,
+		DataDir:  paths.FinalDir,
 		SelfCheckProvider: func(ctx context.Context) selfcheck.Report {
 			return selfcheck.NewRunner().Run(ctx, selfCheckInput)
 		},

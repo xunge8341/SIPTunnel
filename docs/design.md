@@ -62,3 +62,18 @@
 - 任务详情页整合基础信息、状态流转时间线、SIP 事件、RTP 分片统计、HTTP 执行结果、审计记录片段。
 - API 采用双模式适配：`VITE_API_MODE=real` 走真实接口，默认走 mock 数据，便于联调与独立开发。
 - 类型集中在 `src/types/gateway.ts`，避免页面层与接口字段耦合。
+
+
+## 9. 本端节点 / 对端节点建模与持久化
+
+`gateway-server/internal/nodeconfig` + `gateway-server/internal/repository/file/node_config_store.go`
+
+- `LocalNodeConfig`：描述本端节点（node_id/node_name/node_role）与本端网络绑定（network_mode/sip_listen/rtp_listen）。
+- `PeerNodeConfig`：描述对端节点（peer_node_id/peer_name）与对端信令/媒体地址段，并通过 `supported_network_mode` 声明兼容网络模式。
+- `network_mode` 挂在 `LocalNodeConfig` 上，作为“本端当前生效网络能力边界”；Peer 记录其可兼容模式用于后续匹配。
+- 提供真实文件持久化（`data/final/node_config.json`），重启后配置可恢复。
+- API：
+  - `GET/PUT /api/node`
+  - `GET/POST /api/peers`
+  - `PUT/DELETE /api/peers/{peer_node_id}`
+- `TunnelMapping` 后续应保存 `peer_node_id` 并引用该配置，而不是重复存放地址/端口字段，实现“节点信息”与“映射关系”解耦。
