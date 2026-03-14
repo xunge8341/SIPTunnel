@@ -25,6 +25,7 @@ import (
 	"siptunnel/internal/service"
 	"siptunnel/internal/service/taskengine"
 	"siptunnel/internal/startupsummary"
+	"siptunnel/internal/tunnelmapping"
 	"siptunnel/loadtest"
 )
 
@@ -43,6 +44,7 @@ type handlerDeps struct {
 	routes    map[string]OpsRoute
 	nodes     []OpsNode
 	nodeStore nodeConfigStore
+	mappings  tunnelMappingStore
 
 	lastLinkTest LinkTestReport
 }
@@ -80,11 +82,14 @@ type OpsLimits struct {
 }
 
 type OpsRoute struct {
+	// Deprecated: OpsRoute is the legacy /api/routes response model.
 	APICode    string `json:"api_code"`
 	HTTPMethod string `json:"http_method"`
 	HTTPPath   string `json:"http_path"`
 	Enabled    bool   `json:"enabled"`
 }
+
+type TunnelMapping = tunnelmapping.TunnelMapping
 
 type OpsNode struct {
 	NodeID   string `json:"node_id"`
@@ -181,6 +186,13 @@ type updateRoutesRequest struct {
 	Routes []OpsRoute `json:"routes"`
 }
 
+type tunnelMappingStore interface {
+	List() []TunnelMapping
+	Create(TunnelMapping) (TunnelMapping, error)
+	Update(id string, mapping TunnelMapping) (TunnelMapping, error)
+	Delete(id string) error
+}
+
 type LinkTestReport struct {
 	Passed     bool           `json:"passed"`
 	Status     string         `json:"status"`
@@ -268,6 +280,17 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, io.Closer, error)
 		}
 		return nil, nil, fmt.Errorf("init node config store: %w", err)
 	}
+	mappingStore, err := filerepo.NewTunnelMappingStore(filepath.Join(dataDir, "tunnel_mappings.json"))
+	if err != nil {
+		if logCloser != nil {
+			_ = logCloser.Close()
+		}
+		if auditCloser != nil {
+			_ = auditCloser.Close()
+		}
+		return nil, nil, fmt.Errorf("init tunnel mapping store: %w", err)
+	}
+
 	deps := handlerDeps{
 		logger: logger,
 		audit:  audit,
@@ -276,11 +299,9 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, io.Closer, error)
 		httpClient: &http.Client{
 			Timeout: 1500 * time.Millisecond,
 		},
-		limits: OpsLimits{RPS: 200, Burst: 400, MaxConcurrent: 100},
-		routes: map[string]OpsRoute{
-			"asset.sync":   {APICode: "asset.sync", HTTPMethod: "POST", HTTPPath: "/v1/assets/sync", Enabled: true},
-			"asset.delete": {APICode: "asset.delete", HTTPMethod: "DELETE", HTTPPath: "/v1/assets", Enabled: true},
-		},
+		limits:            OpsLimits{RPS: 200, Burst: 400, MaxConcurrent: 100},
+		routes:            map[string]OpsRoute{},
+		mappings:          mappingStore,
 		nodes:             []OpsNode{{NodeID: "gateway-a-01", Role: "gateway", Status: "ready", Endpoint: "10.0.0.11:18080"}},
 		nodeStore:         nodeStore,
 		selfCheckProvider: opts.SelfCheckProvider,
@@ -380,6 +401,8 @@ func newMux(deps handlerDeps) http.Handler {
 	mux.HandleFunc("/api/tasks", deps.handleTasks)
 	mux.HandleFunc("/api/tasks/", deps.handleTaskByID)
 	mux.HandleFunc("/api/limits", deps.handleLimits)
+	mux.HandleFunc("/api/mappings", deps.handleMappings)
+	mux.HandleFunc("/api/mappings/", deps.handleMappings)
 	mux.HandleFunc("/api/routes", deps.handleRoutes)
 	mux.HandleFunc("/api/nodes", deps.handleNodes)
 	mux.HandleFunc("/api/audits", deps.handleAudits)
@@ -718,14 +741,11 @@ func (d handlerDeps) handleLimits(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d handlerDeps) handleRoutes(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Deprecation", "true")
+	w.Header().Set("Sunset", "legacy-ops-route")
 	switch r.Method {
 	case http.MethodGet:
-		d.mu.RLock()
-		items := make([]OpsRoute, 0, len(d.routes))
-		for _, route := range d.routes {
-			items = append(items, route)
-		}
-		d.mu.RUnlock()
+		items := d.listLegacyRoutesFromMappings()
 		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: map[string]any{"items": items}})
 	case http.MethodPut:
 		var req updateRoutesRequest
@@ -733,22 +753,138 @@ func (d handlerDeps) handleRoutes(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid json body")
 			return
 		}
-		updated := make(map[string]OpsRoute, len(req.Routes))
+		created := make([]TunnelMapping, 0, len(req.Routes))
 		for _, route := range req.Routes {
 			if route.APICode == "" || route.HTTPMethod == "" || route.HTTPPath == "" {
 				writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", "route fields are required")
 				return
 			}
-			updated[route.APICode] = route
+			created = append(created, TunnelMapping{
+				MappingID:            route.APICode,
+				Name:                 route.APICode,
+				Enabled:              route.Enabled,
+				PeerNodeID:           "legacy-peer",
+				LocalBindIP:          "127.0.0.1",
+				LocalBindPort:        18080,
+				LocalBasePath:        route.HTTPPath,
+				RemoteTargetIP:       "127.0.0.1",
+				RemoteTargetPort:     8080,
+				RemoteBasePath:       route.HTTPPath,
+				AllowedMethods:       []string{route.HTTPMethod},
+				ConnectTimeoutMS:     500,
+				RequestTimeoutMS:     3000,
+				ResponseTimeoutMS:    3000,
+				MaxRequestBodyBytes:  10 * 1024 * 1024,
+				MaxResponseBodyBytes: 20 * 1024 * 1024,
+				Description:          "deprecated /api/routes compatibility mapping",
+			})
 		}
-		d.mu.Lock()
-		d.routes = updated
-		d.mu.Unlock()
+		for _, item := range d.mappings.List() {
+			_ = d.mappings.Delete(item.MappingID)
+		}
+		for _, item := range created {
+			if _, err := d.mappings.Create(item); err != nil {
+				writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", fmt.Sprintf("save mapping failed: %v", err))
+				return
+			}
+		}
 		d.recordOpsAudit(r, readOperator(r), "UPDATE_ROUTES", map[string]any{"count": len(req.Routes)})
 		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: map[string]any{"items": req.Routes}})
 	default:
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
 	}
+}
+
+func (d handlerDeps) handleMappings(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimPrefix(r.URL.Path, "/api/mappings/")
+	if r.URL.Path == "/api/mappings" || r.URL.Path == "/api/mappings/" {
+		id = ""
+	}
+	switch r.Method {
+	case http.MethodGet:
+		if id != "" {
+			writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
+			return
+		}
+		items := d.mappings.List()
+		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: map[string]any{"items": items}})
+	case http.MethodPost:
+		if id != "" {
+			writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
+			return
+		}
+		var req TunnelMapping
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid json body")
+			return
+		}
+		created, err := d.mappings.Create(req)
+		if err != nil {
+			status := http.StatusBadRequest
+			code := "INVALID_ARGUMENT"
+			if errors.Is(err, filerepo.ErrMappingExists) {
+				status = http.StatusConflict
+				code = "MAPPING_EXISTS"
+			}
+			writeError(w, status, code, err.Error())
+			return
+		}
+		d.recordOpsAudit(r, readOperator(r), "CREATE_MAPPING", map[string]any{"mapping_id": created.MappingID})
+		writeJSON(w, http.StatusCreated, responseEnvelope{Code: "OK", Message: "success", Data: created})
+	case http.MethodPut:
+		if id == "" {
+			writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", "mapping id is required in path")
+			return
+		}
+		var req TunnelMapping
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid json body")
+			return
+		}
+		updated, err := d.mappings.Update(id, req)
+		if err != nil {
+			status := http.StatusBadRequest
+			code := "INVALID_ARGUMENT"
+			if errors.Is(err, filerepo.ErrMappingNotFound) {
+				status = http.StatusNotFound
+				code = "MAPPING_NOT_FOUND"
+			}
+			writeError(w, status, code, err.Error())
+			return
+		}
+		d.recordOpsAudit(r, readOperator(r), "UPDATE_MAPPING", map[string]any{"mapping_id": updated.MappingID})
+		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: updated})
+	case http.MethodDelete:
+		if id == "" {
+			writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", "mapping id is required in path")
+			return
+		}
+		if err := d.mappings.Delete(id); err != nil {
+			if errors.Is(err, filerepo.ErrMappingNotFound) {
+				writeError(w, http.StatusNotFound, "MAPPING_NOT_FOUND", err.Error())
+				return
+			}
+			writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", err.Error())
+			return
+		}
+		d.recordOpsAudit(r, readOperator(r), "DELETE_MAPPING", map[string]any{"mapping_id": id})
+		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success"})
+	default:
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
+	}
+}
+
+func (d handlerDeps) listLegacyRoutesFromMappings() []OpsRoute {
+	items := d.mappings.List()
+	legacy := make([]OpsRoute, 0, len(items))
+	for _, item := range items {
+		method := "ANY"
+		if len(item.AllowedMethods) > 0 {
+			method = item.AllowedMethods[0]
+		}
+		legacy = append(legacy, OpsRoute{APICode: item.MappingID, HTTPMethod: method, HTTPPath: item.LocalBasePath, Enabled: item.Enabled})
+	}
+	return legacy
 }
 
 func (d handlerDeps) handleCapacityRecommendation(w http.ResponseWriter, r *http.Request) {

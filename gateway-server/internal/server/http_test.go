@@ -30,6 +30,11 @@ func buildTestHandler(t *testing.T) (http.Handler, repository.TaskRepository, ob
 	if err != nil {
 		t.Fatalf("new node config store failed: %v", err)
 	}
+	mappingStore, err := filerepo.NewTunnelMappingStore(t.TempDir() + "/tunnel_mappings.json")
+	if err != nil {
+		t.Fatalf("new tunnel mapping store failed: %v", err)
+	}
+	_, _ = mappingStore.Create(TunnelMapping{MappingID: "asset.sync", Name: "asset.sync", Enabled: true, PeerNodeID: "peer-legacy", LocalBindIP: "127.0.0.1", LocalBindPort: 18080, LocalBasePath: "/sync", RemoteTargetIP: "127.0.0.1", RemoteTargetPort: 8080, RemoteBasePath: "/sync", AllowedMethods: []string{"POST"}, ConnectTimeoutMS: 500, RequestTimeoutMS: 1000, ResponseTimeoutMS: 1000, MaxRequestBodyBytes: 1024, MaxResponseBodyBytes: 2048})
 	deps := handlerDeps{
 		logger:    observability.NewStructuredLogger(nil),
 		audit:     audit,
@@ -37,6 +42,7 @@ func buildTestHandler(t *testing.T) (http.Handler, repository.TaskRepository, ob
 		engine:    taskengine.NewEngine(repo, service.RetryPolicy{MaxAttempts: 3, BaseBackoff: time.Second}),
 		limits:    OpsLimits{RPS: 100, Burst: 200, MaxConcurrent: 50},
 		routes:    map[string]OpsRoute{"asset.sync": {APICode: "asset.sync", HTTPMethod: "POST", HTTPPath: "/sync", Enabled: true}},
+		mappings:  mappingStore,
 		nodes:     []OpsNode{{NodeID: "n1", Role: "gateway", Status: "ready", Endpoint: "127.0.0.1:18080"}},
 		nodeStore: nodeStore,
 		selfCheckProvider: func(_ context.Context) selfcheck.Report {
@@ -61,6 +67,52 @@ func buildTestHandler(t *testing.T) (http.Handler, repository.TaskRepository, ob
 		},
 	}
 	return newMux(deps), repo, audit
+}
+
+func TestMappingsCRUD(t *testing.T) {
+	h, _, _ := buildTestHandler(t)
+	body := `{"mapping_id":"map-2","name":"orders","enabled":true,"peer_node_id":"peer-b","local_bind_ip":"127.0.0.1","local_bind_port":18090,"local_base_path":"/orders","remote_target_ip":"10.0.0.2","remote_target_port":8090,"remote_base_path":"/api/orders","allowed_methods":["GET","POST"],"connect_timeout_ms":500,"request_timeout_ms":3000,"response_timeout_ms":3000,"max_request_body_bytes":1048576,"max_response_body_bytes":1048576,"description":"orders mapping"}`
+
+	createReq := httptest.NewRequest(http.MethodPost, "/api/mappings", bytes.NewBufferString(body))
+	createRR := httptest.NewRecorder()
+	h.ServeHTTP(createRR, createReq)
+	if createRR.Code != http.StatusCreated {
+		t.Fatalf("create mapping expected 201 got %d body=%s", createRR.Code, createRR.Body.String())
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/mappings", nil)
+	listRR := httptest.NewRecorder()
+	h.ServeHTTP(listRR, listReq)
+	if listRR.Code != http.StatusOK || !strings.Contains(listRR.Body.String(), "map-2") {
+		t.Fatalf("list mappings failed code=%d body=%s", listRR.Code, listRR.Body.String())
+	}
+
+	updateReq := httptest.NewRequest(http.MethodPut, "/api/mappings/map-2", bytes.NewBufferString(strings.ReplaceAll(body, "orders", "orders-v2")))
+	updateRR := httptest.NewRecorder()
+	h.ServeHTTP(updateRR, updateReq)
+	if updateRR.Code != http.StatusOK || !strings.Contains(updateRR.Body.String(), "orders-v2") {
+		t.Fatalf("update mapping failed code=%d body=%s", updateRR.Code, updateRR.Body.String())
+	}
+
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/mappings/map-2", nil)
+	deleteRR := httptest.NewRecorder()
+	h.ServeHTTP(deleteRR, deleteReq)
+	if deleteRR.Code != http.StatusOK {
+		t.Fatalf("delete mapping expected 200 got %d body=%s", deleteRR.Code, deleteRR.Body.String())
+	}
+}
+
+func TestRoutesDeprecatedCompatibility(t *testing.T) {
+	h, _, _ := buildTestHandler(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/routes", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if rr.Header().Get("Deprecation") != "true" {
+		t.Fatalf("expected deprecation header")
+	}
 }
 
 func TestHealthz(t *testing.T) {

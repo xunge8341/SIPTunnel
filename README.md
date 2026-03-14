@@ -123,7 +123,9 @@ $env:VITE_API_BASE_URL='http://127.0.0.1:18080/api'
 页面将直接调用后端运维接口：
 
 - `GET/PUT /api/limits`
-- `GET/PUT /api/routes`
+- `GET/POST /api/mappings`
+- `PUT/DELETE /api/mappings/{mapping_id}`
+- `GET/PUT /api/routes`（**deprecated**，仅兼容旧版 `OpsRoute/RouteConfig`）
 - `GET /api/tasks`
 - `GET /api/tasks/{id}`
 - `GET /api/audits`
