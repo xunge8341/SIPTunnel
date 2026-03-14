@@ -50,6 +50,14 @@ func (s *NodeConfigStore) UpdateLocalNode(local nodeconfig.LocalNodeConfig) (nod
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	for _, peer := range s.data.Peers {
+		if !peer.Enabled {
+			continue
+		}
+		if peer.SupportedNetworkMode.Normalize() != local.NetworkMode.Normalize() {
+			return nodeconfig.LocalNodeConfig{}, fmt.Errorf("local network_mode %s is incompatible with enabled peer %s mode %s", local.NetworkMode.Normalize(), peer.PeerNodeID, peer.SupportedNetworkMode.Normalize())
+		}
+	}
 	s.data.LocalNode = local
 	if err := s.persistLocked(); err != nil {
 		return nodeconfig.LocalNodeConfig{}, err
@@ -77,6 +85,9 @@ func (s *NodeConfigStore) CreatePeer(peer nodeconfig.PeerNodeConfig) (nodeconfig
 			return nodeconfig.PeerNodeConfig{}, ErrPeerAlreadyExists
 		}
 	}
+	if peer.Enabled && peer.SupportedNetworkMode.Normalize() != s.data.LocalNode.NetworkMode.Normalize() {
+		return nodeconfig.PeerNodeConfig{}, fmt.Errorf("peer supported_network_mode %s is incompatible with local network_mode %s", peer.SupportedNetworkMode.Normalize(), s.data.LocalNode.NetworkMode.Normalize())
+	}
 	s.data.Peers = append(s.data.Peers, peer)
 	if err := s.persistLocked(); err != nil {
 		return nodeconfig.PeerNodeConfig{}, err
@@ -93,6 +104,9 @@ func (s *NodeConfigStore) UpdatePeer(peer nodeconfig.PeerNodeConfig) (nodeconfig
 	defer s.mu.Unlock()
 	for i, item := range s.data.Peers {
 		if item.PeerNodeID == peer.PeerNodeID {
+			if peer.Enabled && peer.SupportedNetworkMode.Normalize() != s.data.LocalNode.NetworkMode.Normalize() {
+				return nodeconfig.PeerNodeConfig{}, fmt.Errorf("peer supported_network_mode %s is incompatible with local network_mode %s", peer.SupportedNetworkMode.Normalize(), s.data.LocalNode.NetworkMode.Normalize())
+			}
 			s.data.Peers[i] = peer
 			if err := s.persistLocked(); err != nil {
 				return nodeconfig.PeerNodeConfig{}, err

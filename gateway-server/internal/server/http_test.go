@@ -183,6 +183,9 @@ func TestNodeNetworkStatusEndpointAndAudit(t *testing.T) {
 	if payload.Code != "OK" {
 		t.Fatalf("unexpected code: %s", payload.Code)
 	}
+	if payload.Data.CurrentNetworkMode != config.NetworkModeAToBSIPBToARTP || payload.Data.CompatibilityStatus.Level == "" {
+		t.Fatalf("compatibility fields missing in network status: %+v", payload.Data)
+	}
 	if payload.Data.SIP.ListenIP != "10.10.1.10" || payload.Data.RTP.AvailablePorts != 15 || payload.Data.RTP.PortAllocFailTotal != 2 {
 		t.Fatalf("unexpected network status payload: %+v", payload.Data)
 	}
@@ -242,6 +245,9 @@ func TestSelfCheckEndpoint(t *testing.T) {
 	}
 	if !strings.Contains(rr.Body.String(), "sample") {
 		t.Fatalf("unexpected body: %s", rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "local_node_config_valid") || !strings.Contains(rr.Body.String(), "peer_node_config_valid") || !strings.Contains(rr.Body.String(), "network_mode_compatibility") {
+		t.Fatalf("expected compatibility items in selfcheck: %s", rr.Body.String())
 	}
 }
 
@@ -399,6 +405,9 @@ func TestNodeAndPeerEndpoints(t *testing.T) {
 	if getNodeRR.Code != http.StatusOK {
 		t.Fatalf("GET /api/node expected 200 got %d body=%s", getNodeRR.Code, getNodeRR.Body.String())
 	}
+	if !strings.Contains(getNodeRR.Body.String(), "current_network_mode") || !strings.Contains(getNodeRR.Body.String(), "compatibility_status") {
+		t.Fatalf("GET /api/node missing compatibility fields: %s", getNodeRR.Body.String())
+	}
 
 	putNodeBody := `{"node_id":"gateway-a-01","node_name":"Gateway-A-Updated","node_role":"gateway","network_mode":"A_TO_B_SIP__B_TO_A_RTP","sip_listen_ip":"10.10.1.10","sip_listen_port":5060,"sip_transport":"TCP","rtp_listen_ip":"10.10.1.10","rtp_port_start":30000,"rtp_port_end":30100,"rtp_transport":"UDP"}`
 	putNode := httptest.NewRequest(http.MethodPut, "/api/node", bytes.NewBufferString(putNodeBody))
@@ -408,6 +417,13 @@ func TestNodeAndPeerEndpoints(t *testing.T) {
 		t.Fatalf("PUT /api/node expected 200 got %d body=%s", putNodeRR.Code, putNodeRR.Body.String())
 	}
 
+	incompatiblePeerBody := `{"peer_node_id":"peer-b-bad","peer_name":"Peer B Bad","peer_signaling_ip":"10.20.0.20","peer_signaling_port":5060,"peer_media_ip":"10.20.0.20","peer_media_port_start":32000,"peer_media_port_end":32100,"supported_network_mode":"A_B_BIDIR_SIP__BIDIR_RTP","enabled":true}`
+	incompatiblePeer := httptest.NewRequest(http.MethodPost, "/api/peers", bytes.NewBufferString(incompatiblePeerBody))
+	incompatiblePeerRR := httptest.NewRecorder()
+	h.ServeHTTP(incompatiblePeerRR, incompatiblePeer)
+	if incompatiblePeerRR.Code != http.StatusBadRequest {
+		t.Fatalf("POST /api/peers incompatible expected 400 got %d body=%s", incompatiblePeerRR.Code, incompatiblePeerRR.Body.String())
+	}
 	createPeerBody := `{"peer_node_id":"peer-b-01","peer_name":"Peer B","peer_signaling_ip":"10.20.0.20","peer_signaling_port":5060,"peer_media_ip":"10.20.0.20","peer_media_port_start":32000,"peer_media_port_end":32100,"supported_network_mode":"A_TO_B_SIP__B_TO_A_RTP","enabled":true}`
 	createPeer := httptest.NewRequest(http.MethodPost, "/api/peers", bytes.NewBufferString(createPeerBody))
 	createPeerRR := httptest.NewRecorder()
@@ -480,5 +496,18 @@ func TestNodePeerPersistenceAcrossHandlerRestart(t *testing.T) {
 	h2.ServeHTTP(rrPeers, httptest.NewRequest(http.MethodGet, "/api/peers", nil))
 	if rrPeers.Code != http.StatusOK || !strings.Contains(rrPeers.Body.String(), "persist-peer") {
 		t.Fatalf("persisted peers not found code=%d body=%s", rrPeers.Code, rrPeers.Body.String())
+	}
+}
+
+func TestStartupSummaryIncludesCompatibilityFields(t *testing.T) {
+	h, _, _ := buildTestHandler(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/startup-summary", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "current_network_mode") || !strings.Contains(rr.Body.String(), "compatibility_status") {
+		t.Fatalf("startup summary missing compatibility fields: %s", rr.Body.String())
 	}
 }

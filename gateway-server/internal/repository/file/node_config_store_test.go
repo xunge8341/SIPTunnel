@@ -81,3 +81,37 @@ func TestNodeConfigStorePeerCRUD(t *testing.T) {
 		t.Fatalf("expected not found, got %v", err)
 	}
 }
+
+func TestNodeConfigStoreRejectIncompatiblePeerAndLocalMode(t *testing.T) {
+	store, err := NewNodeConfigStore(filepath.Join(t.TempDir(), "node_config.json"))
+	if err != nil {
+		t.Fatalf("new store failed: %v", err)
+	}
+	peer := nodeconfig.PeerNodeConfig{
+		PeerNodeID:           "peer-incompatible",
+		PeerName:             "Peer Incompatible",
+		PeerSignalingIP:      "10.0.0.3",
+		PeerSignalingPort:    5060,
+		PeerMediaIP:          "10.0.0.3",
+		PeerMediaPortStart:   30000,
+		PeerMediaPortEnd:     30020,
+		SupportedNetworkMode: config.NetworkModeABBiDirSIPBiDirRTP,
+		Enabled:              true,
+	}
+	if _, err := store.CreatePeer(peer); err == nil {
+		t.Fatalf("expected incompatible peer error")
+	}
+
+	okPeer := peer
+	okPeer.PeerNodeID = "peer-ok"
+	okPeer.SupportedNetworkMode = config.NetworkModeAToBSIPBToARTP
+	if _, err := store.CreatePeer(okPeer); err != nil {
+		t.Fatalf("create compatible peer failed: %v", err)
+	}
+
+	local := nodeconfig.DefaultLocalNodeConfig()
+	local.NetworkMode = config.NetworkModeABBiDirSIPBiDirRTP
+	if _, err := store.UpdateLocalNode(local); err == nil {
+		t.Fatalf("expected local mode incompatibility error")
+	}
+}
