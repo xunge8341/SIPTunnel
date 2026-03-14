@@ -115,3 +115,42 @@ HTTP 映射隧道模式采用明确的双节点协作模型：
   - 在同一策略接口下扩展 SIP 元信息、RTP 大载荷、流式响应回传。
 
 该分层确保：当前版本可直接运行，同时不破坏后续 Invite + SIP/RTP 承载主链路的接入方式。
+
+## 8. 新增：映射 ID 自增与配置持久化
+
+- 映射创建时 `mapping_id` 支持由后端自动分配（数值自增），前端创建表单不再要求手填。
+- 自增游标与映射列表一起持久化在 `data/final/tunnel_mappings.json` 的 `cursor` 字段。
+- 启动时自动加载映射与游标；若文件损坏，服务会在初始化时输出 `decode mapping store` 错误日志，便于快速恢复。
+- 运行时瞬态状态（如 active forwarding 计数）不会落盘。
+
+## 9. 新增：心跳与会话保活
+
+- 心跳调度由 `tunnel_session_manager` 统一执行，支持：
+  - `heartbeat_interval_sec`
+  - `register_retry_count`
+  - `register_retry_interval_sec`
+- 连续心跳失败会累计 `consecutive_heartbeat_timeout`，并驱动重注册。
+- UI 在“隧道配置”页展示：
+  - 心跳状态
+  - 最近心跳时间
+  - 连续超时计数
+  - 手动“发送一次心跳”
+
+## 10. 新增：SIP/RTP / 映射运行日志要求
+
+- 会话日志：
+  - `REGISTER`（注册成功/失败/401）
+  - `MESSAGE`（心跳成功/超时）
+  - 包含 `session_id`、状态码/结果、耗时。
+- 映射运行日志：
+  - 每次转发生成 `request_id`
+  - 日志包含 `mapping_id`、upstream/downstream 方向、错误原因、耗时。
+- 映射状态机统一收敛为：`listening / forwarding / degraded / interrupted`（含 disabled、start_failed）。
+
+## 11. 映射“有监听无响应”修复说明
+
+当前 runtime 已补齐转发闭环：
+
+`HTTP request -> mapping runtime -> forward target -> return response`
+
+并在失败分支给出可观测错误（prepare / upstream forward / downstream writeback）。
