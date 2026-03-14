@@ -190,12 +190,23 @@ type NodeConfigPayload struct {
 }
 
 type TunnelConfigPayload struct {
-	ChannelProtocol string                  `json:"channel_protocol"`
-	RequestChannel  string                  `json:"request_channel"`
-	ResponseChannel string                  `json:"response_channel"`
-	NetworkMode     config.NetworkMode      `json:"network_mode"`
-	Capability      config.Capability       `json:"capability"`
-	CapabilityItems []config.CapabilityItem `json:"capability_items"`
+	ChannelProtocol          string                  `json:"channel_protocol"`
+	ConnectionInitiator      string                  `json:"connection_initiator"`
+	LocalDeviceID            string                  `json:"local_device_id"`
+	PeerDeviceID             string                  `json:"peer_device_id"`
+	HeartbeatIntervalSec     int                     `json:"heartbeat_interval_sec"`
+	RegisterRetryCount       int                     `json:"register_retry_count"`
+	RegisterRetryIntervalSec int                     `json:"register_retry_interval_sec"`
+	RegistrationStatus       string                  `json:"registration_status"`
+	LastRegisterTime         string                  `json:"last_register_time"`
+	LastHeartbeatTime        string                  `json:"last_heartbeat_time"`
+	HeartbeatStatus          string                  `json:"heartbeat_status"`
+	SupportedCapabilities    []string                `json:"supported_capabilities"`
+	RequestChannel           string                  `json:"request_channel"`
+	ResponseChannel          string                  `json:"response_channel"`
+	NetworkMode              config.NetworkMode      `json:"network_mode"`
+	Capability               config.Capability       `json:"capability"`
+	CapabilityItems          []config.CapabilityItem `json:"capability_items"`
 }
 
 type SIPNetworkStatus struct {
@@ -1282,41 +1293,111 @@ func (d handlerDeps) handleNodeConfig(w http.ResponseWriter, r *http.Request) {
 func defaultTunnelConfigPayload(mode config.NetworkMode) TunnelConfigPayload {
 	normalized := mode.Normalize()
 	capability := config.DeriveCapability(normalized)
+	now := time.Now().UTC().Format(time.RFC3339)
 	return TunnelConfigPayload{
-		ChannelProtocol: "GB28181",
-		RequestChannel:  "SIP",
-		ResponseChannel: "RTP",
-		NetworkMode:     normalized,
-		Capability:      capability,
-		CapabilityItems: capability.Matrix(),
+		ChannelProtocol:          "GB/T 28181",
+		ConnectionInitiator:      "LOCAL",
+		LocalDeviceID:            "gateway-local",
+		PeerDeviceID:             "gateway-peer",
+		HeartbeatIntervalSec:     60,
+		RegisterRetryCount:       3,
+		RegisterRetryIntervalSec: 10,
+		RegistrationStatus:       "unregistered",
+		LastRegisterTime:         "",
+		LastHeartbeatTime:        now,
+		HeartbeatStatus:          "unknown",
+		SupportedCapabilities:    capabilityDescriptions(capability),
+		RequestChannel:           "SIP",
+		ResponseChannel:          "RTP",
+		NetworkMode:              normalized,
+		Capability:               capability,
+		CapabilityItems:          capability.Matrix(),
 	}
+}
+
+func capabilityDescriptions(capability config.Capability) []string {
+	desc := make([]string, 0, 6)
+	if capability.SupportsSmallRequestBody {
+		desc = append(desc, "支持小请求体（典型 SIP JSON 负载）")
+	}
+	if capability.SupportsLargeRequestBody {
+		desc = append(desc, "支持大请求体上传")
+	}
+	if capability.SupportsLargeResponseBody {
+		desc = append(desc, "支持大响应体回传")
+	}
+	if capability.SupportsStreamingResponse {
+		desc = append(desc, "支持流式响应")
+	}
+	if capability.SupportsBidirectionalHTTPTunnel {
+		desc = append(desc, "支持双向 HTTP 隧道")
+	}
+	if capability.SupportsTransparentHTTPProxy {
+		desc = append(desc, "支持透明代理")
+	}
+	if len(desc) == 0 {
+		desc = append(desc, "当前网络模式下暂无可用扩展能力")
+	}
+	return desc
 }
 
 func (d *handlerDeps) upsertTunnelConfig(req TunnelConfigPayload) (TunnelConfigPayload, error) {
 	channelProtocol := strings.ToUpper(strings.TrimSpace(req.ChannelProtocol))
-	requestChannel := strings.ToUpper(strings.TrimSpace(req.RequestChannel))
-	responseChannel := strings.ToUpper(strings.TrimSpace(req.ResponseChannel))
+	connectionInitiator := strings.ToUpper(strings.TrimSpace(req.ConnectionInitiator))
+	localDeviceID := strings.TrimSpace(req.LocalDeviceID)
+	peerDeviceID := strings.TrimSpace(req.PeerDeviceID)
 	if channelProtocol == "" {
 		return TunnelConfigPayload{}, fmt.Errorf("channel_protocol is required")
 	}
-	if requestChannel == "" {
-		return TunnelConfigPayload{}, fmt.Errorf("request_channel is required")
+	if connectionInitiator != "LOCAL" && connectionInitiator != "PEER" {
+		return TunnelConfigPayload{}, fmt.Errorf("connection_initiator must be LOCAL or PEER")
 	}
-	if responseChannel == "" {
-		return TunnelConfigPayload{}, fmt.Errorf("response_channel is required")
+	if localDeviceID == "" {
+		return TunnelConfigPayload{}, fmt.Errorf("local_device_id is required")
+	}
+	if peerDeviceID == "" {
+		return TunnelConfigPayload{}, fmt.Errorf("peer_device_id is required")
+	}
+	if req.HeartbeatIntervalSec <= 0 {
+		return TunnelConfigPayload{}, fmt.Errorf("heartbeat_interval_sec must be greater than 0")
+	}
+	if req.RegisterRetryCount < 0 {
+		return TunnelConfigPayload{}, fmt.Errorf("register_retry_count must be greater than or equal to 0")
+	}
+	if req.RegisterRetryIntervalSec <= 0 {
+		return TunnelConfigPayload{}, fmt.Errorf("register_retry_interval_sec must be greater than 0")
 	}
 	mode := req.NetworkMode.Normalize()
 	if err := mode.Validate(); err != nil {
 		return TunnelConfigPayload{}, err
 	}
 	capability := config.DeriveCapability(mode)
+	registrationStatus := strings.ToLower(strings.TrimSpace(req.RegistrationStatus))
+	if registrationStatus == "" {
+		registrationStatus = "unregistered"
+	}
+	heartbeatStatus := strings.ToLower(strings.TrimSpace(req.HeartbeatStatus))
+	if heartbeatStatus == "" {
+		heartbeatStatus = "unknown"
+	}
 	updated := TunnelConfigPayload{
-		ChannelProtocol: channelProtocol,
-		RequestChannel:  requestChannel,
-		ResponseChannel: responseChannel,
-		NetworkMode:     mode,
-		Capability:      capability,
-		CapabilityItems: capability.Matrix(),
+		ChannelProtocol:          channelProtocol,
+		ConnectionInitiator:      connectionInitiator,
+		LocalDeviceID:            localDeviceID,
+		PeerDeviceID:             peerDeviceID,
+		HeartbeatIntervalSec:     req.HeartbeatIntervalSec,
+		RegisterRetryCount:       req.RegisterRetryCount,
+		RegisterRetryIntervalSec: req.RegisterRetryIntervalSec,
+		RegistrationStatus:       registrationStatus,
+		LastRegisterTime:         req.LastRegisterTime,
+		LastHeartbeatTime:        req.LastHeartbeatTime,
+		HeartbeatStatus:          heartbeatStatus,
+		SupportedCapabilities:    capabilityDescriptions(capability),
+		RequestChannel:           "SIP",
+		ResponseChannel:          "RTP",
+		NetworkMode:              mode,
+		Capability:               capability,
+		CapabilityItems:          capability.Matrix(),
 	}
 	d.mu.Lock()
 	d.tunnelConfig = updated

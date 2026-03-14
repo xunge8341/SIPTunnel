@@ -772,7 +772,7 @@ func TestTunnelConfigEndpointGetAndPost(t *testing.T) {
 		t.Fatalf("GET /api/tunnel/config failed code=%d body=%s", getRR.Code, getRR.Body.String())
 	}
 
-	postBody := `{"channel_protocol":"GB28181","request_channel":"SIP","response_channel":"RTP","network_mode":"A_B_BIDIR_SIP__BIDIR_RTP"}`
+	postBody := `{"channel_protocol":"GB/T 28181","connection_initiator":"LOCAL","local_device_id":"gateway-a-001","peer_device_id":"gateway-b-001","heartbeat_interval_sec":30,"register_retry_count":5,"register_retry_interval_sec":10,"registration_status":"registered","last_register_time":"2026-01-01T10:00:00Z","last_heartbeat_time":"2026-01-01T10:00:30Z","heartbeat_status":"healthy","network_mode":"A_B_BIDIR_SIP__BIDIR_RTP"}`
 	postReq := httptest.NewRequest(http.MethodPost, "/api/tunnel/config", bytes.NewBufferString(postBody))
 	postRR := httptest.NewRecorder()
 	h.ServeHTTP(postRR, postReq)

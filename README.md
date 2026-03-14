@@ -831,6 +831,7 @@ cd gateway-ui && npm run test -- --run
 - 限流策略：在线查看/更新全局限流（变更前后请执行 `docs/runbook.md` 的链路自检）
 - 映射规则：按 TunnelMapping 编辑核心业务映射（不在页面逐条编辑 transport，发布/回滚流程见 `docs/operations.md`）
 - 本端节点配置：集中维护 `node_id/node_name/node_role/network_mode` 与 SIP/RTP 监听参数，并展示当前 NetworkMode/Capability 摘要。
+- 通道配置：以 GB/T 28181 注册与心跳为核心，维护连接发起方、设备编号、心跳间隔、注册重试策略，并只读展示当前注册/心跳状态与最近时间。
 - 对端节点配置：维护 peer signaling/media 地址范围、`supported_network_mode` 与启停状态，支持增删改查。
 - 审计日志：查询与详情查看（升级研发前需附带审计与诊断信息）
 

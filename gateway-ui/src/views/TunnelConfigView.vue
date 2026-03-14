@@ -1,28 +1,55 @@
 <template>
   <a-space direction="vertical" size="middle" style="width: 100%">
-    <a-card title="通道配置">
+    <a-card title="通道配置（GB/T 28181 注册与心跳）">
       <a-form layout="vertical">
         <a-row :gutter="12">
-          <a-col :span="12">
+          <a-col :span="8">
             <a-form-item label="通道协议">
-              <a-select v-model:value="draft.channel_protocol" :options="channelProtocolOptions" />
+              <a-input :value="draft.channel_protocol" disabled />
             </a-form-item>
           </a-col>
-          <a-col :span="12">
-            <a-form-item label="网络模式">
-              <a-select v-model:value="draft.network_mode" :options="networkModeOptions" />
+          <a-col :span="8">
+            <a-form-item label="连接发起方">
+              <a-radio-group v-model:value="draft.connection_initiator">
+                <a-radio-button value="LOCAL">本端</a-radio-button>
+                <a-radio-button value="PEER">对端</a-radio-button>
+              </a-radio-group>
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="网络模式（只读）">
+              <a-input :value="networkModeLabel" disabled />
             </a-form-item>
           </a-col>
         </a-row>
+
         <a-row :gutter="12">
           <a-col :span="12">
-            <a-form-item label="请求通道">
-              <a-select v-model:value="draft.request_channel" :options="channelOptions" />
+            <a-form-item label="本端设备编号">
+              <a-input v-model:value="draft.local_device_id" placeholder="例如：34020000001320000001" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="响应通道">
-              <a-select v-model:value="draft.response_channel" :options="channelOptions" />
+            <a-form-item label="对端设备编号">
+              <a-input v-model:value="draft.peer_device_id" placeholder="例如：34020000002000000001" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+
+        <a-row :gutter="12">
+          <a-col :span="8">
+            <a-form-item label="心跳间隔（秒）">
+              <a-input-number v-model:value="draft.heartbeat_interval_sec" :min="1" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="注册重试次数">
+              <a-input-number v-model:value="draft.register_retry_count" :min="0" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item label="注册重试间隔（秒）">
+              <a-input-number v-model:value="draft.register_retry_interval_sec" :min="1" style="width: 100%" />
             </a-form-item>
           </a-col>
         </a-row>
@@ -33,69 +60,104 @@
       </a-space>
     </a-card>
 
-    <a-card title="能力矩阵（自动生成）">
-      <a-alert type="info" show-icon message="当通道或网络模式变化时，能力矩阵会自动刷新。" style="margin-bottom: 12px" />
-      <a-table :data-source="capabilityRows" :pagination="false" row-key="key" size="small">
-        <a-table-column title="能力项" data-index="key" key="key" />
-        <a-table-column title="支持" key="supported" width="120">
-          <template #default="{ record }">
-            <a-tag :color="record.supported ? 'green' : 'red'">{{ record.supported ? '支持' : '不支持' }}</a-tag>
-          </template>
-        </a-table-column>
-        <a-table-column title="说明" data-index="description" key="description" />
-      </a-table>
+    <a-card title="注册与心跳状态（只读）">
+      <a-row :gutter="12">
+        <a-col :span="8">
+          <a-statistic title="当前注册状态" :value="formatRegistrationStatus(draft.registration_status)" />
+        </a-col>
+        <a-col :span="8">
+          <a-statistic title="最近注册时间" :value="formatDateTime(draft.last_register_time)" />
+        </a-col>
+        <a-col :span="8">
+          <a-statistic title="最近心跳时间" :value="formatDateTime(draft.last_heartbeat_time)" />
+        </a-col>
+      </a-row>
+      <a-row :gutter="12" style="margin-top: 12px">
+        <a-col :span="8">
+          <a-form-item label="心跳状态">
+            <a-tag :color="heartbeatTagColor">{{ formatHeartbeatStatus(draft.heartbeat_status) }}</a-tag>
+          </a-form-item>
+        </a-col>
+        <a-col :span="16">
+          <a-form-item label="当前支持能力">
+            <a-space wrap>
+              <a-tag v-for="item in draft.supported_capabilities" :key="item" color="blue">{{ item }}</a-tag>
+            </a-space>
+          </a-form-item>
+        </a-col>
+      </a-row>
+      <a-alert
+        type="info"
+        show-icon
+        message="SIP 请求通道与 RTP 响应通道已由系统自动推导，无需运维单独编辑。"
+      />
     </a-card>
   </a-space>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { gatewayApi } from '../api/gateway'
 import type { TunnelConfigPayload } from '../types/gateway'
-import { buildTunnelCapabilityItems, deriveTunnelCapability } from '../utils/tunnelConfig'
+import { deriveTunnelCapability } from '../utils/tunnelConfig'
 
 const saving = ref(false)
 
-const channelProtocolOptions = [{ label: 'GB28181', value: 'GB28181' }]
-const channelOptions = [
-  { label: 'SIP', value: 'SIP' },
-  { label: 'RTP', value: 'RTP' },
-  { label: 'HTTP', value: 'HTTP' }
-]
-const networkModeOptions = [
-  { label: 'A 到 B 单向 SIP，B 到 A 单向 RTP', value: 'A_TO_B_SIP__B_TO_A_RTP' },
-  { label: 'A 与 B 双向 SIP + 双向 RTP', value: 'A_B_BIDIR_SIP__BIDIR_RTP' },
-  { label: 'A 与 B 双向 SIP，B 到 A 单向 RTP', value: 'A_B_BIDIR_SIP__B_TO_A_RTP' }
-]
+const networkModeLabels: Record<string, string> = {
+  A_TO_B_SIP__B_TO_A_RTP: 'A 到 B 单向 SIP，B 到 A 单向 RTP',
+  A_B_BIDIR_SIP__BIDIR_RTP: 'A 与 B 双向 SIP + 双向 RTP',
+  A_B_BIDIR_SIP__B_TO_A_RTP: 'A 与 B 双向 SIP，B 到 A 单向 RTP'
+}
 
 const draft = reactive<TunnelConfigPayload>({
-  channel_protocol: 'GB28181',
+  channel_protocol: 'GB/T 28181',
+  connection_initiator: 'LOCAL',
+  local_device_id: '',
+  peer_device_id: '',
+  heartbeat_interval_sec: 60,
+  register_retry_count: 3,
+  register_retry_interval_sec: 10,
+  registration_status: 'unregistered',
+  last_register_time: '',
+  last_heartbeat_time: '',
+  heartbeat_status: 'unknown',
+  supported_capabilities: [],
   request_channel: 'SIP',
   response_channel: 'RTP',
   network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
-  capability: {
-    supports_small_request_body: true,
-    supports_large_request_body: false,
-    supports_large_response_body: true,
-    supports_streaming_response: true,
-    supports_bidirectional_http_tunnel: false,
-    supports_transparent_http_proxy: false
-  },
+  capability: deriveTunnelCapability({ network_mode: 'A_TO_B_SIP__B_TO_A_RTP' }),
   capability_items: []
 })
 
-watch(
-  () => [draft.channel_protocol, draft.request_channel, draft.response_channel, draft.network_mode],
-  () => {
-    const capability = deriveTunnelCapability(draft)
-    draft.capability = capability
-    draft.capability_items = buildTunnelCapabilityItems(capability)
-  },
-  { immediate: true }
-)
+const heartbeatTagColor = computed(() => {
+  if (draft.heartbeat_status === 'healthy') return 'green'
+  if (draft.heartbeat_status === 'timeout') return 'red'
+  return 'default'
+})
 
-const capabilityRows = computed(() => draft.capability_items)
+const networkModeLabel = computed(() => networkModeLabels[draft.network_mode] ?? draft.network_mode)
+
+const formatDateTime = (value: string) => {
+  if (!value) return '暂无'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`
+}
+
+const formatRegistrationStatus = (status: string) => {
+  if (status === 'registered') return '已注册'
+  if (status === 'registering') return '注册中'
+  if (status === 'failed') return '注册失败'
+  return '未注册'
+}
+
+const formatHeartbeatStatus = (status: string) => {
+  if (status === 'healthy') return '正常'
+  if (status === 'timeout') return '超时'
+  if (status === 'lost') return '丢失'
+  return '未知'
+}
 
 const load = async () => {
   const data = await gatewayApi.fetchTunnelConfig()
@@ -105,14 +167,8 @@ const load = async () => {
 const save = async () => {
   saving.value = true
   try {
-    const capability = deriveTunnelCapability(draft)
-    const payload: TunnelConfigPayload = {
-      ...JSON.parse(JSON.stringify(draft)),
-      capability,
-      capability_items: buildTunnelCapabilityItems(capability)
-    }
-    await gatewayApi.saveTunnelConfig(payload)
-    message.success('通道配置保存成功，能力矩阵已更新')
+    await gatewayApi.saveTunnelConfig(JSON.parse(JSON.stringify(draft)))
+    message.success('GB/T 28181 注册与心跳配置保存成功')
     await load()
   } finally {
     saving.value = false
