@@ -38,7 +38,8 @@ SIPTunnel 同时支持两种产品模式，文档与 UI 必须明确区分：
 - `name`、`peer_node_id`、`allowed_methods` 为兼容字段：
   - UI 不再展示/编辑；
   - `allowed_methods` 由系统内部默认写入 `[*]`（全部允许）；
-  - `name`、`peer_node_id` 不再作为映射编辑必填项。
+  - `name`、`peer_node_id` 不再作为映射编辑必填项；
+  - `peer_node_id` 在后端按“唯一启用对端节点”自动绑定：无对端或多对端冲突时，映射保存会返回明确错误。
 
 ## 如何启动
 

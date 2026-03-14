@@ -47,6 +47,23 @@
       </a-table>
     </a-card>
 
+    <a-card title="当前绑定对端（只读）">
+      <a-alert
+        v-if="mappingBindingError"
+        type="error"
+        show-icon
+        :message="mappingBindingError"
+        description="映射规则当前按单对单模式运行：必须且仅能有一个启用的对端节点。"
+        style="margin-bottom: 12px"
+      />
+      <a-descriptions bordered :column="2" size="small">
+        <a-descriptions-item label="peer_node_id">{{ boundPeer?.peer_node_id ?? '-' }}</a-descriptions-item>
+        <a-descriptions-item label="peer_name">{{ boundPeer?.peer_name ?? '-' }}</a-descriptions-item>
+        <a-descriptions-item label="peer_signaling">{{ boundPeerEndpoint }}</a-descriptions-item>
+        <a-descriptions-item label="映射绑定策略">映射规则自动绑定唯一启用对端（不可编辑）</a-descriptions-item>
+      </a-descriptions>
+    </a-card>
+
     <a-card title="映射规则列表">
       <a-alert
         v-if="mappingTestResult"
@@ -144,7 +161,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { gatewayApi } from '../api/gateway'
-import type { CapabilityItem, MappingTestPayload, StartupSummaryPayload, TunnelMapping } from '../types/gateway'
+import type { CapabilityItem, MappingTestPayload, PeerBinding, StartupSummaryPayload, TunnelMapping } from '../types/gateway'
 import { buildCapabilityMatrix, evaluateMappingCapability } from '../utils/capability'
 
 const keyword = ref('')
@@ -152,6 +169,8 @@ const drawerVisible = ref(false)
 const editingMode = ref<'create' | 'edit'>('create')
 const mappings = ref<TunnelMapping[]>([])
 const warnings = ref<string[]>([])
+const boundPeer = ref<PeerBinding>()
+const mappingBindingError = ref('')
 const startupSummary = ref<StartupSummaryPayload>()
 const testingMapping = ref(false)
 const mappingTestResult = ref<MappingTestPayload>()
@@ -195,6 +214,11 @@ const capabilityMatrix = computed<CapabilityItem[]>(() => {
 })
 
 const editorCapabilityEvaluation = computed(() => evaluateMappingCapability(editing, startupSummary.value))
+
+const boundPeerEndpoint = computed(() => {
+  if (!boundPeer.value?.peer_signaling_ip || !boundPeer.value?.peer_signaling_port) return '-'
+  return `${boundPeer.value.peer_signaling_ip}:${boundPeer.value.peer_signaling_port}`
+})
 const editorBlockingIssues = computed(() => editorCapabilityEvaluation.value.blockingIssues)
 const editorAdvisoryWarnings = computed(() => editorCapabilityEvaluation.value.advisoryWarnings)
 
@@ -237,6 +261,8 @@ const loadMappings = async () => {
   const result = await gatewayApi.fetchMappings()
   mappings.value = result.items
   warnings.value = result.warnings ?? []
+  boundPeer.value = result.bound_peer
+  mappingBindingError.value = result.binding_error ?? ''
 }
 
 const loadReadonlyContext = async () => {
@@ -260,6 +286,10 @@ const runMappingTest = async () => {
 const save = async () => {
   if (editorBlockingIssues.value.length > 0) {
     message.error(editorBlockingIssues.value.join('；'))
+    return
+  }
+  if (mappingBindingError.value) {
+    message.error(mappingBindingError.value)
     return
   }
   const payload: TunnelMapping = {

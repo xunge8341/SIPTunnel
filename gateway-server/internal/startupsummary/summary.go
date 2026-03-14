@@ -15,6 +15,8 @@ type Summary struct {
 	Capability          config.Capability          `json:"capability"`
 	CapabilitySummary   CapabilitySummary          `json:"capability_summary"`
 	TransportPlan       config.TunnelTransportPlan `json:"transport_plan"`
+	BoundPeer           *PeerBinding               `json:"bound_peer,omitempty"`
+	PeerBindingError    string                     `json:"peer_binding_error,omitempty"`
 	CurrentNetworkMode  config.NetworkMode         `json:"current_network_mode,omitempty"`
 	CurrentCapability   config.Capability          `json:"current_capability,omitempty"`
 	CompatibilityStatus nodeconfig.CheckResult     `json:"compatibility_status,omitempty"`
@@ -32,6 +34,13 @@ type Summary struct {
 	BusinessExecution   BusinessExecutionStatus    `json:"business_execution"`
 	SelfCheckSummary    SelfCheckSummary           `json:"self_check_summary"`
 	DataSources         DataSources                `json:"data_sources"`
+}
+
+type PeerBinding struct {
+	PeerNodeID        string `json:"peer_node_id"`
+	PeerName          string `json:"peer_name"`
+	PeerSignalingIP   string `json:"peer_signaling_ip"`
+	PeerSignalingPort int    `json:"peer_signaling_port"`
 }
 
 type DataSources struct {

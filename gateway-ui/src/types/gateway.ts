@@ -70,9 +70,19 @@ export interface TunnelTransportPlan {
   warnings: string[]
 }
 
+
+export interface PeerBinding {
+  peer_node_id: string
+  peer_name?: string
+  peer_signaling_ip?: string
+  peer_signaling_port?: number
+}
+
 export interface StartupSummaryPayload {
   node_id: string
   network_mode: string
+  bound_peer?: PeerBinding
+  peer_binding_error?: string
   capability: Capability
   capability_summary: CapabilitySummary
   config_path: string
@@ -103,6 +113,8 @@ export interface SystemStatusPayload {
   tunnel_status: 'connected' | 'disconnected' | 'degraded'
   connection_reason: string
   network_mode: string
+  bound_peer?: PeerBinding
+  peer_binding_error?: string
   capability: SystemStatusCapability
 }
 
@@ -261,6 +273,8 @@ export interface TunnelMapping {
 
 export interface TunnelMappingListPayload {
   items: TunnelMapping[]
+  bound_peer?: PeerBinding
+  binding_error?: string
   warnings?: string[]
 }
 
@@ -367,6 +381,8 @@ export interface NodeNetworkStatusPayload {
   current_capability: Capability
   compatibility_status: NodeConfigCheckResult
   capability_summary: CapabilitySummary
+  bound_peer?: PeerBinding
+  peer_binding_error?: string
 }
 
 
