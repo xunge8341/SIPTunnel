@@ -11,6 +11,8 @@ import FileTasksView from '../views/FileTasksView.vue'
 import TaskDetailView from '../views/TaskDetailView.vue'
 import NetworkConfigView from '../views/NetworkConfigView.vue'
 import ConfigGovernanceView from '../views/ConfigGovernanceView.vue'
+import LocalNodeConfigView from '../views/LocalNodeConfigView.vue'
+import PeerNodeConfigView from '../views/PeerNodeConfigView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -49,6 +51,18 @@ const router = createRouter({
           name: 'network-config',
           component: NetworkConfigView,
           meta: { title: '网络配置', description: '统一管理 SIP/RTP 网络参数与端口池状态。' }
+        },
+        {
+          path: 'local-node-config',
+          name: 'local-node-config',
+          component: LocalNodeConfigView,
+          meta: { title: '本端节点配置', description: '管理本端 node_id / network_mode / SIP / RTP 参数。' }
+        },
+        {
+          path: 'peer-node-config',
+          name: 'peer-node-config',
+          component: PeerNodeConfigView,
+          meta: { title: '对端节点配置', description: '管理 peer signaling/media 与模式兼容性。' }
         },
         {
           path: 'config-governance',

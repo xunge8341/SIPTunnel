@@ -18,7 +18,11 @@ import type {
   StartupSummaryPayload,
   TunnelMapping,
   TunnelMappingListPayload,
-  TunnelMappingSavePayload
+  TunnelMappingSavePayload,
+  NodeDetailPayload,
+  LocalNodeConfig,
+  PeerNodeConfig,
+  NodeNetworkStatusPayload
 } from '../types/gateway'
 
 const wait = (ms = 200) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -67,6 +71,35 @@ let mappingState: TunnelMapping[] = [
   }
 ]
 
+
+
+let localNodeState: LocalNodeConfig = {
+  node_id: 'gateway-a-01',
+  node_name: 'Gateway A',
+  node_role: 'gateway',
+  network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+  sip_listen_ip: '0.0.0.0',
+  sip_listen_port: 5060,
+  sip_transport: 'UDP',
+  rtp_listen_ip: '0.0.0.0',
+  rtp_port_start: 20000,
+  rtp_port_end: 20999,
+  rtp_transport: 'UDP'
+}
+
+let peerNodeState: PeerNodeConfig[] = [
+  {
+    peer_node_id: 'peer-b-01',
+    peer_name: 'Peer B 生产',
+    peer_signaling_ip: '10.20.0.20',
+    peer_signaling_port: 5060,
+    peer_media_ip: '10.20.0.20',
+    peer_media_port_start: 32000,
+    peer_media_port_end: 32100,
+    supported_network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+    enabled: true
+  }
+]
 const statuses: TaskStatus[] = ['pending', 'running', 'succeeded', 'failed', 'retry_wait']
 
 const makeCommandTasks = (): CommandTask[] =>
@@ -654,4 +687,97 @@ export async function retryDiagnosticExportMock(jobId: string): Promise<Diagnost
   record.job.downloadUrl = undefined
   record.job.sections = diagnosticSectionsTemplate.map((item) => ({ ...item, done: false }))
   return cloneJob(record.job)
+}
+
+
+export async function fetchNodeDetailMock(): Promise<NodeDetailPayload> {
+  await wait()
+  return {
+    local_node: JSON.parse(JSON.stringify(localNodeState)),
+    current_network_mode: localNodeState.network_mode,
+    current_capability: {
+      supports_large_request_body: false,
+      supports_large_response_body: true,
+      supports_streaming_response: false,
+      supports_bidirectional_http_tunnel: false,
+      supports_transparent_proxy: false
+    },
+    compatibility_status: {
+      level: 'info',
+      message: '本端配置与当前网络模式兼容',
+      suggestion: '继续保持并定期复核。',
+      action_hint: '变更前先确认 peer 兼容性。'
+    }
+  }
+}
+
+export async function updateLocalNodeMock(payload: LocalNodeConfig): Promise<LocalNodeConfig> {
+  await wait()
+  localNodeState = JSON.parse(JSON.stringify(payload))
+  return JSON.parse(JSON.stringify(localNodeState))
+}
+
+export async function fetchPeersMock(): Promise<{ items: PeerNodeConfig[] }> {
+  await wait()
+  return { items: JSON.parse(JSON.stringify(peerNodeState)) }
+}
+
+export async function createPeerMock(payload: PeerNodeConfig): Promise<PeerNodeConfig> {
+  await wait()
+  peerNodeState.push(JSON.parse(JSON.stringify(payload)))
+  return JSON.parse(JSON.stringify(payload))
+}
+
+export async function updatePeerMock(peerNodeId: string, payload: Omit<PeerNodeConfig, 'peer_node_id'>): Promise<PeerNodeConfig> {
+  await wait()
+  const index = peerNodeState.findIndex((item) => item.peer_node_id === peerNodeId)
+  if (index < 0) {
+    throw new Error('PEER_NOT_FOUND')
+  }
+  const updated = { peer_node_id: peerNodeId, ...JSON.parse(JSON.stringify(payload)) }
+  peerNodeState[index] = updated
+  return JSON.parse(JSON.stringify(updated))
+}
+
+export async function deletePeerMock(peerNodeId: string): Promise<{ peer_node_id: string }> {
+  await wait()
+  peerNodeState = peerNodeState.filter((item) => item.peer_node_id !== peerNodeId)
+  return { peer_node_id: peerNodeId }
+}
+
+export async function fetchNodeNetworkStatusMock(): Promise<NodeNetworkStatusPayload> {
+  await wait()
+  return {
+    network_mode: localNodeState.network_mode,
+    capability: {
+      supports_large_request_body: false,
+      supports_large_response_body: true,
+      supports_streaming_response: false,
+      supports_bidirectional_http_tunnel: false,
+      supports_transparent_proxy: false
+    },
+    current_network_mode: localNodeState.network_mode,
+    current_capability: {
+      supports_large_request_body: false,
+      supports_large_response_body: true,
+      supports_streaming_response: false,
+      supports_bidirectional_http_tunnel: false,
+      supports_transparent_proxy: false
+    },
+    compatibility_status: {
+      level: 'info',
+      message: '节点配置与 network_mode 兼容。',
+      suggestion: '无需处理。',
+      action_hint: '保持当前配置并纳入巡检。'
+    },
+    capability_summary: {
+      supported: ['small_request', 'large_response'],
+      unsupported: ['large_request', 'streaming_response', 'bidirectional_http_tunnel', 'transparent_proxy'],
+      items: [
+        { key: 'small_request', label: '小请求体', supported: true, note: '支持' },
+        { key: 'large_response', label: '大响应体', supported: true, note: '支持' },
+        { key: 'large_request', label: '大请求体', supported: false, note: '不支持' }
+      ]
+    }
+  }
 }
