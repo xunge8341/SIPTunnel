@@ -78,7 +78,7 @@
                   <a-space style="width: 100%; justify-content: space-between">
                     <span>{{ item.name }}</span>
                     <a-tag :color="item.level === 'pass' ? 'green' : item.level === 'warn' ? 'gold' : 'red'">
-                      {{ levelTextMap[item.level] }}
+                      {{ getLevelText(item.level) }}
                     </a-tag>
                   </a-space>
                 </a-list-item>
@@ -109,6 +109,9 @@ const levelTextMap: Record<ConfigCheck['level'], string> = {
   warn: '异常',
   fail: '异常'
 }
+
+
+const getLevelText = (level: ConfigCheck['level']) => levelTextMap[level]
 
 const activeTool = ref('network')
 

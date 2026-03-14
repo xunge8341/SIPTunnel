@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { TunnelConfigPayload } from '../../types/gateway'
 
 const requestMock = vi.fn()
 
@@ -45,7 +46,7 @@ describe('gatewayApi tunnel config', () => {
         supports_transparent_http_proxy: false
       },
       capability_items: []
-    }
+    } satisfies TunnelConfigPayload
     await gatewayApi.saveTunnelConfig(payload)
     expect(requestMock).toHaveBeenCalledWith('/tunnel/config', { method: 'POST', body: payload })
   })

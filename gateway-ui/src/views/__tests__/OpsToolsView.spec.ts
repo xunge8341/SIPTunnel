@@ -20,4 +20,12 @@ describe('OpsToolsView', () => {
     expect(wrapper.text()).toContain('执行通道测试')
     expect(wrapper.text()).toContain('执行配置校验')
   })
+
+  it('keeps config validation Chinese copy', () => {
+    const wrapper = mount(OpsToolsView)
+
+    expect(wrapper.text()).toContain('配置校验')
+    expect(wrapper.text()).toContain('执行配置校验')
+  })
+
 })
