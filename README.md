@@ -68,13 +68,20 @@ SIPTunnel 同时支持两种产品模式，文档与 UI 必须明确区分：
 | `interrupted` / `abnormal` | 异常 | 运行中断或健康检查失败。 |
 | `start_failed` | 启动失败 | 启动监听失败（常见端口冲突）。 |
 
-规则测试统一字段：
+规则测试（`POST /api/mapping/test`）统一字段：
 
-- `signaling_request`：成功 / 失败
-- `response_channel`：正常 / 异常
-- `registration_status`：正常 / 未注册
-- `failure_reason`：异常原因
-- `suggested_action`：建议动作
+- `passed`/`status`：阶段化联调总结果（`passed|failed`）。
+- `stages`：分阶段结果数组，至少包含：
+  - `local_listening`（本地监听可用）
+  - `registration`（注册状态正常）
+  - `heartbeat`（心跳状态正常）
+  - `peer_reachability`（对端可达）
+  - `session_ready`（会话已准备）
+  - `mapping_forward`（映射转发准备就绪）
+- `failure_stage`：当前卡住的阶段名称。
+- `failure_reason`：阻塞原因（例如 peer 不可达、映射未监听、绑定对端冲突）。
+- `suggested_action`：对应阶段建议动作。
+- 保留兼容字段：`signaling_request`、`response_channel`、`registration_status`。
 
 GB/T 28181 注册/心跳状态字段（`/api/tunnel/config`、`/api/system/status`）：
 

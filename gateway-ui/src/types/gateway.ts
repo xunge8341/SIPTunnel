@@ -296,7 +296,21 @@ export interface TunnelMappingSavePayload {
   warnings?: string[]
 }
 
+export interface MappingTestStage {
+  key: string
+  name: string
+  status: 'passed' | 'failed' | 'blocked'
+  passed: boolean
+  detail: string
+  blocking_reason?: string
+  suggested_action?: string
+}
+
 export interface MappingTestPayload {
+  passed: boolean
+  status: 'passed' | 'failed'
+  stages: MappingTestStage[]
+  failure_stage?: string
   signaling_request: '成功' | '失败'
   response_channel: '正常' | '异常'
   registration_status: '正常' | '未注册'

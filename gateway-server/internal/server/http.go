@@ -107,11 +107,25 @@ type MappingWithWarnings struct {
 }
 
 type MappingTestResponse struct {
-	SignalingRequest   string `json:"signaling_request"`
-	ResponseChannel    string `json:"response_channel"`
-	RegistrationStatus string `json:"registration_status"`
-	FailureReason      string `json:"failure_reason,omitempty"`
-	SuggestedAction    string `json:"suggested_action,omitempty"`
+	Passed             bool               `json:"passed"`
+	Status             string             `json:"status"`
+	Stages             []MappingTestStage `json:"stages"`
+	FailureStage       string             `json:"failure_stage,omitempty"`
+	SignalingRequest   string             `json:"signaling_request"`
+	ResponseChannel    string             `json:"response_channel"`
+	RegistrationStatus string             `json:"registration_status"`
+	FailureReason      string             `json:"failure_reason,omitempty"`
+	SuggestedAction    string             `json:"suggested_action,omitempty"`
+}
+
+type MappingTestStage struct {
+	Key             string `json:"key"`
+	Name            string `json:"name"`
+	Status          string `json:"status"`
+	Passed          bool   `json:"passed"`
+	Detail          string `json:"detail"`
+	BlockingReason  string `json:"blocking_reason,omitempty"`
+	SuggestedAction string `json:"suggested_action,omitempty"`
 }
 
 type mappingListResponse struct {
@@ -1061,30 +1075,159 @@ func (d handlerDeps) handleMappingTest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	status := d.networkStatusFunc(r.Context())
-	sipPassed := d.checkSIPControlPath(r.Context(), status).Passed
-	rtpPassed := d.checkRTPPortPool(status).Passed
-	registrationStatus := strings.ToLower(strings.TrimSpace(d.sessionMgr.Snapshot().RegistrationStatus))
-	registrationNormal := registrationStatus == "registered"
+	sip := d.checkSIPControlPath(r.Context(), status)
+	rtp := d.checkRTPPortPool(status)
+	localListeningPassed := sip.Passed && rtp.Passed
+	session := d.sessionMgr.Snapshot()
+	registrationNormal := strings.EqualFold(strings.TrimSpace(session.RegistrationStatus), "registered")
+	heartbeatNormal := strings.EqualFold(strings.TrimSpace(session.HeartbeatStatus), "healthy")
+	peerStage := d.checkPeerReachabilityStage(r.Context())
+	sessionReady := registrationNormal && heartbeatNormal && peerStage.Passed
+	forwardStage := d.checkMappingForwardReadinessStage(sessionReady)
 
+	stages := []MappingTestStage{
+		{Key: "local_listening", Name: "本地监听可用", Status: boolLabel(localListeningPassed, "passed", "failed"), Passed: localListeningPassed, Detail: fmt.Sprintf("SIP=%s；RTP=%s", sip.Detail, rtp.Detail), BlockingReason: firstNonEmpty(failedReason(sip), failedReason(rtp)), SuggestedAction: "检查本端 SIP 监听与 RTP 端口池配置。"},
+		{Key: "registration", Name: "注册状态正常", Status: boolLabel(registrationNormal, "passed", "failed"), Passed: registrationNormal, Detail: fmt.Sprintf("当前注册状态：%s", normalizeValue(session.RegistrationStatus, "unknown")), BlockingReason: boolLabel(registrationNormal, "", normalizeValue(session.LastFailureReason, "注册尚未完成")), SuggestedAction: "检查鉴权参数并触发重新注册。"},
+		{Key: "heartbeat", Name: "心跳状态正常", Status: boolLabel(heartbeatNormal, "passed", "failed"), Passed: heartbeatNormal, Detail: fmt.Sprintf("当前心跳状态：%s", normalizeValue(session.HeartbeatStatus, "unknown")), BlockingReason: boolLabel(heartbeatNormal, "", normalizeValue(session.LastFailureReason, "心跳未恢复健康")), SuggestedAction: "检查心跳周期、网络时延与丢包。"},
+		peerStage,
+		{Key: "session_ready", Name: "会话已准备", Status: ternary(sessionReady, "passed", "blocked"), Passed: sessionReady, Detail: "会话准备要求：注册正常 + 心跳正常 + 对端可达。", BlockingReason: blockingReasonsForSession(registrationNormal, heartbeatNormal, peerStage.Passed), SuggestedAction: "按前置阶段提示恢复会话条件后重试。"},
+		forwardStage,
+	}
+
+	passed := allMappingStagesPassed(stages)
 	result := MappingTestResponse{
-		SignalingRequest:   boolLabel(sipPassed, "成功", "失败"),
-		ResponseChannel:    boolLabel(rtpPassed, "正常", "异常"),
+		Passed:             passed,
+		Status:             boolLabel(passed, "passed", "failed"),
+		Stages:             stages,
+		SignalingRequest:   boolLabel(localListeningPassed, "成功", "失败"),
+		ResponseChannel:    boolLabel(rtp.Passed, "正常", "异常"),
 		RegistrationStatus: boolLabel(registrationNormal, "正常", "未注册"),
 	}
 
-	if !sipPassed {
-		result.FailureReason = "信令请求未通过，当前节点未完成控制链路健康校验。"
-		result.SuggestedAction = "优先检查 SIP 注册、对端信令地址和监听端口，再重试规则测试。"
-	} else if !rtpPassed {
-		result.FailureReason = "响应通道异常，RTP 端口池不可用或端口不足。"
-		result.SuggestedAction = "检查 RTP 端口池占用、对端媒体可达性，并确认端口范围配置。"
-	} else if !registrationNormal {
-		result.FailureReason = "注册状态未就绪，映射规则无法稳定收发控制消息。"
-		result.SuggestedAction = "检查注册鉴权参数与心跳状态，确认后再执行映射联调。"
+	if failed := firstFailedMappingStage(stages); failed != nil {
+		result.FailureStage = failed.Name
+		result.FailureReason = normalizeValue(failed.BlockingReason, failed.Detail)
+		result.SuggestedAction = failed.SuggestedAction
 	}
 
-	d.recordOpsAudit(r, readOperator(r), "RUN_MAPPING_TEST", map[string]any{"signaling_request": result.SignalingRequest, "response_channel": result.ResponseChannel, "registration_status": result.RegistrationStatus})
+	d.recordOpsAudit(r, readOperator(r), "RUN_MAPPING_TEST", map[string]any{"status": result.Status, "failure_stage": result.FailureStage, "signaling_request": result.SignalingRequest, "response_channel": result.ResponseChannel, "registration_status": result.RegistrationStatus})
 	writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: result})
+}
+
+func (d handlerDeps) checkPeerReachabilityStage(ctx context.Context) MappingTestStage {
+	binding, err := d.currentPeerBinding()
+	if err != nil {
+		return MappingTestStage{Key: "peer_reachability", Name: "对端可达", Status: "failed", Passed: false, Detail: "对端绑定检查失败", BlockingReason: err.Error(), SuggestedAction: "在对端配置页面保持且仅保持一个启用对端。"}
+	}
+	if strings.TrimSpace(binding.PeerSignalingIP) == "" || binding.PeerSignalingPort <= 0 {
+		return MappingTestStage{Key: "peer_reachability", Name: "对端可达", Status: "failed", Passed: false, Detail: "对端信令地址未配置", BlockingReason: "peer_signaling_ip 或 peer_signaling_port 未配置", SuggestedAction: "补齐对端信令地址后再测试。"}
+	}
+	addr := net.JoinHostPort(strings.TrimSpace(binding.PeerSignalingIP), strconv.Itoa(binding.PeerSignalingPort))
+	dialer := &net.Dialer{Timeout: 1200 * time.Millisecond}
+	conn, dialErr := dialer.DialContext(ctx, "tcp", addr)
+	if dialErr != nil {
+		return MappingTestStage{Key: "peer_reachability", Name: "对端可达", Status: "failed", Passed: false, Detail: fmt.Sprintf("TCP 探测 %s 失败", addr), BlockingReason: dialErr.Error(), SuggestedAction: "检查对端进程、ACL 与路由。"}
+	}
+	_ = conn.Close()
+	return MappingTestStage{Key: "peer_reachability", Name: "对端可达", Status: "passed", Passed: true, Detail: fmt.Sprintf("TCP 探测 %s 成功", addr)}
+}
+
+func (d handlerDeps) checkMappingForwardReadinessStage(sessionReady bool) MappingTestStage {
+	if !sessionReady {
+		return MappingTestStage{Key: "mapping_forward", Name: "映射转发准备就绪", Status: "blocked", Passed: false, Detail: "会话尚未准备完成，暂不执行转发准备判定", BlockingReason: "依赖阶段“会话已准备”未通过", SuggestedAction: "先恢复注册/心跳/对端可达后重试。"}
+	}
+	items := d.mappings.List()
+	enabled := make([]TunnelMapping, 0, len(items))
+	for _, item := range items {
+		if item.Enabled {
+			enabled = append(enabled, item)
+		}
+	}
+	if len(enabled) == 0 {
+		return MappingTestStage{Key: "mapping_forward", Name: "映射转发准备就绪", Status: "failed", Passed: false, Detail: "未找到启用的映射规则", BlockingReason: "至少需要一个 enabled=true 的映射规则", SuggestedAction: "启用至少一个映射规则后再执行联调。"}
+	}
+	runtime := d.runtime.Snapshot()
+	notReady := make([]string, 0)
+	for _, item := range enabled {
+		rs, ok := runtime[item.MappingID]
+		if !ok {
+			notReady = append(notReady, fmt.Sprintf("%s: 运行时状态缺失", item.MappingID))
+			continue
+		}
+		if rs.State != mappingStateListening && rs.State != "connected" {
+			notReady = append(notReady, fmt.Sprintf("%s: %s", item.MappingID, normalizeValue(rs.Reason, rs.State)))
+		}
+	}
+	if len(notReady) > 0 {
+		return MappingTestStage{Key: "mapping_forward", Name: "映射转发准备就绪", Status: "failed", Passed: false, Detail: fmt.Sprintf("共有 %d 条启用规则未就绪", len(notReady)), BlockingReason: strings.Join(notReady, "；"), SuggestedAction: "修复映射监听失败/中断后重试。"}
+	}
+	return MappingTestStage{Key: "mapping_forward", Name: "映射转发准备就绪", Status: "passed", Passed: true, Detail: fmt.Sprintf("%d 条启用规则已进入监听态", len(enabled))}
+}
+
+func allMappingStagesPassed(stages []MappingTestStage) bool {
+	for _, stage := range stages {
+		if !stage.Passed {
+			return false
+		}
+	}
+	return true
+}
+
+func firstFailedMappingStage(stages []MappingTestStage) *MappingTestStage {
+	for _, stage := range stages {
+		if !stage.Passed {
+			item := stage
+			return &item
+		}
+	}
+	return nil
+}
+
+func failedReason(item LinkTestItem) string {
+	if item.Passed {
+		return ""
+	}
+	return item.Detail
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func normalizeValue(v string, fallback string) string {
+	if strings.TrimSpace(v) == "" {
+		return fallback
+	}
+	return v
+}
+
+func blockingReasonsForSession(registrationNormal, heartbeatNormal, peerReachable bool) string {
+	reasons := make([]string, 0, 3)
+	if !registrationNormal {
+		reasons = append(reasons, "注册状态未就绪")
+	}
+	if !heartbeatNormal {
+		reasons = append(reasons, "心跳状态未恢复")
+	}
+	if !peerReachable {
+		reasons = append(reasons, "对端不可达")
+	}
+	if len(reasons) == 0 {
+		return ""
+	}
+	return strings.Join(reasons, "；")
+}
+
+func ternary(ok bool, pass, fail string) string {
+	if ok {
+		return pass
+	}
+	return fail
 }
 
 func (d handlerDeps) listLegacyRoutesFromMappings() []OpsRoute {
