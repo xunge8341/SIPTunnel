@@ -2,39 +2,25 @@
   <a-space direction="vertical" size="middle" style="width: 100%">
     <a-card title="通道配置（GB/T 28181 注册与心跳）">
       <a-form layout="vertical">
-        <a-row :gutter="12">
-          <a-col :span="8">
-            <a-form-item label="通道协议">
-              <a-input :value="draft.channel_protocol" disabled />
-            </a-form-item>
-          </a-col>
-          <a-col :span="8">
-            <a-form-item label="连接发起方">
-              <a-radio-group v-model:value="draft.connection_initiator">
-                <a-radio-button value="LOCAL">本端</a-radio-button>
-                <a-radio-button value="PEER">对端</a-radio-button>
-              </a-radio-group>
-            </a-form-item>
-          </a-col>
-          <a-col :span="8">
-            <a-form-item label="网络模式（只读）">
-              <a-input :value="networkModeLabel" disabled />
-            </a-form-item>
-          </a-col>
-        </a-row>
+        <a-form-item label="通道协议">
+          <a-input :value="draft.channel_protocol" disabled />
+        </a-form-item>
+        <a-form-item label="连接发起方">
+          <a-radio-group v-model:value="draft.connection_initiator">
+            <a-radio-button value="LOCAL">本端</a-radio-button>
+            <a-radio-button value="PEER">对端</a-radio-button>
+          </a-radio-group>
+        </a-form-item>
+        <a-form-item label="网络模式（只读）">
+          <a-input :value="networkModeLabel" disabled />
+        </a-form-item>
 
-        <a-row :gutter="12">
-          <a-col :span="12">
-            <a-form-item label="本端设备编号（来源：节点配置）">
-              <a-input :value="draft.local_device_id || '未配置'" disabled />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="对端设备编号（来源：节点配置）">
-              <a-input :value="draft.peer_device_id || '未配置'" disabled />
-            </a-form-item>
-          </a-col>
-        </a-row>
+        <a-form-item label="本端设备编号（来源：节点配置）">
+          <a-input :value="draft.local_device_id || '未配置'" disabled />
+        </a-form-item>
+        <a-form-item label="对端设备编号（来源：节点配置）">
+          <a-input :value="draft.peer_device_id || '未配置'" disabled />
+        </a-form-item>
         <a-alert
           type="info"
           show-icon
@@ -42,23 +28,15 @@
           message="设备编码由节点配置统一维护，通道配置仅展示，不可编辑。"
         />
 
-        <a-row :gutter="12">
-          <a-col :span="8">
-            <a-form-item label="心跳间隔（秒）">
-              <a-input-number v-model:value="draft.heartbeat_interval_sec" :min="1" style="width: 100%" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="8">
-            <a-form-item label="注册重试次数">
-              <a-input-number v-model:value="draft.register_retry_count" :min="0" style="width: 100%" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="8">
-            <a-form-item label="注册重试间隔（秒）">
-              <a-input-number v-model:value="draft.register_retry_interval_sec" :min="1" style="width: 100%" />
-            </a-form-item>
-          </a-col>
-        </a-row>
+        <a-form-item label="心跳间隔（秒）">
+          <a-input-number v-model:value="draft.heartbeat_interval_sec" :min="1" style="width: 100%" />
+        </a-form-item>
+        <a-form-item label="注册重试次数">
+          <a-input-number v-model:value="draft.register_retry_count" :min="0" style="width: 100%" />
+        </a-form-item>
+        <a-form-item label="注册重试间隔（秒）">
+          <a-input-number v-model:value="draft.register_retry_interval_sec" :min="1" style="width: 100%" />
+        </a-form-item>
       </a-form>
       <a-space>
         <a-button @click="load">重载</a-button>

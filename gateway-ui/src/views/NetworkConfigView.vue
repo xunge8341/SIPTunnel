@@ -40,121 +40,115 @@
       </a-row>
     </a-card>
 
-    <a-row :gutter="16">
-      <a-col :span="12">
-        <a-card title="SIP 配置">
-          <a-form layout="vertical">
-            <a-form-item>
-              <template #label>
-                <field-label-tooltip label="监听 IP" tooltip="SIP 信令监听网卡地址，建议与服务绑定地址保持一致。" />
-              </template>
-              <a-input v-model:value="draft.sip.listenIp" :disabled="!isEditable" />
-            </a-form-item>
-            <a-form-item>
-              <template #label>
-                <field-label-tooltip label="监听端口" tooltip="SIP 服务监听端口，变更后需确保上下游防火墙同步放行。" />
-              </template>
-              <a-input-number v-model:value="draft.sip.listenPort" :min="1" :max="65535" :disabled="!isEditable" style="width: 100%" />
-            </a-form-item>
-            <a-form-item>
-              <template #label>
-                <field-label-tooltip label="协议" tooltip="SIP 传输协议，通常为 UDP，切换 TCP 需上下游同时支持。" />
-              </template>
-              <a-radio-group v-model:value="draft.sip.protocol" :disabled="!isEditable" button-style="solid">
-                <a-radio-button value="UDP">UDP</a-radio-button>
-                <a-radio-button value="TCP">TCP</a-radio-button>
-              </a-radio-group>
-            </a-form-item>
-            <a-form-item>
-              <template #label>
-                <field-label-tooltip label="对外通告地址" tooltip="写入 SIP/SDP 给外部节点回连，通常为公网或跨网可达地址。" />
-              </template>
-              <a-input v-model:value="draft.sip.advertisedAddress" :disabled="!isEditable" />
-            </a-form-item>
-            <a-form-item>
-              <template #label>
-                <field-label-tooltip label="域" tooltip="SIP 域用于路由与身份标识，应保持与注册域一致。" />
-              </template>
-              <a-input v-model:value="draft.sip.domain" :disabled="!isEditable" />
-            </a-form-item>
-            <a-form-item>
-              <template #label>
-                <field-label-tooltip label="TCP Keepalive" tooltip="启用后可加速识别僵死连接。" />
-              </template>
-              <a-switch v-model:checked="draft.sip.tcpKeepaliveEnabled" :disabled="!isEditable" />
-            </a-form-item>
-            <a-form-item>
-              <template #label>
-                <field-label-tooltip label="Keepalive 间隔(ms)" tooltip="TCP keepalive 探测间隔。" />
-              </template>
-              <a-input-number v-model:value="draft.sip.tcpKeepaliveIntervalMs" :min="1000" :disabled="!isEditable" style="width: 100%" />
-            </a-form-item>
-            <a-form-item>
-              <template #label>
-                <field-label-tooltip label="读缓冲区(bytes)" tooltip="单连接读取缓冲区大小。" />
-              </template>
-              <a-input-number v-model:value="draft.sip.tcpReadBufferBytes" :min="1024" :disabled="!isEditable" style="width: 100%" />
-            </a-form-item>
-            <a-form-item>
-              <template #label>
-                <field-label-tooltip label="写缓冲区(bytes)" tooltip="单连接写入缓冲区大小。" />
-              </template>
-              <a-input-number v-model:value="draft.sip.tcpWriteBufferBytes" :min="1024" :disabled="!isEditable" style="width: 100%" />
-            </a-form-item>
-            <a-form-item>
-              <template #label>
-                <field-label-tooltip label="最大连接数" tooltip="SIP TCP 服务端最大并发连接。" />
-              </template>
-              <a-input-number v-model:value="draft.sip.maxConnections" :min="1" :disabled="!isEditable" style="width: 100%" />
-            </a-form-item>
-          </a-form>
-        </a-card>
-      </a-col>
+    <a-card title="SIP 配置">
+      <a-form layout="vertical">
+        <a-form-item>
+          <template #label>
+            <field-label-tooltip label="监听 IP" tooltip="SIP 信令监听网卡地址，建议与服务绑定地址保持一致。" />
+          </template>
+          <a-input v-model:value="draft.sip.listenIp" :disabled="!isEditable" />
+        </a-form-item>
+        <a-form-item>
+          <template #label>
+            <field-label-tooltip label="监听端口" tooltip="SIP 服务监听端口，变更后需确保上下游防火墙同步放行。" />
+          </template>
+          <a-input-number v-model:value="draft.sip.listenPort" :min="1" :max="65535" :disabled="!isEditable" style="width: 100%" />
+        </a-form-item>
+        <a-form-item>
+          <template #label>
+            <field-label-tooltip label="协议" tooltip="SIP 传输协议，通常为 UDP，切换 TCP 需上下游同时支持。" />
+          </template>
+          <a-radio-group v-model:value="draft.sip.protocol" :disabled="!isEditable" button-style="solid">
+            <a-radio-button value="UDP">UDP</a-radio-button>
+            <a-radio-button value="TCP">TCP</a-radio-button>
+          </a-radio-group>
+        </a-form-item>
+        <a-form-item>
+          <template #label>
+            <field-label-tooltip label="对外通告地址" tooltip="写入 SIP/SDP 给外部节点回连，通常为公网或跨网可达地址。" />
+          </template>
+          <a-input v-model:value="draft.sip.advertisedAddress" :disabled="!isEditable" />
+        </a-form-item>
+        <a-form-item>
+          <template #label>
+            <field-label-tooltip label="域" tooltip="SIP 域用于路由与身份标识，应保持与注册域一致。" />
+          </template>
+          <a-input v-model:value="draft.sip.domain" :disabled="!isEditable" />
+        </a-form-item>
+        <a-form-item>
+          <template #label>
+            <field-label-tooltip label="TCP Keepalive" tooltip="启用后可加速识别僵死连接。" />
+          </template>
+          <a-switch v-model:checked="draft.sip.tcpKeepaliveEnabled" :disabled="!isEditable" />
+        </a-form-item>
+        <a-form-item>
+          <template #label>
+            <field-label-tooltip label="Keepalive 间隔(ms)" tooltip="TCP keepalive 探测间隔。" />
+          </template>
+          <a-input-number v-model:value="draft.sip.tcpKeepaliveIntervalMs" :min="1000" :disabled="!isEditable" style="width: 100%" />
+        </a-form-item>
+        <a-form-item>
+          <template #label>
+            <field-label-tooltip label="读缓冲区(bytes)" tooltip="单连接读取缓冲区大小。" />
+          </template>
+          <a-input-number v-model:value="draft.sip.tcpReadBufferBytes" :min="1024" :disabled="!isEditable" style="width: 100%" />
+        </a-form-item>
+        <a-form-item>
+          <template #label>
+            <field-label-tooltip label="写缓冲区(bytes)" tooltip="单连接写入缓冲区大小。" />
+          </template>
+          <a-input-number v-model:value="draft.sip.tcpWriteBufferBytes" :min="1024" :disabled="!isEditable" style="width: 100%" />
+        </a-form-item>
+        <a-form-item>
+          <template #label>
+            <field-label-tooltip label="最大连接数" tooltip="SIP TCP 服务端最大并发连接。" />
+          </template>
+          <a-input-number v-model:value="draft.sip.maxConnections" :min="1" :disabled="!isEditable" style="width: 100%" />
+        </a-form-item>
+      </a-form>
+    </a-card>
 
-      <a-col :span="12">
-        <a-card title="RTP 配置">
-          <a-form layout="vertical">
-            <a-form-item>
-              <template #label>
-                <field-label-tooltip label="监听 IP" tooltip="RTP 收流监听网卡地址，应确保与数据面网络可达。" />
-              </template>
-              <a-input v-model:value="draft.rtp.listenIp" :disabled="!isEditable" />
-            </a-form-item>
-            <a-form-item>
-              <template #label>
-                <field-label-tooltip label="端口范围" tooltip="RTP 端口池，建议预留连续区间并在网络策略中整体放行。" />
-              </template>
-              <a-space style="width: 100%">
-                <a-input-number v-model:value="draft.rtp.portRangeStart" :min="1" :max="65535" :disabled="!isEditable" style="width: 45%" />
-                <span>~</span>
-                <a-input-number v-model:value="draft.rtp.portRangeEnd" :min="1" :max="65535" :disabled="!isEditable" style="width: 45%" />
-              </a-space>
-            </a-form-item>
-            <a-form-item>
-              <template #label>
-                <field-label-tooltip label="协议" tooltip="RTP/文件传输协议，默认 UDP，切换 TCP 可能增大链路延迟。" />
-              </template>
-              <a-radio-group v-model:value="draft.rtp.protocol" :disabled="!isEditable" button-style="solid">
-                <a-radio-button value="UDP">UDP</a-radio-button>
-                <a-radio-button value="TCP">TCP</a-radio-button>
-              </a-radio-group>
-            </a-form-item>
-            <a-form-item>
-              <template #label>
-                <field-label-tooltip label="对外通告地址" tooltip="对端用于建立 RTP 回传的地址，建议配置可达的 FQDN 或静态 IP。" />
-              </template>
-              <a-input v-model:value="draft.rtp.advertisedAddress" :disabled="!isEditable" />
-            </a-form-item>
-            <a-form-item>
-              <template #label>
-                <field-label-tooltip label="最大并发传输数" tooltip="限制同时进行的 RTP 传输会话，超过阈值后新任务排队。" />
-              </template>
-              <a-input-number v-model:value="draft.rtp.maxConcurrentTransfers" :min="1" :max="20000" :disabled="!isEditable" style="width: 100%" />
-            </a-form-item>
-          </a-form>
-        </a-card>
-      </a-col>
-    </a-row>
+    <a-card title="RTP 配置">
+      <a-form layout="vertical">
+        <a-form-item>
+          <template #label>
+            <field-label-tooltip label="监听 IP" tooltip="RTP 收流监听网卡地址，应确保与数据面网络可达。" />
+          </template>
+          <a-input v-model:value="draft.rtp.listenIp" :disabled="!isEditable" />
+        </a-form-item>
+        <a-form-item>
+          <template #label>
+            <field-label-tooltip label="端口范围" tooltip="RTP 端口池，建议预留连续区间并在网络策略中整体放行。" />
+          </template>
+          <a-space style="width: 100%">
+            <a-input-number v-model:value="draft.rtp.portRangeStart" :min="1" :max="65535" :disabled="!isEditable" style="width: 45%" />
+            <span>~</span>
+            <a-input-number v-model:value="draft.rtp.portRangeEnd" :min="1" :max="65535" :disabled="!isEditable" style="width: 45%" />
+          </a-space>
+        </a-form-item>
+        <a-form-item>
+          <template #label>
+            <field-label-tooltip label="协议" tooltip="RTP/文件传输协议，默认 UDP，切换 TCP 可能增大链路延迟。" />
+          </template>
+          <a-radio-group v-model:value="draft.rtp.protocol" :disabled="!isEditable" button-style="solid">
+            <a-radio-button value="UDP">UDP</a-radio-button>
+            <a-radio-button value="TCP">TCP</a-radio-button>
+          </a-radio-group>
+        </a-form-item>
+        <a-form-item>
+          <template #label>
+            <field-label-tooltip label="对外通告地址" tooltip="对端用于建立 RTP 回传的地址，建议配置可达的 FQDN 或静态 IP。" />
+          </template>
+          <a-input v-model:value="draft.rtp.advertisedAddress" :disabled="!isEditable" />
+        </a-form-item>
+        <a-form-item>
+          <template #label>
+            <field-label-tooltip label="最大并发传输数" tooltip="限制同时进行的 RTP 传输会话，超过阈值后新任务排队。" />
+          </template>
+          <a-input-number v-model:value="draft.rtp.maxConcurrentTransfers" :min="1" :max="20000" :disabled="!isEditable" style="width: 100%" />
+        </a-form-item>
+      </a-form>
+    </a-card>
 
     <a-row :gutter="16">
       <a-col :xs="24" :xl="14">

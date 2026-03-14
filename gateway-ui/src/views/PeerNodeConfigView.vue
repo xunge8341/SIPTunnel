@@ -44,19 +44,13 @@
 
     <a-drawer v-model:open="drawerOpen" :title="drawerTitle" width="620" @close="drawerOpen = false">
       <a-form layout="vertical">
-        <a-row :gutter="12">
-          <a-col :span="12"><a-form-item label="peer_node_id"><a-input v-model:value="editing.peer_node_id" :disabled="mode === 'edit'" /></a-form-item></a-col>
-          <a-col :span="12"><a-form-item label="peer_name"><a-input v-model:value="editing.peer_name" /></a-form-item></a-col>
-        </a-row>
-        <a-row :gutter="12">
-          <a-col :span="12"><a-form-item label="peer_signaling_ip"><a-input v-model:value="editing.peer_signaling_ip" /></a-form-item></a-col>
-          <a-col :span="12"><a-form-item label="peer_signaling_port"><a-input-number v-model:value="editing.peer_signaling_port" :min="1" :max="65535" style="width: 100%" /></a-form-item></a-col>
-        </a-row>
-        <a-row :gutter="12">
-          <a-col :span="8"><a-form-item label="peer_media_ip"><a-input v-model:value="editing.peer_media_ip" /></a-form-item></a-col>
-          <a-col :span="8"><a-form-item label="peer_media_port_start"><a-input-number v-model:value="editing.peer_media_port_start" :min="1" :max="65535" style="width: 100%" /></a-form-item></a-col>
-          <a-col :span="8"><a-form-item label="peer_media_port_end"><a-input-number v-model:value="editing.peer_media_port_end" :min="1" :max="65535" style="width: 100%" /></a-form-item></a-col>
-        </a-row>
+        <a-form-item label="peer_node_id"><a-input v-model:value="editing.peer_node_id" :disabled="mode === 'edit'" /></a-form-item>
+        <a-form-item label="peer_name"><a-input v-model:value="editing.peer_name" /></a-form-item>
+        <a-form-item label="peer_signaling_ip"><a-input v-model:value="editing.peer_signaling_ip" /></a-form-item>
+        <a-form-item label="peer_signaling_port"><a-input-number v-model:value="editing.peer_signaling_port" :min="1" :max="65535" style="width: 100%" /></a-form-item>
+        <a-form-item label="peer_media_ip"><a-input v-model:value="editing.peer_media_ip" /></a-form-item>
+        <a-form-item label="peer_media_port_start"><a-input-number v-model:value="editing.peer_media_port_start" :min="1" :max="65535" style="width: 100%" /></a-form-item>
+        <a-form-item label="peer_media_port_end"><a-input-number v-model:value="editing.peer_media_port_end" :min="1" :max="65535" style="width: 100%" /></a-form-item>
         <a-form-item label="supported_network_mode"><a-input v-model:value="editing.supported_network_mode" /></a-form-item>
         <a-form-item label="enabled"><a-switch v-model:checked="editing.enabled" /></a-form-item>
       </a-form>
