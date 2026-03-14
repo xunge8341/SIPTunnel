@@ -94,6 +94,9 @@ paths:
   /api/node:
     get: { summary: Get local node config, responses: { '200': { description: OK } } }
     put: { summary: Update local node config, responses: { '200': { description: OK }, '400': { description: Invalid argument } } }
+  /api/node/config:
+    get: { summary: Get M31 node config (local/peer compact model), responses: { '200': { description: OK } } }
+    post: { summary: Save M31 node config and trigger tunnel restart, responses: { '200': { description: OK }, '400': { description: Invalid argument } } }
   /api/peers:
     get: { summary: List peer node configs, responses: { '200': { description: OK } } }
     post: { summary: Create peer node config, responses: { '201': { description: Created }, '400': { description: Invalid argument }, '409': { description: Peer already exists } } }

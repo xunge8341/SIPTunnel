@@ -47,6 +47,15 @@ describe('gatewayApi node/peer adapter', () => {
     peers = await gatewayApi.fetchPeers()
     expect(peers.items.some((item) => item.peer_node_id === peerPayload.peer_node_id)).toBe(false)
 
+    const config = await gatewayApi.fetchNodeConfig()
+    expect(config.local_node.device_id).toBeTruthy()
+
+    const saveResult = await gatewayApi.saveNodeConfig({
+      local_node: { ...config.local_node, device_id: 'gateway-a-m31' },
+      peer_node: config.peer_node
+    })
+    expect(saveResult.tunnel_restarted).toBe(true)
+
     const status = await gatewayApi.fetchNodeNetworkStatus()
     expect(status.current_network_mode).toBeTruthy()
     expect(Array.isArray(status.capability_summary.supported)).toBe(true)

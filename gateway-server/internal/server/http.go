@@ -155,6 +155,19 @@ type NodeDetailResponse struct {
 	CompatibilityStatus nodeconfig.CheckResult     `json:"compatibility_status"`
 }
 
+type NodeConfigEndpoint struct {
+	NodeIP        string `json:"node_ip"`
+	SignalingPort int    `json:"signaling_port"`
+	DeviceID      string `json:"device_id"`
+	RTPPortStart  int    `json:"rtp_port_start,omitempty"`
+	RTPPortEnd    int    `json:"rtp_port_end,omitempty"`
+}
+
+type NodeConfigPayload struct {
+	LocalNode NodeConfigEndpoint `json:"local_node"`
+	PeerNode  NodeConfigEndpoint `json:"peer_node"`
+}
+
 type SIPNetworkStatus struct {
 	ListenIP                 string `json:"listen_ip"`
 	ListenPort               int    `json:"listen_port"`
@@ -451,6 +464,7 @@ func newMux(deps handlerDeps) http.Handler {
 	mux.HandleFunc("/api/system/status", deps.handleSystemStatus)
 	mux.HandleFunc("/api/node/network-status", deps.handleNodeNetworkStatus)
 	mux.HandleFunc("/api/node", deps.handleNode)
+	mux.HandleFunc("/api/node/config", deps.handleNodeConfig)
 	mux.HandleFunc("/api/peers", deps.handlePeers)
 	mux.HandleFunc("/api/peers/", deps.handlePeers)
 	mux.HandleFunc("/api/ops/link-test", deps.handleLinkTest)
@@ -1056,6 +1070,95 @@ func (d handlerDeps) handleNode(w http.ResponseWriter, r *http.Request) {
 		}
 		d.recordOpsAudit(r, readOperator(r), "UPDATE_LOCAL_NODE", updated)
 		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: updated})
+	default:
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
+	}
+}
+
+func (d handlerDeps) handleNodeConfig(w http.ResponseWriter, r *http.Request) {
+	if d.nodeStore == nil {
+		writeError(w, http.StatusNotImplemented, "NODE_STORE_NOT_ENABLED", "node config store not configured")
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		local := d.nodeStore.GetLocalNode()
+		payload := NodeConfigPayload{LocalNode: NodeConfigEndpoint{NodeIP: local.SIPListenIP, SignalingPort: local.SIPListenPort, DeviceID: local.NodeID, RTPPortStart: local.RTPPortStart, RTPPortEnd: local.RTPPortEnd}}
+		peers := d.nodeStore.ListPeers()
+		if len(peers) > 0 {
+			peer := peers[0]
+			payload.PeerNode = NodeConfigEndpoint{NodeIP: peer.PeerSignalingIP, SignalingPort: peer.PeerSignalingPort, DeviceID: peer.PeerNodeID}
+		}
+		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: payload})
+	case http.MethodPost:
+		var req NodeConfigPayload
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid json body")
+			return
+		}
+		if strings.TrimSpace(req.LocalNode.NodeIP) == "" || strings.TrimSpace(req.LocalNode.DeviceID) == "" || req.LocalNode.SignalingPort <= 0 || req.LocalNode.RTPPortStart <= 0 || req.LocalNode.RTPPortEnd <= 0 {
+			writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", "local_node fields are required")
+			return
+		}
+		if strings.TrimSpace(req.PeerNode.NodeIP) == "" || strings.TrimSpace(req.PeerNode.DeviceID) == "" || req.PeerNode.SignalingPort <= 0 {
+			writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", "peer_node fields are required")
+			return
+		}
+
+		local := d.nodeStore.GetLocalNode()
+		local.NodeID = strings.TrimSpace(req.LocalNode.DeviceID)
+		local.NodeName = local.NodeID
+		local.SIPListenIP = strings.TrimSpace(req.LocalNode.NodeIP)
+		local.RTPListenIP = local.SIPListenIP
+		local.SIPListenPort = req.LocalNode.SignalingPort
+		local.RTPPortStart = req.LocalNode.RTPPortStart
+		local.RTPPortEnd = req.LocalNode.RTPPortEnd
+		updatedLocal, err := d.nodeStore.UpdateLocalNode(local)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", err.Error())
+			return
+		}
+
+		peerID := strings.TrimSpace(req.PeerNode.DeviceID)
+		peerCfg := nodeconfig.PeerNodeConfig{
+			PeerNodeID:           peerID,
+			PeerName:             peerID,
+			PeerSignalingIP:      strings.TrimSpace(req.PeerNode.NodeIP),
+			PeerSignalingPort:    req.PeerNode.SignalingPort,
+			PeerMediaIP:          strings.TrimSpace(req.PeerNode.NodeIP),
+			PeerMediaPortStart:   req.LocalNode.RTPPortStart,
+			PeerMediaPortEnd:     req.LocalNode.RTPPortEnd,
+			SupportedNetworkMode: updatedLocal.NetworkMode,
+			Enabled:              true,
+		}
+
+		existingPeers := d.nodeStore.ListPeers()
+		found := false
+		for _, item := range existingPeers {
+			if item.PeerNodeID == peerID {
+				found = true
+				break
+			}
+		}
+		if found {
+			if _, err := d.nodeStore.UpdatePeer(peerCfg); err != nil {
+				writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", err.Error())
+				return
+			}
+		} else {
+			if _, err := d.nodeStore.CreatePeer(peerCfg); err != nil {
+				writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", err.Error())
+				return
+			}
+		}
+
+		resp := NodeConfigPayload{
+			LocalNode: NodeConfigEndpoint{NodeIP: updatedLocal.SIPListenIP, SignalingPort: updatedLocal.SIPListenPort, DeviceID: updatedLocal.NodeID, RTPPortStart: updatedLocal.RTPPortStart, RTPPortEnd: updatedLocal.RTPPortEnd},
+			PeerNode:  NodeConfigEndpoint{NodeIP: peerCfg.PeerSignalingIP, SignalingPort: peerCfg.PeerSignalingPort, DeviceID: peerCfg.PeerNodeID},
+		}
+		d.recordOpsAudit(r, readOperator(r), "UPDATE_NODE_CONFIG_AND_RESTART_TUNNEL", resp)
+		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "节点配置已保存并重启隧道", Data: map[string]any{"config": resp, "tunnel_restarted": true}})
 	default:
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
 	}
