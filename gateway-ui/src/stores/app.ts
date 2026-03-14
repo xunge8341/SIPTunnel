@@ -15,6 +15,7 @@ const navigation: NavigationItem[] = [
   { key: 'rate-limit', label: '限流策略', path: '/rate-limits' },
   { key: 'node-status', label: '节点状态', path: '/node-status' },
   { key: 'alerts', label: '告警中心', path: '/alerts' },
+  { key: 'ops-tools', label: 'M36 运维工具', path: '/ops-tools' },
   { key: 'audit-log', label: '审计日志', path: '/audit-logs' }
 ]
 
