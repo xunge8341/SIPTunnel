@@ -1,3 +1,4 @@
+# 兼容示例：历史 route/api_code/template 模型（deprecated），仅迁移或兼容场景使用。
 routes:
   - api_code: api.order.create
     target_service: order-service

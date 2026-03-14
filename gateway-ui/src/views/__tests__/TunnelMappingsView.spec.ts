@@ -102,7 +102,7 @@ describe('TunnelMappingsView', () => {
     expect(text).toContain('本端入口端口')
     expect(text).toContain('对端目标 IP')
     expect(text).toContain('对端目标端口')
-    expect(text).toContain('系统按动作类型自动选择命令或文件传输链路。')
+    expect(text).toContain('系统按动作类型自动选择命令或文件传输链路；route/api_code/template 为兼容术语（deprecated）。')
     expect(text).toContain('备注')
 
     const indexLocalIp = text.indexOf('本端入口 IP')
