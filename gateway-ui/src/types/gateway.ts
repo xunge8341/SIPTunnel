@@ -276,7 +276,7 @@ export interface TunnelMapping {
   require_streaming_response: boolean
   description: string
   updated_at?: string
-  link_status?: 'connected' | 'disconnected' | 'degraded'
+  link_status?: 'connected' | 'disconnected' | 'degraded' | 'disabled' | 'listening' | 'start_failed' | 'interrupted'
   status_reason?: string
 }
 

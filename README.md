@@ -29,6 +29,7 @@ SIPTunnel 同时支持两种产品模式，文档与 UI 必须明确区分：
 - 生产基线：限流、审计日志、trace 字段透传和结构化日志。
 - 网络模式能力矩阵：`NetworkMode -> Capability` 由后端统一推导，覆盖系统信息 API、启动摘要与诊断导出（见 `docs/README.md#网络模式与能力矩阵`）。
 - 映射能力联动校验：`TunnelMapping` 保存/更新会按当前 `NetworkMode/Capability` 校验 `max_request_body_bytes`、`max_response_body_bytes`、`allowed_methods`（默认 `[*]`，即全部允许）与 `require_streaming_response`，并在 API/selfcheck/诊断暴露 warnings 或 errors。
+- 映射运行时主链路：`enabled=true` 时后端会自动监听 `local_bind_ip:local_bind_port`；`enabled=false` 或删除映射会自动释放监听。监听状态会回写到映射列表/状态页（`disabled/listening/start_failed/interrupted`）并附带失败原因（含中文端口冲突提示）。
 
 
 ### 映射规则配置瘦身（当前产品要求）
@@ -37,6 +38,7 @@ SIPTunnel 同时支持两种产品模式，文档与 UI 必须明确区分：
 - 映射编辑抽屉采用单列纵向布局，建议按“本端入口 → 对端目标 → 超时与体积限制 → 启用状态 → 备注”顺序逐项核对填写。
 - 请求动作类型与承载链路由系统自动判定：命令请求走控制链路，文件类请求走文件传输链路；映射页不提供手工切换。
 - UI 列表默认展示：`序号`、`本端入口`、`对端目标`、`协议`、`状态`、`更新时间`、`操作`。
+- UI 列表会展示“映射链路状态 + 状态原因”，用于直接观察本端监听是否成功，以及启动失败/异常中断原因。
 - `name`、`peer_node_id`、`allowed_methods` 为兼容字段：
   - UI 不再展示/编辑；
   - `allowed_methods` 由系统内部默认写入 `[*]`（全部允许）；

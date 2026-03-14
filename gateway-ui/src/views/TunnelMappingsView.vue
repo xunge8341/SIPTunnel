@@ -260,12 +260,19 @@ const columns = [
 ]
 
 const mappingLinkText = (status?: TunnelMapping['link_status']) => {
+  if (status === 'listening') return '监听中'
+  if (status === 'start_failed') return '启动失败'
+  if (status === 'interrupted') return '异常中断'
+  if (status === 'disabled') return '未启用'
   if (status === 'connected') return '正常'
   if (status === 'disconnected') return '未连接'
   return '异常'
 }
 
 const mappingLinkColor = (status?: TunnelMapping['link_status']) => {
+  if (status === 'listening') return 'success'
+  if (status === 'disabled') return 'default'
+  if (status === 'start_failed' || status === 'interrupted') return 'error'
   if (status === 'connected') return 'success'
   if (status === 'disconnected') return 'default'
   return 'error'
@@ -288,11 +295,11 @@ const inferMappingRuntimeStatus = (
   item: TunnelMapping,
   systemStatus?: { tunnel_status: string; registration_status?: string; heartbeat_status?: string; connection_reason?: string; peer_binding_error?: string }
 ): Pick<TunnelMapping, 'link_status' | 'status_reason'> => {
-  if (!item.enabled) {
-    return { link_status: 'disconnected', status_reason: '规则未启用。' }
-  }
   if (item.link_status && item.status_reason) {
     return { link_status: item.link_status, status_reason: item.status_reason }
+  }
+  if (!item.enabled) {
+    return { link_status: 'disabled', status_reason: '规则未启用。' }
   }
   if (!systemStatus) {
     return { link_status: 'degraded', status_reason: '未获取到系统状态。' }

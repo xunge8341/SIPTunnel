@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -95,7 +97,10 @@ func TestNodeConfigEndpointSaveAndLoad(t *testing.T) {
 
 func TestMappingsCRUD(t *testing.T) {
 	h, _, _ := buildTestHandler(t)
-	body := `{"mapping_id":"map-2","name":"orders","enabled":true,"local_bind_ip":"127.0.0.1","local_bind_port":18090,"local_base_path":"/orders","remote_target_ip":"10.0.0.2","remote_target_port":8090,"remote_base_path":"/api/orders","allowed_methods":["GET","POST"],"connect_timeout_ms":500,"request_timeout_ms":3000,"response_timeout_ms":3000,"max_request_body_bytes":1048576,"max_response_body_bytes":1048576,"description":"orders mapping"}`
+	port := reserveFreePort(t)
+	body := fmt.Sprintf(`{"mapping_id":"map-2","name":"orders","enabled":true,"local_bind_ip":"127.0.0.1","local_bind_port":%d,"local_base_path":"/orders","remote_target_ip":"10.0.0.2","remote_target_port":8090,"remote_base_path":"/api/orders","allowed_methods":["GET","POST"],"connect_timeout_ms":500,"request_timeout_ms":3000,"response_timeout_ms":3000,"max_request_body_bytes":1048576,"max_response_body_bytes":1048576,"description":"orders mapping"}`,
+		port,
+	)
 
 	createReq := httptest.NewRequest(http.MethodPost, "/api/mappings", bytes.NewBufferString(body))
 	createRR := httptest.NewRecorder()
@@ -124,6 +129,93 @@ func TestMappingsCRUD(t *testing.T) {
 	if deleteRR.Code != http.StatusOK {
 		t.Fatalf("delete mapping expected 200 got %d body=%s", deleteRR.Code, deleteRR.Body.String())
 	}
+}
+
+func TestMappingRuntimeEnableDisableAndStatusWriteback(t *testing.T) {
+	h, _, _ := buildTestHandler(t)
+	port := reserveFreePort(t)
+	body := fmt.Sprintf(`{"mapping_id":"map-runtime","name":"runtime","enabled":true,"local_bind_ip":"127.0.0.1","local_bind_port":%d,"local_base_path":"/runtime","remote_target_ip":"10.0.0.9","remote_target_port":8090,"remote_base_path":"/api/runtime","allowed_methods":["POST"],"connect_timeout_ms":500,"request_timeout_ms":3000,"response_timeout_ms":3000,"max_request_body_bytes":1024,"max_response_body_bytes":1024,"description":"runtime"}`,
+		port,
+	)
+
+	createReq := httptest.NewRequest(http.MethodPost, "/api/mappings", bytes.NewBufferString(body))
+	createRR := httptest.NewRecorder()
+	h.ServeHTTP(createRR, createReq)
+	if createRR.Code != http.StatusCreated {
+		t.Fatalf("create mapping expected 201 got %d body=%s", createRR.Code, createRR.Body.String())
+	}
+
+	if _, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port)); err == nil {
+		t.Fatalf("expected runtime to occupy port %d when enabled", port)
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/mappings", nil)
+	listRR := httptest.NewRecorder()
+	h.ServeHTTP(listRR, listReq)
+	if listRR.Code != http.StatusOK {
+		t.Fatalf("list mappings expected 200 got %d body=%s", listRR.Code, listRR.Body.String())
+	}
+	if !strings.Contains(listRR.Body.String(), `"mapping_id":"map-runtime"`) || !strings.Contains(listRR.Body.String(), `"link_status":"listening"`) {
+		t.Fatalf("expected runtime status writeback in list body=%s", listRR.Body.String())
+	}
+
+	disableBody := strings.Replace(body, `"enabled":true`, `"enabled":false`, 1)
+	updateReq := httptest.NewRequest(http.MethodPut, "/api/mappings/map-runtime", bytes.NewBufferString(disableBody))
+	updateRR := httptest.NewRecorder()
+	h.ServeHTTP(updateRR, updateReq)
+	if updateRR.Code != http.StatusOK {
+		t.Fatalf("disable mapping expected 200 got %d body=%s", updateRR.Code, updateRR.Body.String())
+	}
+
+	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	if err != nil {
+		t.Fatalf("expected runtime to release port %d when disabled, err=%v", port, err)
+	}
+	_ = ln.Close()
+}
+
+func TestMappingRuntimePortConflict(t *testing.T) {
+	h, _, _ := buildTestHandler(t)
+	conflictPort := reserveFreePort(t)
+	occupied, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", conflictPort))
+	if err != nil {
+		t.Fatalf("prepare conflict listener failed: %v", err)
+	}
+	defer occupied.Close()
+
+	body := fmt.Sprintf(`{"mapping_id":"map-conflict","name":"conflict","enabled":true,"local_bind_ip":"127.0.0.1","local_bind_port":%d,"local_base_path":"/conflict","remote_target_ip":"10.0.0.3","remote_target_port":8091,"remote_base_path":"/api/conflict","allowed_methods":["GET"],"connect_timeout_ms":500,"request_timeout_ms":3000,"response_timeout_ms":3000,"max_request_body_bytes":1024,"max_response_body_bytes":1024,"description":"conflict"}`,
+		conflictPort,
+	)
+
+	createReq := httptest.NewRequest(http.MethodPost, "/api/mappings", bytes.NewBufferString(body))
+	createRR := httptest.NewRecorder()
+	h.ServeHTTP(createRR, createReq)
+	if createRR.Code != http.StatusCreated {
+		t.Fatalf("create mapping expected 201 got %d body=%s", createRR.Code, createRR.Body.String())
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/mappings", nil)
+	listRR := httptest.NewRecorder()
+	h.ServeHTTP(listRR, listReq)
+	if listRR.Code != http.StatusOK {
+		t.Fatalf("list mappings expected 200 got %d body=%s", listRR.Code, listRR.Body.String())
+	}
+	if !strings.Contains(listRR.Body.String(), `"mapping_id":"map-conflict"`) || !strings.Contains(listRR.Body.String(), `"link_status":"start_failed"`) {
+		t.Fatalf("expected start_failed status on conflict body=%s", listRR.Body.String())
+	}
+	if !strings.Contains(listRR.Body.String(), "端口冲突") {
+		t.Fatalf("expected chinese conflict reason body=%s", listRR.Body.String())
+	}
+}
+
+func reserveFreePort(t *testing.T) int {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("allocate free port failed: %v", err)
+	}
+	defer ln.Close()
+	return ln.Addr().(*net.TCPAddr).Port
 }
 
 func TestMappingTestEndpoint(t *testing.T) {
