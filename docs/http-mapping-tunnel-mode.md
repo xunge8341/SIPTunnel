@@ -101,3 +101,17 @@ HTTP 映射隧道模式采用明确的双节点协作模型：
 - `suggested_action`（建议动作）
 
 要求：后端直接返回中文诊断语义，前端仅做展示，不再额外翻译成另一套术语。
+
+## 7. 运行时转发策略分层（当前 direct + 未来 SIP/RTP）
+
+为避免把当前 HTTP direct 转发写成“不可演进”的路径，映射运行时采用监听层与转发策略解耦：
+
+- `mapping runtime listener`：仅负责本端 `IP:Port` 监听、连接接入、状态机维护与审计。
+- `forward strategy`：负责请求准备与执行；接口拆分为 `PrepareForward` 与 `ExecuteForward`。
+- `direct HTTP forwarder`（当前落地）：
+  - `PrepareForward` 完成方法校验、请求体限制、路径映射与转发头构建。
+  - `ExecuteForward` 执行 HTTP 直连请求并保留超时/响应体限制控制。
+- `future SIP/RTP tunnel forwarder`（预留）：
+  - 在同一策略接口下扩展 SIP 元信息、RTP 大载荷、流式响应回传。
+
+该分层确保：当前版本可直接运行，同时不破坏后续 Invite + SIP/RTP 承载主链路的接入方式。
