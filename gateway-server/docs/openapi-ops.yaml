@@ -93,6 +93,20 @@ paths:
         - in: query
           name: trace_id
           schema: { type: string }
+        - in: query
+          name: rule
+          schema: { type: string }
+          description: 规则关键词，匹配 api_code/ops_action/request_type/local_service_route
+        - in: query
+          name: error_only
+          schema: { type: boolean }
+          description: 是否仅返回错误结果（final_result != OK）
+        - in: query
+          name: start_time
+          schema: { type: string, format: date-time }
+        - in: query
+          name: end_time
+          schema: { type: string, format: date-time }
       responses:
         '200': { description: OK }
 

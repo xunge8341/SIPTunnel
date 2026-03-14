@@ -262,6 +262,40 @@ func TestLimitsRoutesNodesAndAudits(t *testing.T) {
 	}
 }
 
+func TestAuditsEndpointAdvancedFilters(t *testing.T) {
+	h, _, audit := buildTestHandler(t)
+	base := time.Date(2026, 3, 8, 10, 0, 0, 0, time.UTC)
+	_ = audit.Record(t.Context(), observability.AuditEvent{Who: "ops", When: base, RequestType: "ops", LocalServiceRoute: "gateway", OpsAction: "UPDATE_LIMITS", FinalResult: "OK", Core: observability.CoreFields{APICode: "asset.sync"}})
+	_ = audit.Record(t.Context(), observability.AuditEvent{Who: "ops", When: base.Add(30 * time.Minute), RequestType: "demo.process", LocalServiceRoute: "gateway", OpsAction: "NONE", FinalResult: "UPSTREAM_TIMEOUT", Core: observability.CoreFields{APICode: "asset.upload"}})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/audits?rule=upload&error_only=true&start_time=2026-03-08T10:15:00Z&end_time=2026-03-08T10:45:00Z&page=1&page_size=10", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var payload struct {
+		Code string `json:"code"`
+		Data struct {
+			Items []observability.AuditEvent `json:"items"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal response failed: %v", err)
+	}
+	if payload.Code != "OK" {
+		t.Fatalf("unexpected code: %s", payload.Code)
+	}
+	if len(payload.Data.Items) != 1 {
+		t.Fatalf("expected 1 filtered audit item, got %d", len(payload.Data.Items))
+	}
+	if payload.Data.Items[0].Core.APICode != "asset.upload" || payload.Data.Items[0].FinalResult != "UPSTREAM_TIMEOUT" {
+		t.Fatalf("unexpected filtered audit item: %+v", payload.Data.Items[0])
+	}
+}
+
 func TestNodeNetworkStatusEndpointAndAudit(t *testing.T) {
 	h, _, audit := buildTestHandler(t)
 	req := httptest.NewRequest(http.MethodGet, "/api/node/network-status", nil)

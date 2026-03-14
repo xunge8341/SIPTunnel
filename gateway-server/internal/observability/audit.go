@@ -3,6 +3,7 @@ package observability
 import (
 	"context"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -23,6 +24,10 @@ type AuditQuery struct {
 	TraceID   string
 	APICode   string
 	Who       string
+	Rule      string
+	ErrorOnly bool
+	StartTime time.Time
+	EndTime   time.Time
 	Limit     int
 }
 
@@ -82,6 +87,18 @@ func (s *InMemoryAuditStore) List(_ context.Context, query AuditQuery) ([]AuditE
 		if query.Who != "" && e.Who != query.Who {
 			continue
 		}
+		if !query.StartTime.IsZero() && e.When.Before(query.StartTime) {
+			continue
+		}
+		if !query.EndTime.IsZero() && e.When.After(query.EndTime) {
+			continue
+		}
+		if query.Rule != "" && !matchesAuditRule(e, query.Rule) {
+			continue
+		}
+		if query.ErrorOnly && !isAuditError(e) {
+			continue
+		}
 		out = append(out, e)
 	}
 
@@ -89,6 +106,24 @@ func (s *InMemoryAuditStore) List(_ context.Context, query AuditQuery) ([]AuditE
 		return out[i].When.After(out[j].When)
 	})
 	return out, nil
+}
+
+func matchesAuditRule(event AuditEvent, rule string) bool {
+	rule = strings.TrimSpace(strings.ToLower(rule))
+	if rule == "" {
+		return true
+	}
+	for _, field := range []string{event.Core.APICode, event.OpsAction, event.RequestType, event.LocalServiceRoute} {
+		if strings.Contains(strings.ToLower(field), rule) {
+			return true
+		}
+	}
+	return false
+}
+
+func isAuditError(event AuditEvent) bool {
+	result := strings.ToUpper(strings.TrimSpace(event.FinalResult))
+	return result != "" && result != "OK"
 }
 
 type AuditLogger struct {
