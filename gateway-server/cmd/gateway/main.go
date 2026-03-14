@@ -265,6 +265,7 @@ func buildSelfCheckInput(paths config.StoragePaths, cliConfigPath string, defaul
 		RunMode:         resolveRunMode(),
 		SuggestFreePort: parseBoolEnv("GATEWAY_SELFCHECK_SUGGEST_FREE_PORT"),
 	}
+	// GATEWAY_HTTPINVOKE_CONFIG 仅用于加载历史 route/api_code 配置（兼容/迁移路径，deprecated 术语）。
 	if routePath := os.Getenv("GATEWAY_HTTPINVOKE_CONFIG"); routePath != "" {
 		routeCfg, err := httpinvoke.LoadConfig(routePath)
 		if err != nil {
@@ -293,6 +294,7 @@ func buildStartupSummary(nodeID string, cfgLoad configLoadResult, uiCfg config.U
 	}
 
 	businessState := "active"
+	// 业务执行层主线语义：HTTP 映射隧道；route/template 仅兼容存在。
 	businessMessage := "业务执行层已激活，下游 HTTP 隧道映射可用"
 	businessImpact := "A 网 HTTP 落地可执行"
 	if routeCount <= 0 {

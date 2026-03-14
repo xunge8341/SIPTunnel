@@ -1,14 +1,14 @@
 <template>
   <a-space direction="vertical" size="middle" style="width: 100%">
-    <a-card title="映射规则查询">
+    <a-card title="隧道映射查询">
       <a-form layout="inline">
-        <a-form-item label="规则ID">
-          <a-input v-model:value="keyword" allow-clear placeholder="输入规则ID" />
+        <a-form-item label="映射ID">
+          <a-input v-model:value="keyword" allow-clear placeholder="输入映射ID" />
         </a-form-item>
         <a-form-item>
           <a-space>
-            <a-button type="primary" @click="openCreate">新建规则</a-button>
-            <a-button :loading="testingMapping" @click="runMappingTest">测试规则</a-button>
+            <a-button type="primary" @click="openCreate">新建映射</a-button>
+            <a-button :loading="testingMapping" @click="runMappingTest">测试映射</a-button>
           </a-space>
         </a-form-item>
       </a-form>
@@ -53,23 +53,23 @@
         type="error"
         show-icon
         :message="mappingBindingError"
-        description="映射规则当前按单对单模式运行：必须且仅能有一个启用的对端节点。"
+        description="隧道映射当前按单对单模式运行：必须且仅能有一个启用的对端节点。"
         style="margin-bottom: 12px"
       />
       <a-descriptions bordered :column="2" size="small">
         <a-descriptions-item label="peer_node_id">{{ boundPeer?.peer_node_id ?? '-' }}</a-descriptions-item>
         <a-descriptions-item label="peer_name">{{ boundPeer?.peer_name ?? '-' }}</a-descriptions-item>
         <a-descriptions-item label="peer_signaling">{{ boundPeerEndpoint }}</a-descriptions-item>
-        <a-descriptions-item label="映射绑定策略">映射规则自动绑定唯一启用对端（不可编辑）</a-descriptions-item>
+        <a-descriptions-item label="映射绑定策略">隧道映射自动绑定唯一启用对端（不可编辑）</a-descriptions-item>
       </a-descriptions>
     </a-card>
 
-    <a-card title="映射规则列表">
+    <a-card title="隧道映射列表">
       <a-alert
         v-if="mappingTestResult"
         :type="mappingTestPassed ? 'success' : 'error'"
         show-icon
-        :message="`规则测试：信令请求 ${mappingTestResult.signaling_request}，响应通道 ${mappingTestResult.response_channel}，注册状态 ${mappingTestResult.registration_status}`"
+        :message="`映射测试：信令请求 ${mappingTestResult.signaling_request}，响应通道 ${mappingTestResult.response_channel}，注册状态 ${mappingTestResult.registration_status}`"
         style="margin-bottom: 12px"
       />
       <a-alert v-if="warnings.length" type="warning" show-icon :message="warnings.join('；')" style="margin-bottom: 12px" />
@@ -122,7 +122,7 @@
         v-if="editorAdvisoryWarnings.length"
       />
       <a-form layout="vertical">
-        <a-form-item label="规则ID">
+        <a-form-item label="映射ID">
           <a-input v-model:value="editing.mapping_id" :disabled="editingMode === 'edit'" />
         </a-form-item>
         <a-form-item label="本端入口 IP" extra="填写本端业务入口地址。">
@@ -145,7 +145,7 @@
         <a-form-item label="响应超时（毫秒）" extra="控制响应等待时长，超时后自动失败返回。">
           <a-input-number v-model:value="editing.response_timeout_ms" :min="1" style="width: 100%" />
         </a-form-item>
-        <a-form-item label="请求体大小上限（字节）" extra="系统按动作类型自动选择命令或文件传输链路。">
+        <a-form-item label="请求体大小上限（字节）" extra="系统按动作类型自动选择命令或文件传输链路；route/api_code/template 为兼容术语（deprecated）。">
           <a-input-number v-model:value="editing.max_request_body_bytes" :min="1" style="width: 100%" />
         </a-form-item>
         <a-form-item label="响应体大小上限（字节）" extra="建议与对端能力矩阵保持一致。">
@@ -295,7 +295,7 @@ const filteredMappings = computed(() => {
   return mappings.value.filter((item) => item.mapping_id.toLowerCase().includes(k))
 })
 
-const drawerTitle = computed(() => (editingMode.value === 'create' ? '新建映射规则' : '编辑映射规则'))
+const drawerTitle = computed(() => (editingMode.value === 'create' ? '新建隧道映射' : '编辑隧道映射'))
 
 const inferMappingRuntimeStatus = (
   item: TunnelMapping,
@@ -364,9 +364,9 @@ const runMappingTest = async () => {
   try {
     mappingTestResult.value = await gatewayApi.testMapping()
     if (mappingTestPassed.value) {
-      message.success('映射规则测试通过，链路状态正常')
+      message.success('隧道映射测试通过，链路状态正常')
     } else {
-      message.warning('映射规则测试未通过，请根据异常原因与建议动作排查')
+      message.warning('隧道映射测试未通过，请根据异常原因与建议动作排查')
     }
   } finally {
     testingMapping.value = false

@@ -249,6 +249,7 @@ export interface OpsLimits {
   maxConcurrent: number
 }
 
+// 兼容 API（历史模型 route/api_code）返回结构，非主线术语。
 export interface OpsRoute {
   api_code: string
   http_method: string

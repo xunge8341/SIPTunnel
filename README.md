@@ -12,11 +12,22 @@ SIPTunnel 是跨安全边界业务交换网关，当前仓库为 monorepo 结构
 SIPTunnel 同时支持两种产品模式，文档与 UI 必须明确区分：
 
 1. **命令网关模式**：以 SIP 控制命令分发与状态同步为核心。
-2. **HTTP 映射隧道模式（当前主线）**：以“受全局网络模式约束的 HTTP 映射转发”为核心。
+2. **HTTP 映射隧道模式（当前主线）**：以“受全局网络模式约束的 HTTP 映射隧道”为核心。
 
 当前主线统一术语：**本端节点 / 对端节点 / 网络模式 / 能力矩阵 / 隧道映射 / 本端入口 / 对端目标**。
 
-> 兼容说明：`route` / `api_code` / `template` 属于历史模型（兼容术语），仅在迁移或兼容接口（如 `/api/routes`）中出现，不再作为默认产品术语。
+网络模型（HTTP 映射隧道主链路）：
+
+- 接收端（SIP 下级域）：监听本端入口端口，收到 HTTP 请求后通过 Invite 连接发送端。
+- 发送端（SIP 上级域）：收到 Invite 后访问对端目标 `IP:Port`，并通过 SIP/RTP 返回给接收端。
+- 支持单向映射与双向映射，基础承载能力来自 GB/T 28181 视频点流链路。
+
+> 兼容说明：`route` / `api_code` / `template` 属于**历史模型**（**兼容术语 / deprecated 术语**），仅在迁移或兼容接口（如 `/api/routes`）中出现，不再作为默认产品术语。
+
+详见：
+
+- `docs/command-gateway-vs-http-mapping-tunnel.md`
+- `docs/network-mode-capability-tunnel-mapping.md`
 
 ## 关键能力与约束落实
 
