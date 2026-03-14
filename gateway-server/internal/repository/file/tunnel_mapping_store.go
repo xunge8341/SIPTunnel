@@ -101,16 +101,122 @@ func (s *TunnelMappingStore) load() error {
 	if len(buf) == 0 {
 		return nil
 	}
-	var payload struct {
-		Items []tunnelmapping.TunnelMapping `json:"items"`
-	}
-	if err := json.Unmarshal(buf, &payload); err != nil {
+	items, migrated, err := decodeMappingPayload(buf)
+	if err != nil {
 		return fmt.Errorf("decode mapping store: %w", err)
 	}
-	for _, item := range payload.Items {
+	for _, item := range items {
 		s.data[item.MappingID] = item
 	}
+	if migrated {
+		return s.persistLocked()
+	}
 	return nil
+}
+
+func decodeMappingPayload(buf []byte) ([]tunnelmapping.TunnelMapping, bool, error) {
+	var latest struct {
+		Items []tunnelmapping.TunnelMapping `json:"items"`
+	}
+	if err := json.Unmarshal(buf, &latest); err == nil {
+		if len(latest.Items) > 0 {
+			return latest.Items, false, nil
+		}
+		// 如果是空 payload，继续探测旧模型。
+	}
+
+	if hasLegacyRouteConfigShape(buf) {
+		legacyRouteConfig := struct {
+			Routes []tunnelmapping.LegacyRouteConfig `json:"routes"`
+		}{}
+		if err := json.Unmarshal(buf, &legacyRouteConfig); err == nil && len(legacyRouteConfig.Routes) > 0 {
+			return convertLegacyRouteConfigs(legacyRouteConfig.Routes)
+		}
+
+		var routeArray []tunnelmapping.LegacyRouteConfig
+		if err := json.Unmarshal(buf, &routeArray); err == nil && len(routeArray) > 0 {
+			return convertLegacyRouteConfigs(routeArray)
+		}
+	}
+
+	legacyOps := struct {
+		Items  []tunnelmapping.LegacyOpsRoute `json:"items"`
+		Routes []tunnelmapping.LegacyOpsRoute `json:"routes"`
+	}{}
+	if err := json.Unmarshal(buf, &legacyOps); err == nil {
+		routes := legacyOps.Items
+		if len(routes) == 0 {
+			routes = legacyOps.Routes
+		}
+		if len(routes) > 0 {
+			return convertLegacyOpsRoutes(routes)
+		}
+	}
+
+	if len(latest.Items) == 0 {
+		return []tunnelmapping.TunnelMapping{}, false, nil
+	}
+	return latest.Items, false, nil
+}
+
+func hasLegacyRouteConfigShape(buf []byte) bool {
+	var probe struct {
+		Routes []map[string]json.RawMessage `json:"routes"`
+	}
+	if err := json.Unmarshal(buf, &probe); err == nil && len(probe.Routes) > 0 {
+		for _, item := range probe.Routes {
+			if _, ok := item["target_host"]; ok {
+				return true
+			}
+			if _, ok := item["target_port"]; ok {
+				return true
+			}
+			if _, ok := item["target_service"]; ok {
+				return true
+			}
+		}
+		return false
+	}
+
+	var arr []map[string]json.RawMessage
+	if err := json.Unmarshal(buf, &arr); err == nil && len(arr) > 0 {
+		for _, item := range arr {
+			if _, ok := item["target_host"]; ok {
+				return true
+			}
+			if _, ok := item["target_port"]; ok {
+				return true
+			}
+			if _, ok := item["target_service"]; ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func convertLegacyOpsRoutes(routes []tunnelmapping.LegacyOpsRoute) ([]tunnelmapping.TunnelMapping, bool, error) {
+	items := make([]tunnelmapping.TunnelMapping, 0, len(routes))
+	for _, route := range routes {
+		item, err := tunnelmapping.MappingFromLegacyOpsRoute(route)
+		if err != nil {
+			return nil, false, err
+		}
+		items = append(items, item)
+	}
+	return items, true, nil
+}
+
+func convertLegacyRouteConfigs(routes []tunnelmapping.LegacyRouteConfig) ([]tunnelmapping.TunnelMapping, bool, error) {
+	items := make([]tunnelmapping.TunnelMapping, 0, len(routes))
+	for _, route := range routes {
+		item, err := tunnelmapping.MappingFromLegacyRouteConfig(route)
+		if err != nil {
+			return nil, false, err
+		}
+		items = append(items, item)
+	}
+	return items, true, nil
 }
 
 func (s *TunnelMappingStore) persistLocked() error {

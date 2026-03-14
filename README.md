@@ -135,6 +135,41 @@ $env:VITE_API_BASE_URL='http://127.0.0.1:18080/api'
 - `POST /api/config-governance/rollback`
 - `GET /api/config-governance/export?target=current|pending`
 
+### RouteConfig/OpsRoute → TunnelMapping 迁移（兼容过渡）
+
+为避免历史页面/脚本一次性失效，当前版本提供“启动时自动迁移 + 显式迁移工具”双路径：
+
+- 自动迁移：服务启动加载 `data/final/tunnel_mappings.json` 时，若检测到旧格式（`OpsRoute` 或 `RouteConfig`）会自动转换为 `TunnelMapping` 并回写新格式。
+- 显式迁移：执行 `go run ./cmd/mapping-migrate --in <legacy.json> --out <tunnel_mappings.json>` 完成离线转换。
+- 兼容 API：`GET/PUT /api/routes` 仍保留，但已标记 **deprecated**，仅用于过渡，建议改用 `/api/mappings`。
+
+推荐迁移步骤：
+
+1. 导出旧数据
+   - 旧运维接口导出：`curl -s http://127.0.0.1:18080/api/routes > legacy-routes.json`
+   - 旧配置文件导出：备份历史 `httpinvoke_routes*.yaml/json`。
+2. 转换/导入新模型
+   - 离线转换：`go run ./cmd/mapping-migrate --in legacy-routes.json --out ./data/final/tunnel_mappings.json`
+   - 或直接重启 gateway，让启动时兼容层自动读取并转换。
+3. 校验转换结果
+   - `curl -s http://127.0.0.1:18080/api/mappings` 确认 `mapping_id/local_base_path/remote_target_*` 等字段已生成。
+   - 观察 `tunnel_mappings.json` 已改写为 `{"items":[...]}` 新格式。
+
+字段映射与丢弃规则：
+
+- `OpsRoute.api_code -> TunnelMapping.mapping_id/name`
+- `OpsRoute.http_path -> local_base_path/remote_base_path`
+- `OpsRoute.http_method -> allowed_methods[0]`
+- `RouteConfig.target_service -> peer_node_id`（为空时回退 `legacy-peer`）
+- `RouteConfig.target_host/target_port -> remote_target_ip/remote_target_port`（无效值回退 `127.0.0.1:8080`）
+- `RouteConfig.timeout_ms -> request_timeout_ms/response_timeout_ms`
+- 以下旧字段不再作为主模型持久化：`retry_times/header_mapping/body_mapping/content_type`（迁移后由 TunnelMapping + 业务逻辑统一治理）。
+
+弃用建议：
+
+- **当前版本起**：`OpsRoute`、`RouteConfig` 仅作为兼容输入/输出模型，新增能力只在 `TunnelMapping` 维护。
+- **建议切换窗口**：建议在下一个小版本迭代周期内完成所有页面、脚本到 `/api/mappings` 的切换。
+
 运维联动文档（页面/API/CLI 统一入口）：
 
 - Runbook（启动停止、发布回滚、链路自检、端口/transport/TCP/RTP 排障、压测前准备）：`docs/runbook.md`
