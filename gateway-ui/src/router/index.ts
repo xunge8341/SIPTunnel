@@ -2,7 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import AdminLayout from '../layouts/AdminLayout.vue'
 import DashboardView from '../views/DashboardView.vue'
 import RateLimitPoliciesView from '../views/RateLimitPoliciesView.vue'
-import RouteConfigView from '../views/RouteConfigView.vue'
+import TunnelMappingsView from '../views/TunnelMappingsView.vue'
 import NodeStatusView from '../views/NodeStatusView.vue'
 import AlertsCenterView from '../views/AlertsCenterView.vue'
 import AuditLogsView from '../views/AuditLogsView.vue'
@@ -57,10 +57,10 @@ const router = createRouter({
           meta: { title: '配置治理', description: '快照、对比、回滚与 YAML 导出。' }
         },
         {
-          path: 'route-config',
-          name: 'route-config',
-          component: RouteConfigView,
-          meta: { title: '路由配置', description: '维护 api_code 到 HTTP 模板的映射关系。' }
+          path: 'tunnel-mappings',
+          name: 'tunnel-mappings',
+          component: TunnelMappingsView,
+          meta: { title: '隧道映射', description: '维护 TunnelMapping 核心业务字段，并只读展示全局 transport 决策。' }
         },
         {
           path: 'rate-limits',

@@ -15,10 +15,57 @@ import type {
   DiagnosticExportJob,
   DiagnosticExportCreatePayload,
   DeploymentModePayload,
-  StartupSummaryPayload
+  StartupSummaryPayload,
+  TunnelMapping,
+  TunnelMappingListPayload,
+  TunnelMappingSavePayload
 } from '../types/gateway'
 
 const wait = (ms = 200) => new Promise((resolve) => setTimeout(resolve, ms))
+
+
+let mappingState: TunnelMapping[] = [
+  {
+    mapping_id: 'map-orders',
+    name: '订单同步映射',
+    enabled: true,
+    peer_node_id: 'gateway-b-01',
+    local_bind_ip: '10.10.10.8',
+    local_bind_port: 18080,
+    local_base_path: '/orders',
+    remote_target_ip: '172.16.8.12',
+    remote_target_port: 8080,
+    remote_base_path: '/api/v1/orders',
+    allowed_methods: ['POST', 'PUT'],
+    connect_timeout_ms: 500,
+    request_timeout_ms: 3000,
+    response_timeout_ms: 3000,
+    max_request_body_bytes: 1048576,
+    max_response_body_bytes: 10485760,
+    require_streaming_response: false,
+    description: '用于订单写入与状态更新。'
+  },
+  {
+    mapping_id: 'map-query',
+    name: '查询映射',
+    enabled: true,
+    peer_node_id: 'gateway-b-02',
+    local_bind_ip: '10.10.10.8',
+    local_bind_port: 18081,
+    local_base_path: '/query',
+    remote_target_ip: '172.16.8.18',
+    remote_target_port: 8081,
+    remote_base_path: '/query',
+    allowed_methods: ['GET'],
+    connect_timeout_ms: 500,
+    request_timeout_ms: 2000,
+    response_timeout_ms: 2000,
+    max_request_body_bytes: 1048576,
+    max_response_body_bytes: 5242880,
+    require_streaming_response: false,
+    description: '用于只读查询。'
+  }
+]
 
 const statuses: TaskStatus[] = ['pending', 'running', 'succeeded', 'failed', 'retry_wait']
 
@@ -129,6 +176,23 @@ export async function fetchStartupSummaryMock(): Promise<StartupSummaryPayload> 
   await wait()
   return {
     node_id: 'gateway-a-01',
+    network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+    capability: {
+      supports_large_request_body: false,
+      supports_large_response_body: true,
+      supports_streaming_response: false,
+      supports_bidirectional_http_tunnel: false,
+      supports_transparent_proxy: false
+    },
+    capability_summary: {
+      supported: ['small_request', 'large_response'],
+      unsupported: ['large_request', 'streaming_response', 'bidirectional_http_tunnel', 'transparent_proxy'],
+      items: [
+        { key: 'small_request', label: '小请求体', supported: true, note: '支持' },
+        { key: 'large_response', label: '大响应体', supported: true, note: '支持' },
+        { key: 'large_request', label: '大请求体', supported: false, note: '不支持' }
+      ]
+    },
     config_path: '/etc/siptunnel/config.yaml',
     config_source: 'local-file',
     ui_mode: 'embedded',
@@ -233,6 +297,33 @@ export async function fetchTaskDetailMock(id: string, taskKind: TaskKind): Promi
       }
     ]
   }
+}
+
+
+export async function fetchMappingsMock(): Promise<TunnelMappingListPayload> {
+  await wait()
+  return { items: JSON.parse(JSON.stringify(mappingState)), warnings: [] }
+}
+
+export async function createMappingMock(payload: TunnelMapping): Promise<TunnelMappingSavePayload> {
+  await wait()
+  mappingState.push(JSON.parse(JSON.stringify(payload)))
+  return { mapping: JSON.parse(JSON.stringify(payload)), warnings: [] }
+}
+
+export async function updateMappingMock(id: string, payload: TunnelMapping): Promise<TunnelMappingSavePayload> {
+  await wait()
+  const index = mappingState.findIndex((item) => item.mapping_id === id)
+  if (index < 0) {
+    throw new Error('MAPPING_NOT_FOUND')
+  }
+  mappingState[index] = JSON.parse(JSON.stringify(payload))
+  return { mapping: JSON.parse(JSON.stringify(payload)), warnings: [] }
+}
+
+export async function deleteMappingMock(id: string): Promise<void> {
+  await wait()
+  mappingState = mappingState.filter((item) => item.mapping_id !== id)
 }
 
 

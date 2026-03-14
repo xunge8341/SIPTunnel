@@ -768,7 +768,7 @@ cd gateway-ui && npm run test -- --run
 - 命令任务与文件任务：过滤、分页、详情跳转（故障处置见 `docs/runbook.md`）
 - 任务详情：基础信息、状态流转、SIP/RTP/HTTP执行结果（诊断导出见 `gatewayctl diag export`）
 - 限流策略：在线查看/更新全局限流（变更前后请执行 `docs/runbook.md` 的链路自检）
-- 路由配置：按 api_code 编辑映射路由（发布/回滚流程见 `docs/operations.md`）
+- 隧道映射：按 TunnelMapping 编辑核心业务映射（不在页面逐条编辑 transport，发布/回滚流程见 `docs/operations.md`）
 - 审计日志：查询与详情查看（升级研发前需附带审计与诊断信息）
 
 ## 统一压测工具集（loadtest）
