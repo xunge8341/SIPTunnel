@@ -134,6 +134,16 @@ export async function fetchStartupSummaryMock(): Promise<StartupSummaryPayload> 
     ui_mode: 'embedded',
     ui_url: 'http://127.0.0.1:8360/ui',
     api_url: 'http://127.0.0.1:8360/api',
+    transport_plan: {
+      request_meta_transport: 'sip_control',
+      request_body_transport: 'sip_body_only',
+      response_meta_transport: 'sip_control',
+      response_body_transport: 'rtp_stream',
+      request_body_size_limit: 65535,
+      response_body_size_limit: -1,
+      notes: ['transport 决策由全局 network.mode 推导，禁止在单条映射上覆盖。'],
+      warnings: ['不支持大请求体上传；超过 SIP 限制的请求体将被拒绝。']
+    },
     business_execution: {
       state: 'protocol_only',
       route_count: 0,

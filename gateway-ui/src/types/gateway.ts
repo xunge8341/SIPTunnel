@@ -59,6 +59,17 @@ export interface BusinessExecutionStatus {
   impact: string
 }
 
+export interface TunnelTransportPlan {
+  request_meta_transport: string
+  request_body_transport: string
+  response_meta_transport: string
+  response_body_transport: string
+  request_body_size_limit: number
+  response_body_size_limit: number
+  notes: string[]
+  warnings: string[]
+}
+
 export interface StartupSummaryPayload {
   node_id: string
   config_path: string
@@ -66,6 +77,7 @@ export interface StartupSummaryPayload {
   ui_mode: UiDeployMode
   ui_url: string
   api_url: string
+  transport_plan: TunnelTransportPlan
   business_execution: BusinessExecutionStatus
   self_check_summary: {
     generated_at: string

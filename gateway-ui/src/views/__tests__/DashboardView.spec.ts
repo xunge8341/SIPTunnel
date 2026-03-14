@@ -50,6 +50,16 @@ describe('DashboardView', () => {
       ui_mode: 'external',
       ui_url: 'https://ops.example.com',
       api_url: 'https://api.example.com',
+      transport_plan: {
+        request_meta_transport: 'sip_control',
+        request_body_transport: 'sip_body_only',
+        response_meta_transport: 'sip_control',
+        response_body_transport: 'rtp_stream',
+        request_body_size_limit: 65535,
+        response_body_size_limit: -1,
+        notes: ['transport 决策由全局 network.mode 推导，禁止在单条映射上覆盖。'],
+        warnings: ['不支持大请求体上传；超过 SIP 限制的请求体将被拒绝。']
+      },
       business_execution: {
         state: 'protocol_only',
         route_count: 0,
@@ -78,6 +88,8 @@ describe('DashboardView', () => {
     expect(wrapper.text()).toContain('config-center')
     expect(wrapper.text()).toContain('当前未加载业务路由')
     expect(wrapper.text()).toContain('不会执行 A 网 HTTP 落地')
+    expect(wrapper.text()).toContain('sip_body_only')
+    expect(wrapper.text()).toContain('rtp_stream')
     expect(wrapper.findAll('circle')).toHaveLength(2)
   })
 })

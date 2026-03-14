@@ -59,6 +59,30 @@
     </a-card>
 
 
+
+    <a-card title="全局 TunnelTransportPlan（只读）" :bordered="false">
+      <a-descriptions :column="1" size="small" bordered>
+        <a-descriptions-item label="request_meta_transport">{{ startupSummary.transport_plan.request_meta_transport }}</a-descriptions-item>
+        <a-descriptions-item label="request_body_transport">{{ startupSummary.transport_plan.request_body_transport }}</a-descriptions-item>
+        <a-descriptions-item label="response_meta_transport">{{ startupSummary.transport_plan.response_meta_transport }}</a-descriptions-item>
+        <a-descriptions-item label="response_body_transport">{{ startupSummary.transport_plan.response_body_transport }}</a-descriptions-item>
+        <a-descriptions-item label="request_body_size_limit">{{ startupSummary.transport_plan.request_body_size_limit }}</a-descriptions-item>
+        <a-descriptions-item label="response_body_size_limit">{{ startupSummary.transport_plan.response_body_size_limit }}</a-descriptions-item>
+      </a-descriptions>
+      <a-typography-title :level="5" style="margin-top: 12px">notes</a-typography-title>
+      <a-list size="small" bordered :data-source="startupSummary.transport_plan.notes">
+        <template #renderItem="{ item }">
+          <a-list-item>{{ item }}</a-list-item>
+        </template>
+      </a-list>
+      <a-typography-title :level="5" style="margin-top: 12px">warnings</a-typography-title>
+      <a-list size="small" bordered :data-source="startupSummary.transport_plan.warnings">
+        <template #renderItem="{ item }">
+          <a-list-item>{{ item }}</a-list-item>
+        </template>
+      </a-list>
+    </a-card>
+
     <a-card
       v-if="startupSummary.business_execution.state === 'protocol_only'"
       :bordered="false"
@@ -116,6 +140,16 @@ const startupSummary = ref<StartupSummaryPayload>({
   ui_mode: 'embedded',
   ui_url: '-',
   api_url: '-',
+  transport_plan: {
+    request_meta_transport: '-',
+    request_body_transport: '-',
+    response_meta_transport: '-',
+    response_body_transport: '-',
+    request_body_size_limit: 0,
+    response_body_size_limit: 0,
+    notes: [],
+    warnings: []
+  },
   business_execution: {
     state: 'active',
     route_count: 1,
