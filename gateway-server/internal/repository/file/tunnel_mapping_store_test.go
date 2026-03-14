@@ -44,17 +44,24 @@ func TestTunnelMappingStoreCRUDAndReload(t *testing.T) {
 	if created.MappingID != "m1" {
 		t.Fatalf("unexpected mapping id: %s", created.MappingID)
 	}
+	if created.UpdatedAt == "" {
+		t.Fatalf("expected updated_at to be set")
+	}
 	if _, err := store.Create(sampleMapping("m1")); err != ErrMappingExists {
 		t.Fatalf("expected ErrMappingExists, got %v", err)
 	}
 	updatedInput := sampleMapping("m1")
 	updatedInput.Name = "changed"
+	updatedInput.AllowedMethods = nil
 	updated, err := store.Update("m1", updatedInput)
 	if err != nil {
 		t.Fatalf("update failed: %v", err)
 	}
 	if updated.Name != "changed" {
 		t.Fatalf("update did not apply")
+	}
+	if len(updated.AllowedMethods) != 1 || updated.AllowedMethods[0] != "*" {
+		t.Fatalf("expected default methods after update, got %+v", updated.AllowedMethods)
 	}
 	if err := store.Delete("m1"); err != nil {
 		t.Fatalf("delete failed: %v", err)

@@ -15,16 +15,14 @@ describe('gatewayApi mappings adapter', () => {
 
     const payload = {
       mapping_id: 'map-adapter-test',
-      name: 'adapter test',
       enabled: true,
-      peer_node_id: 'peer-1',
       local_bind_ip: '127.0.0.1',
       local_bind_port: 18089,
       local_base_path: '/in',
       remote_target_ip: '127.0.0.2',
       remote_target_port: 8089,
       remote_base_path: '/out',
-      allowed_methods: ['POST'],
+      allowed_methods: ['*'],
       connect_timeout_ms: 500,
       request_timeout_ms: 3000,
       response_timeout_ms: 3000,
@@ -38,9 +36,9 @@ describe('gatewayApi mappings adapter', () => {
     let listed = await gatewayApi.fetchMappings()
     expect(listed.items.length).toBe(initial.items.length + 1)
 
-    await gatewayApi.updateMapping(payload.mapping_id, { ...payload, name: 'adapter test v2' })
+    await gatewayApi.updateMapping(payload.mapping_id, { ...payload, remote_base_path: '/out-v2' })
     listed = await gatewayApi.fetchMappings()
-    expect(listed.items.find((item) => item.mapping_id === payload.mapping_id)?.name).toBe('adapter test v2')
+    expect(listed.items.find((item) => item.mapping_id === payload.mapping_id)?.remote_base_path).toBe('/out-v2')
 
     await gatewayApi.deleteMapping(payload.mapping_id)
     listed = await gatewayApi.fetchMappings()

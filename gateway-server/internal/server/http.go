@@ -894,6 +894,7 @@ func (d handlerDeps) handleMappings(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid json body")
 			return
 		}
+		req.Normalize()
 		validation := d.validateMappingAgainstCapability(req)
 		if validation.HasErrors() {
 			writeError(w, http.StatusBadRequest, "MAPPING_CAPABILITY_INVALID", strings.Join(validation.Errors, "; "))
@@ -922,6 +923,7 @@ func (d handlerDeps) handleMappings(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid json body")
 			return
 		}
+		req.Normalize()
 		validation := d.validateMappingAgainstCapability(req)
 		if validation.HasErrors() {
 			writeError(w, http.StatusBadRequest, "MAPPING_CAPABILITY_INVALID", strings.Join(validation.Errors, "; "))

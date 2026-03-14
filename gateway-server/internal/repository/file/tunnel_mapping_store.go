@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"time"
 
 	"siptunnel/internal/tunnelmapping"
 )
@@ -43,6 +44,8 @@ func (s *TunnelMappingStore) List() []tunnelmapping.TunnelMapping {
 }
 
 func (s *TunnelMappingStore) Create(m tunnelmapping.TunnelMapping) (tunnelmapping.TunnelMapping, error) {
+	m.Normalize()
+	m.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	if err := m.Validate(); err != nil {
 		return tunnelmapping.TunnelMapping{}, err
 	}
@@ -59,6 +62,7 @@ func (s *TunnelMappingStore) Create(m tunnelmapping.TunnelMapping) (tunnelmappin
 }
 
 func (s *TunnelMappingStore) Update(id string, m tunnelmapping.TunnelMapping) (tunnelmapping.TunnelMapping, error) {
+	m.Normalize()
 	if id != m.MappingID {
 		return tunnelmapping.TunnelMapping{}, errors.New("mapping_id mismatch")
 	}
@@ -70,6 +74,7 @@ func (s *TunnelMappingStore) Update(id string, m tunnelmapping.TunnelMapping) (t
 	if _, exists := s.data[id]; !exists {
 		return tunnelmapping.TunnelMapping{}, ErrMappingNotFound
 	}
+	m.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	s.data[id] = m
 	if err := s.persistLocked(); err != nil {
 		return tunnelmapping.TunnelMapping{}, err
@@ -106,6 +111,10 @@ func (s *TunnelMappingStore) load() error {
 		return fmt.Errorf("decode mapping store: %w", err)
 	}
 	for _, item := range items {
+		item.Normalize()
+		if item.UpdatedAt == "" {
+			item.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+		}
 		s.data[item.MappingID] = item
 	}
 	if migrated {

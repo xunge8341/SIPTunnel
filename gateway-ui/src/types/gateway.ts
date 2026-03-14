@@ -239,16 +239,16 @@ export interface OpsRoute {
 
 export interface TunnelMapping {
   mapping_id: string
-  name: string
+  name?: string
   enabled: boolean
-  peer_node_id: string
+  peer_node_id?: string
   local_bind_ip: string
   local_bind_port: number
   local_base_path: string
   remote_target_ip: string
   remote_target_port: number
   remote_base_path: string
-  allowed_methods: string[]
+  allowed_methods?: string[]
   connect_timeout_ms: number
   request_timeout_ms: number
   response_timeout_ms: number
@@ -256,6 +256,7 @@ export interface TunnelMapping {
   max_response_body_bytes: number
   require_streaming_response: boolean
   description: string
+  updated_at?: string
 }
 
 export interface TunnelMappingListPayload {
@@ -400,7 +401,7 @@ export interface OpsAuditEvent {
 }
 
 export interface OpsLinkTestItem {
-  name: string
+  name?: string
   passed: boolean
   status: 'passed' | 'failed'
   detail: string
@@ -461,7 +462,7 @@ export interface ConnectionErrorEvent {
 
 export interface SelfCheckItem {
   key: string
-  name: string
+  name?: string
   level: 'info' | 'warn' | 'error'
   message: string
   suggestion: string

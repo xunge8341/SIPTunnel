@@ -28,7 +28,17 @@ SIPTunnel 同时支持两种产品模式，文档与 UI 必须明确区分：
 - HTTP 执行：主模型为“隧道映射（本端入口 -> 对端目标）”；`api_code -> route template` 仅保留为历史兼容术语，不支持任意透传。
 - 生产基线：限流、审计日志、trace 字段透传和结构化日志。
 - 网络模式能力矩阵：`NetworkMode -> Capability` 由后端统一推导，覆盖系统信息 API、启动摘要与诊断导出（见 `docs/README.md#网络模式与能力矩阵`）。
-- 映射能力联动校验：`TunnelMapping` 保存/更新会按当前 `NetworkMode/Capability` 校验 `max_request_body_bytes`、`max_response_body_bytes`、`allowed_methods` 与 `require_streaming_response`，并在 API/selfcheck/诊断暴露 warnings 或 errors。
+- 映射能力联动校验：`TunnelMapping` 保存/更新会按当前 `NetworkMode/Capability` 校验 `max_request_body_bytes`、`max_response_body_bytes`、`allowed_methods`（默认 `[*]`，即全部允许）与 `require_streaming_response`，并在 API/selfcheck/诊断暴露 warnings 或 errors。
+
+
+### 映射规则配置瘦身（当前产品要求）
+
+- 运维主流程仅配置：`mapping_id`、`本端入口(local_bind_*)`、`对端目标(remote_target_*)`、超时/体积与启用状态。
+- UI 列表默认展示：`序号`、`本端入口`、`对端目标`、`协议`、`状态`、`更新时间`、`操作`。
+- `name`、`peer_node_id`、`allowed_methods` 为兼容字段：
+  - UI 不再展示/编辑；
+  - `allowed_methods` 由系统内部默认写入 `[*]`（全部允许）；
+  - `name`、`peer_node_id` 不再作为映射编辑必填项。
 
 ## 如何启动
 
@@ -169,10 +179,10 @@ $env:VITE_API_BASE_URL='http://127.0.0.1:18080/api'
 
 字段映射与丢弃规则：
 
-- `OpsRoute.api_code -> TunnelMapping.mapping_id/name`
+- `OpsRoute.api_code -> TunnelMapping.mapping_id`（`name` 仅兼容保留）
 - `OpsRoute.http_path -> local_base_path/remote_base_path`
-- `OpsRoute.http_method -> allowed_methods[0]`
-- `RouteConfig.target_service -> peer_node_id`（为空时回退 `legacy-peer`）
+- `OpsRoute.http_method -> allowed_methods`（新模型默认 `[*]`，历史值仅用于兼容）`
+- `RouteConfig.target_service -> peer_node_id`（兼容迁移字段，主流程不再配置）
 - `RouteConfig.target_host/target_port -> remote_target_ip/remote_target_port`（无效值回退 `127.0.0.1:8080`）
 - `RouteConfig.timeout_ms -> request_timeout_ms/response_timeout_ms`
 - 以下旧字段不再作为主模型持久化：`retry_times/header_mapping/body_mapping/content_type`（迁移后由 TunnelMapping + 业务逻辑统一治理）。
