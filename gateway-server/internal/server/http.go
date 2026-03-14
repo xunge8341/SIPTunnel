@@ -46,6 +46,7 @@ type handlerDeps struct {
 	nodes     []OpsNode
 	nodeStore nodeConfigStore
 	mappings  tunnelMappingStore
+	runtime   *mappingRuntimeManager
 
 	nodeConfigSource string
 	mappingSource    string
@@ -99,9 +100,9 @@ type TunnelMapping = tunnelmapping.TunnelMapping
 type MappingCapabilityValidation = tunnelmapping.CapabilityValidationResult
 
 type MappingWithWarnings struct {
-	Mapping   TunnelMapping `json:"mapping"`
-	BoundPeer *PeerBinding  `json:"bound_peer,omitempty"`
-	Warnings  []string      `json:"warnings,omitempty"`
+	Mapping   TunnelMappingView `json:"mapping"`
+	BoundPeer *PeerBinding      `json:"bound_peer,omitempty"`
+	Warnings  []string          `json:"warnings,omitempty"`
 }
 
 type MappingTestResponse struct {
@@ -110,10 +111,16 @@ type MappingTestResponse struct {
 }
 
 type mappingListResponse struct {
-	Items        []TunnelMapping `json:"items"`
-	BoundPeer    *PeerBinding    `json:"bound_peer,omitempty"`
-	BindingError string          `json:"binding_error,omitempty"`
-	Warnings     []string        `json:"warnings,omitempty"`
+	Items        []TunnelMappingView `json:"items"`
+	BoundPeer    *PeerBinding        `json:"bound_peer,omitempty"`
+	BindingError string              `json:"binding_error,omitempty"`
+	Warnings     []string            `json:"warnings,omitempty"`
+}
+
+type TunnelMappingView struct {
+	TunnelMapping
+	LinkStatus   string `json:"link_status,omitempty"`
+	StatusReason string `json:"status_reason,omitempty"`
 }
 
 type PeerBinding struct {
@@ -402,6 +409,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, io.Closer, error)
 		limits:            OpsLimits{RPS: 200, Burst: 400, MaxConcurrent: 100},
 		routes:            map[string]OpsRoute{},
 		mappings:          mappingStore,
+		runtime:           newMappingRuntimeManager(nil),
 		nodeStore:         nodeStore,
 		nodeConfigSource:  dataSourceLabel(dataDir, "node_config.json"),
 		mappingSource:     dataSourceLabel(dataDir, "tunnel_mappings.json"),
@@ -462,7 +470,8 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, io.Closer, error)
 			return startupsummary.Summary{}
 		}
 	}
-	return newMux(deps), joinClosers(logCloser, auditCloser), nil
+	deps.runtime.SyncMappings(deps.mappings.List())
+	return newMux(deps), joinClosers(logCloser, auditCloser, deps.runtime), nil
 }
 
 type multiCloser []io.Closer
@@ -496,6 +505,10 @@ func joinClosers(closers ...io.Closer) io.Closer {
 // newMux 集中注册运维 API；接口清单见 gateway-server/docs/openapi-ops.yaml，
 // 排障动作与升级路径见 docs/runbook.md、docs/oncall-handbook.md。
 func newMux(deps handlerDeps) http.Handler {
+	if deps.runtime == nil {
+		deps.runtime = newMappingRuntimeManager(nil)
+		deps.runtime.SyncMappings(deps.mappings.List())
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", deps.healthz)
 	mux.HandleFunc("/demo/process", deps.demoProcess)
@@ -896,6 +909,7 @@ func (d handlerDeps) handleRoutes(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
+		d.runtime.SyncMappings(d.mappings.List())
 		d.recordOpsAudit(r, readOperator(r), "UPDATE_ROUTES", map[string]any{"count": len(req.Routes)})
 		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: map[string]any{"items": req.Routes, "warnings": validation.Warnings}})
 	default:
@@ -917,7 +931,7 @@ func (d handlerDeps) handleMappings(w http.ResponseWriter, r *http.Request) {
 		items := d.mappings.List()
 		validation := d.validateMappingsAgainstCapability(items)
 		binding, bindErr := d.currentPeerBinding()
-		resp := mappingListResponse{Items: items, BoundPeer: binding, Warnings: validation.Warnings}
+		resp := mappingListResponse{Items: d.decorateMappings(items), BoundPeer: binding, Warnings: validation.Warnings}
 		if bindErr != nil {
 			resp.BindingError = bindErr.Error()
 		}
@@ -953,8 +967,9 @@ func (d handlerDeps) handleMappings(w http.ResponseWriter, r *http.Request) {
 			writeError(w, status, code, err.Error())
 			return
 		}
+		d.runtime.SyncMappings(d.mappings.List())
 		d.recordOpsAudit(r, readOperator(r), "CREATE_MAPPING", map[string]any{"mapping_id": created.MappingID})
-		writeJSON(w, http.StatusCreated, responseEnvelope{Code: "OK", Message: "success", Data: MappingWithWarnings{Mapping: created, BoundPeer: bindingFromMapping(created), Warnings: validation.Warnings}})
+		writeJSON(w, http.StatusCreated, responseEnvelope{Code: "OK", Message: "success", Data: MappingWithWarnings{Mapping: d.decorateMapping(created), BoundPeer: bindingFromMapping(created), Warnings: validation.Warnings}})
 	case http.MethodPut:
 		if id == "" {
 			writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", "mapping id is required in path")
@@ -986,8 +1001,9 @@ func (d handlerDeps) handleMappings(w http.ResponseWriter, r *http.Request) {
 			writeError(w, status, code, err.Error())
 			return
 		}
+		d.runtime.SyncMappings(d.mappings.List())
 		d.recordOpsAudit(r, readOperator(r), "UPDATE_MAPPING", map[string]any{"mapping_id": updated.MappingID})
-		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: MappingWithWarnings{Mapping: updated, BoundPeer: bindingFromMapping(updated), Warnings: validation.Warnings}})
+		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: MappingWithWarnings{Mapping: d.decorateMapping(updated), BoundPeer: bindingFromMapping(updated), Warnings: validation.Warnings}})
 	case http.MethodDelete:
 		if id == "" {
 			writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", "mapping id is required in path")
@@ -1001,6 +1017,7 @@ func (d handlerDeps) handleMappings(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", err.Error())
 			return
 		}
+		d.runtime.SyncMappings(d.mappings.List())
 		d.recordOpsAudit(r, readOperator(r), "DELETE_MAPPING", map[string]any{"mapping_id": id})
 		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success"})
 	default:
@@ -1041,6 +1058,37 @@ func (d handlerDeps) listLegacyRoutesFromMappings() []OpsRoute {
 		legacy = append(legacy, OpsRoute{APICode: item.MappingID, HTTPMethod: method, HTTPPath: item.LocalBasePath, Enabled: item.Enabled})
 	}
 	return legacy
+}
+
+func (d handlerDeps) decorateMappings(items []TunnelMapping) []TunnelMappingView {
+	runtime := d.runtime.Snapshot()
+	out := make([]TunnelMappingView, 0, len(items))
+	for _, item := range items {
+		out = append(out, d.decorateMappingWithRuntime(item, runtime))
+	}
+	return out
+}
+
+func (d handlerDeps) decorateMapping(item TunnelMapping) TunnelMappingView {
+	runtime := d.runtime.Snapshot()
+	return d.decorateMappingWithRuntime(item, runtime)
+}
+
+func (d handlerDeps) decorateMappingWithRuntime(item TunnelMapping, runtime map[string]mappingRuntimeStatus) TunnelMappingView {
+	view := TunnelMappingView{TunnelMapping: item}
+	if rs, ok := runtime[item.MappingID]; ok {
+		view.LinkStatus = rs.State
+		view.StatusReason = rs.Reason
+		return view
+	}
+	if item.Enabled {
+		view.LinkStatus = mappingStateStartFailed
+		view.StatusReason = "监听状态未知，请检查运行时管理器"
+		return view
+	}
+	view.LinkStatus = mappingStateDisabled
+	view.StatusReason = "映射未启用"
+	return view
 }
 
 func (d handlerDeps) handleCapacityRecommendation(w http.ResponseWriter, r *http.Request) {
@@ -1832,13 +1880,22 @@ func (d handlerDeps) handleSystemStatus(w http.ResponseWriter, r *http.Request) 
 	}
 	status := d.networkStatusFunc(r.Context())
 	tunnelStatus, reason := deriveTunnelStatus(status)
-	mappingTotal := len(d.mappings.List())
+	items := d.decorateMappings(d.mappings.List())
+	mappingTotal := len(items)
 	mappingAbnormalTotal := 0
 	latestMappingErrorReason := ""
+	for _, item := range items {
+		if item.LinkStatus == mappingStateStartFailed || item.LinkStatus == mappingStateInterrupted {
+			mappingAbnormalTotal++
+			if latestMappingErrorReason == "" {
+				latestMappingErrorReason = fmt.Sprintf("%s：%s", item.MappingID, item.StatusReason)
+			}
+		}
+	}
 	if status.PeerBindingError != "" {
 		mappingAbnormalTotal = mappingTotal
 		latestMappingErrorReason = status.PeerBindingError
-	} else if tunnelStatus != "connected" {
+	} else if tunnelStatus != "connected" && mappingAbnormalTotal == 0 {
 		mappingAbnormalTotal = mappingTotal
 		latestMappingErrorReason = reason
 	}
