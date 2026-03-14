@@ -1,0 +1,3 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`TunnelConfigView > shows registration heartbeat info and saves config 1`] = `"单向请求：发送端 -> 接收端（SIP）单向响应：接收端 -> 发送端（RTP）重载保存配置正常支持小请求体（典型 SIP JSON 负载）立即注册重新注册发送一次心跳"`;

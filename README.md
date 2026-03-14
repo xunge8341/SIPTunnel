@@ -28,6 +28,7 @@ SIPTunnel 同时支持两种产品模式，文档与 UI 必须明确区分：
 
 - `docs/command-gateway-vs-http-mapping-tunnel.md`
 - `docs/network-mode-capability-tunnel-mapping.md`
+- `docs/migration-round10.md`（本轮重构迁移说明：术语/配置模型/网络模式/注册心跳/映射运行时）
 
 ## 关键能力与约束落实
 
@@ -256,6 +257,20 @@ $env:VITE_API_BASE_URL='http://127.0.0.1:18080/api'
 - API 清单（OpenAPI）：`gateway-server/docs/openapi-ops.yaml`
 
 
+
+## 本轮重构验证步骤（回归建议）
+
+```bash
+cd gateway-ui && npm test -- src/views/__tests__/TunnelConfigView.spec.ts src/views/__tests__/TunnelMappingsView.spec.ts src/utils/__tests__/capability.spec.ts
+cd ../gateway-server && go test ./internal/service/sipcontrol ./internal/server ./internal/config
+cd ../gateway-server && go test ./...
+```
+
+关键接口核验：
+
+- `GET /api/tunnel/config`：确认设备编码为节点配置派生只读字段，注册/心跳状态字段完整。
+- `GET /api/system/status`：确认网络模式、能力矩阵、注册状态、心跳状态已暴露。
+- `POST/GET /api/mappings`：确认映射运行时状态（含 `status_reason/suggested_action`）可回写。
 
 ## Embedded UI（后端自宿主）模式
 

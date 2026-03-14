@@ -78,11 +78,20 @@ func TestHandlersAcceptedFlow(t *testing.T) {
 			if raw["message_type"] != tc.expectRespType {
 				t.Fatalf("unexpected message_type=%v", raw["message_type"])
 			}
+			if raw["request_id"] != req.Header.RequestID || raw["trace_id"] != req.Header.TraceID {
+				t.Fatalf("expected mirror request/trace fields, got request_id=%v trace_id=%v", raw["request_id"], raw["trace_id"])
+			}
+			if raw["signature"] != req.Header.Signature {
+				t.Fatalf("expected signature passthrough, got %v", raw["signature"])
+			}
 			if tc.expectRespType == sip.MessageTypeFileAccepted && raw["file_id"] != tc.expectReference {
 				t.Fatalf("unexpected file_id=%v", raw["file_id"])
 			}
 			if tc.expectRespType == sip.MessageTypeCommandAccepted && raw["command_id"] != tc.expectReference {
 				t.Fatalf("unexpected command_id=%v", raw["command_id"])
+			}
+			if _, ok := raw["expire_at"]; !ok {
+				t.Fatalf("expected expire_at in accepted response: %+v", raw)
 			}
 		})
 	}

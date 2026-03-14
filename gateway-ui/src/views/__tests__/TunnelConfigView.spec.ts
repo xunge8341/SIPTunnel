@@ -66,6 +66,10 @@ describe('TunnelConfigView', () => {
     await flushPromises()
 
     expect(gatewayApi.fetchTunnelConfig).toHaveBeenCalled()
+    expect(wrapper.text()).toContain('单向请求：发送端 -> 接收端（SIP）')
+    expect(wrapper.text()).toContain('单向响应：接收端 -> 发送端（RTP）')
+    expect(wrapper.text()).toMatchSnapshot()
+
     const saveButton = wrapper.findAll('button').find((btn) => btn.text() === '保存配置')
     expect(saveButton).toBeTruthy()
     await saveButton!.trigger('click')
