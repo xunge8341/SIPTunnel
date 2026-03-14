@@ -21,6 +21,7 @@ SIPTunnel 同时支持两种产品模式，文档与 UI 必须明确区分：
 ## 关键能力与约束落实
 
 - SIP 控制面：JSON Body 承载完整业务字段，Header 仅镜像索引字段（request/trace/session/api_code/message_type/source_system）。
+- SIP `task.status`：当状态为异常态（如 `failed/cancelled/dead_lettered/retry_wait`）时，必须携带 `status_reason` 说明原因（例如“未建立RTP通道”“SIP注册失败”“对端不可达”）。
 - RTP 文件面：固定主头 + TLV 扩展协议结构在后端独立模块实现，业务代码不拼裸字节。
 - 签名验签：通过 `Signer` 接口注入，当前 HMAC-SHA256，保留 `SM3_HMAC` 升级位。
 - 防重放：基于 `request_id + nonce` 的接收防重放窗口。
