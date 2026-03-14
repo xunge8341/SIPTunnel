@@ -28,7 +28,9 @@ import type {
   NodeNetworkStatusPayload,
   SystemStatusPayload,
   NodeConfigPayload,
-  TunnelConfigPayload
+  TunnelConfigPayload,
+  ConfigTransferPayload,
+  ConfigTransferImportResult
 } from '../types/gateway'
 
 const wait = (ms = 200) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -39,8 +41,8 @@ let tunnelConfigState: TunnelConfigPayload = {
   request_channel: 'SIP',
   response_channel: 'RTP',
   network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
-  capability: deriveTunnelCapability({ channel_protocol: 'GB28181', request_channel: 'SIP', response_channel: 'RTP', network_mode: 'A_TO_B_SIP__B_TO_A_RTP' }),
-  capability_items: buildTunnelCapabilityItems(deriveTunnelCapability({ channel_protocol: 'GB28181', request_channel: 'SIP', response_channel: 'RTP', network_mode: 'A_TO_B_SIP__B_TO_A_RTP' }))
+  capability: deriveTunnelCapability({ network_mode: 'A_TO_B_SIP__B_TO_A_RTP' }),
+  capability_items: buildTunnelCapabilityItems(deriveTunnelCapability({ network_mode: 'A_TO_B_SIP__B_TO_A_RTP' }))
 }
 
 
@@ -731,6 +733,95 @@ export async function retryDiagnosticExportMock(jobId: string): Promise<Diagnost
   return cloneJob(record.job)
 }
 
+
+export async function exportConfigJsonMock(): Promise<ConfigTransferPayload> {
+  await wait(120)
+  return {
+    version: `mock-${new Date().toISOString().slice(0, 10)}`,
+    exported_at: new Date().toISOString(),
+    network_config: {
+      sip: JSON.parse(JSON.stringify(networkConfigState.sip)),
+      rtp: JSON.parse(JSON.stringify(networkConfigState.rtp))
+    },
+    tunnel_config: JSON.parse(JSON.stringify(tunnelConfigState)),
+    node_config: await fetchNodeConfigMock()
+  }
+}
+
+export async function importConfigJsonMock(payload: ConfigTransferPayload): Promise<ConfigTransferImportResult> {
+  await wait(160)
+  networkConfigState = {
+    ...networkConfigState,
+    sip: JSON.parse(JSON.stringify(payload.network_config.sip)),
+    rtp: JSON.parse(JSON.stringify(payload.network_config.rtp))
+  }
+  tunnelConfigState = JSON.parse(JSON.stringify(payload.tunnel_config))
+  await saveNodeConfigMock(payload.node_config)
+  return {
+    imported: true,
+    tunnel_restarted: true,
+    version: payload.version,
+    message: '配置导入成功，已应用网络/隧道/节点配置。'
+  }
+}
+
+export async function downloadConfigTemplateMock(): Promise<ConfigTransferPayload> {
+  await wait(100)
+  return {
+    version: 'template-v1',
+    exported_at: new Date().toISOString(),
+    network_config: {
+      sip: {
+        listenIp: '0.0.0.0',
+        listenPort: 5060,
+        protocol: 'UDP',
+        advertisedAddress: '',
+        domain: 'example.local',
+        tcpKeepaliveEnabled: true,
+        tcpKeepaliveIntervalMs: 30000,
+        tcpReadBufferBytes: 1048576,
+        tcpWriteBufferBytes: 1048576,
+        maxConnections: 2000
+      },
+      rtp: {
+        listenIp: '0.0.0.0',
+        portRangeStart: 20000,
+        portRangeEnd: 20999,
+        protocol: 'UDP',
+        advertisedAddress: '',
+        maxConcurrentTransfers: 512
+      }
+    },
+    tunnel_config: {
+      channel_protocol: 'GB28181',
+      request_channel: 'SIP',
+      response_channel: 'RTP',
+      network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+      capability: deriveTunnelCapability({
+        network_mode: 'A_TO_B_SIP__B_TO_A_RTP'
+      }),
+      capability_items: buildTunnelCapabilityItems(
+        deriveTunnelCapability({
+          network_mode: 'A_TO_B_SIP__B_TO_A_RTP'
+        })
+      )
+    },
+    node_config: {
+      local_node: {
+        node_ip: '10.10.10.8',
+        signaling_port: 5060,
+        device_id: 'gateway-a-template',
+        rtp_port_start: 20000,
+        rtp_port_end: 20999
+      },
+      peer_node: {
+        node_ip: '10.20.0.20',
+        signaling_port: 5060,
+        device_id: 'gateway-b-template'
+      }
+    }
+  }
+}
 
 export async function fetchTunnelConfigMock(): Promise<TunnelConfigPayload> {
   await wait()

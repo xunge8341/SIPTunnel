@@ -13,7 +13,10 @@ import {
   fetchMappingsMock,
   createMappingMock,
   updateMappingMock,
-  deleteMappingMock
+  deleteMappingMock,
+  exportConfigJsonMock,
+  importConfigJsonMock,
+  downloadConfigTemplateMock
 } from '../mockGateway'
 
 describe('config governance mock api', () => {
@@ -87,6 +90,21 @@ describe('config governance mock api', () => {
     }
     expect(status.status).toBe('succeeded')
     expect(status.downloadUrl).toContain('data:application/zip;base64')
+  })
+
+
+  it('supports config json export/import/template flow', async () => {
+    const exported = await exportConfigJsonMock()
+    expect(exported.version.length).toBeGreaterThan(0)
+    expect(exported.network_config.sip.listenPort).toBeGreaterThan(0)
+
+    const imported = await importConfigJsonMock(exported)
+    expect(imported.imported).toBe(true)
+    expect(imported.tunnel_restarted).toBe(true)
+
+    const template = await downloadConfigTemplateMock()
+    expect(template.version).toBe('template-v1')
+    expect(template.node_config.local_node.device_id).toContain('template')
   })
 
   it('supports tunnel mapping CRUD in mock mode', async () => {

@@ -16,6 +16,7 @@ const navigation: NavigationItem[] = [
   { key: 'node-status', label: '节点状态', path: '/node-status' },
   { key: 'alerts', label: '告警中心', path: '/alerts' },
   { key: 'ops-tools', label: 'M36 运维工具', path: '/ops-tools' },
+  { key: 'config-transfer', label: 'M37 配置导入导出', path: '/config-transfer' },
   { key: 'audit-log', label: '审计日志', path: '/audit-logs' }
 ]
 
