@@ -15,6 +15,7 @@ SIPTunnel 是跨安全边界业务交换网关，当前仓库为 monorepo 结构
 - 防重放：基于 `request_id + nonce` 的接收防重放窗口。
 - HTTP 执行：仅支持 `api_code -> route template` 受控映射，不支持任意透传。
 - 生产基线：限流、审计日志、trace 字段透传和结构化日志。
+- 网络模式能力矩阵：`NetworkMode -> Capability` 由后端统一推导，覆盖系统信息 API、启动摘要与诊断导出（见 `docs/README.md#网络模式与能力矩阵`）。
 
 ## 如何启动
 

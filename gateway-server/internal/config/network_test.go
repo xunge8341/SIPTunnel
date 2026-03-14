@@ -180,3 +180,36 @@ func TestSIPConfigUDPMessageSizeRisk(t *testing.T) {
 		t.Fatal("expected no risk when equals recommended limit")
 	}
 }
+
+func TestParseNetworkConfigYAML_DefaultModeInjected(t *testing.T) {
+	raw := `
+sip:
+  enabled: true
+rtp:
+  enabled: true
+`
+	cfg, err := ParseNetworkConfigYAML([]byte(raw))
+	if err != nil {
+		t.Fatalf("ParseNetworkConfigYAML error: %v", err)
+	}
+	if cfg.Mode != DefaultNetworkMode() {
+		t.Fatalf("mode=%s, want %s", cfg.Mode, DefaultNetworkMode())
+	}
+}
+
+func TestParseNetworkConfigYAML_InvalidMode(t *testing.T) {
+	raw := `
+mode: INVALID_MODE
+sip:
+  enabled: true
+rtp:
+  enabled: true
+`
+	_, err := ParseNetworkConfigYAML([]byte(raw))
+	if err == nil {
+		t.Fatal("expected invalid network.mode error")
+	}
+	if !strings.Contains(err.Error(), "network.mode") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

@@ -127,7 +127,16 @@ func runGatewayStartup(args []string) {
 			poolStats := portPool.Stats()
 			sipSnapshot := sipMetrics.Snapshot()
 			rtpSnapshot := rtpTransport.Snapshot()
+			mode := selfCheckInput.NetworkConfig.Mode.Normalize()
+			capability := config.DeriveCapability(mode)
 			return server.NodeNetworkStatus{
+				NetworkMode: mode,
+				Capability:  capability,
+				CapabilitySummary: startupsummary.CapabilitySummary{
+					Supported:   capability.SupportedFeatures(),
+					Unsupported: capability.UnsupportedFeatures(),
+					Items:       capability.Matrix(),
+				},
 				SIP: server.SIPNetworkStatus{
 					ListenIP:                 selfCheckInput.NetworkConfig.SIP.ListenIP,
 					ListenPort:               selfCheckInput.NetworkConfig.SIP.ListenPort,
@@ -291,8 +300,18 @@ func buildStartupSummary(nodeID string, cfgLoad configLoadResult, uiCfg config.U
 		businessImpact = "仅完成 SIP/RTP 协议交互，不会执行 A 网 HTTP 落地"
 	}
 
+	mode := networkCfg.Mode.Normalize()
+	capability := config.DeriveCapability(mode)
+
 	return startupsummary.Summary{
-		NodeID:              nodeID,
+		NodeID:      nodeID,
+		NetworkMode: mode,
+		Capability:  capability,
+		CapabilitySummary: startupsummary.CapabilitySummary{
+			Supported:   capability.SupportedFeatures(),
+			Unsupported: capability.UnsupportedFeatures(),
+			Items:       capability.Matrix(),
+		},
 		ConfigPath:          cfgLoad.Path,
 		ConfigSource:        string(cfgLoad.Source),
 		RunMode:             runMode,

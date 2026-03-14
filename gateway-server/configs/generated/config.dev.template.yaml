@@ -9,6 +9,7 @@ storage:
   log_dir: ./data/logs
 
 network:
+  mode: A_TO_B_SIP__B_TO_A_RTP
   sip:
     enabled: true
     listen_ip: 127.0.0.1

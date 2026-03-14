@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"siptunnel/internal/config"
 	"siptunnel/internal/observability"
 	"siptunnel/internal/repository"
 	memrepo "siptunnel/internal/repository/memory"
@@ -36,10 +37,15 @@ func buildTestHandler(t *testing.T) (http.Handler, repository.TaskRepository, ob
 			return selfcheck.Report{Overall: selfcheck.LevelInfo, Summary: selfcheck.Summary{Info: 1, Warn: 1, Error: 1}, Items: []selfcheck.Item{{Name: "sample-info", Level: selfcheck.LevelInfo, Message: "ok", Suggestion: "none", ActionHint: "keep"}, {Name: "sample-warn", Level: selfcheck.LevelWarn, Message: "warn", Suggestion: "check", ActionHint: "verify"}, {Name: "sample-error", Level: selfcheck.LevelError, Message: "err", Suggestion: "fix", ActionHint: "recover"}}}
 		},
 		startupSummaryFn: func(_ context.Context) startupsummary.Summary {
-			return startupsummary.Summary{NodeID: "n1", ConfigPath: "./configs/config.yaml", ConfigSource: "cli", UIMode: "embedded", UIURL: "http://127.0.0.1:18080/", APIURL: "http://127.0.0.1:18080/api"}
+			capability := config.DeriveCapability(config.NetworkModeAToBSIPBToARTP)
+			return startupsummary.Summary{NodeID: "n1", NetworkMode: config.NetworkModeAToBSIPBToARTP, Capability: capability, CapabilitySummary: startupsummary.CapabilitySummary{Supported: capability.SupportedFeatures(), Unsupported: capability.UnsupportedFeatures(), Items: capability.Matrix()}, ConfigPath: "./configs/config.yaml", ConfigSource: "cli", UIMode: "embedded", UIURL: "http://127.0.0.1:18080/", APIURL: "http://127.0.0.1:18080/api"}
 		},
 		networkStatusFunc: func(_ context.Context) NodeNetworkStatus {
+			capability := config.DeriveCapability(config.NetworkModeAToBSIPBToARTP)
 			return NodeNetworkStatus{
+				NetworkMode:         config.NetworkModeAToBSIPBToARTP,
+				Capability:          capability,
+				CapabilitySummary:   startupsummary.CapabilitySummary{Supported: capability.SupportedFeatures(), Unsupported: capability.UnsupportedFeatures(), Items: capability.Matrix()},
 				SIP:                 SIPNetworkStatus{ListenIP: "10.10.1.10", ListenPort: 5060, Transport: "TCP", CurrentSessions: 12, CurrentConnections: 7},
 				RTP:                 RTPNetworkStatus{ListenIP: "10.10.1.10", PortStart: 30000, PortEnd: 30020, Transport: "UDP", ActiveTransfers: 3, UsedPorts: 6, AvailablePorts: 15, PortPoolTotal: 21, PortPoolUsed: 6, PortAllocFailTotal: 2},
 				RecentBindErrors:    []string{"sip: bind 10.10.1.10:5061 failed"},
@@ -172,6 +178,9 @@ func TestNodeNetworkStatusEndpointAndAudit(t *testing.T) {
 	}
 	if payload.Data.SIP.ListenIP != "10.10.1.10" || payload.Data.RTP.AvailablePorts != 15 || payload.Data.RTP.PortAllocFailTotal != 2 {
 		t.Fatalf("unexpected network status payload: %+v", payload.Data)
+	}
+	if payload.Data.NetworkMode != config.NetworkModeAToBSIPBToARTP || !payload.Data.Capability.SupportsLargeResponseBody || payload.Data.Capability.SupportsLargeRequestBody {
+		t.Fatalf("unexpected mode/capability payload: %+v", payload.Data)
 	}
 
 	events, err := audit.List(t.Context(), observability.AuditQuery{Who: "net-ops", Limit: 10})
@@ -340,6 +349,18 @@ func TestDiagnosticsExportEndpointWithFilters(t *testing.T) {
 	rateFirst, _ := rateItems[0].(map[string]any)
 	if got, _ := rateFirst["result"].(string); got == "UPSTREAM_RATE_LIMIT" || got == "" {
 		t.Fatalf("rate limit result should be masked, got=%q", got)
+	}
+
+	var transportFile DiagFile
+	for _, f := range payload.Data.Files {
+		if f.Name == "01_transport_config.json" {
+			transportFile = f
+			break
+		}
+	}
+	transportContent, ok := transportFile.Content.(map[string]any)
+	if !ok || transportContent["network_mode"] == nil || transportContent["capability"] == nil {
+		t.Fatalf("transport file missing mode/capability: %#v", transportFile.Content)
 	}
 
 	var readmeFile DiagFile
