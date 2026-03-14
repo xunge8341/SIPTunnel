@@ -14,6 +14,7 @@ import ConfigGovernanceView from '../views/ConfigGovernanceView.vue'
 import LocalNodeConfigView from '../views/LocalNodeConfigView.vue'
 import PeerNodeConfigView from '../views/PeerNodeConfigView.vue'
 import NodeConfigView from '../views/NodeConfigView.vue'
+import TunnelConfigView from '../views/TunnelConfigView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -59,6 +60,13 @@ const router = createRouter({
           name: 'node-config',
           component: NodeConfigView,
           meta: { title: 'M31 节点配置', description: '统一配置本端和对端节点，并触发隧道重启。' }
+        },
+
+        {
+          path: 'tunnel-config',
+          name: 'tunnel-config',
+          component: TunnelConfigView,
+          meta: { title: 'M32 隧道配置', description: '配置 GB28181 通道协议、请求/响应通道与网络模式，并自动生成能力矩阵。' }
         },
         {
           path: 'local-node-config',
