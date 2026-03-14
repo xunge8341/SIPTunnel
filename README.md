@@ -112,6 +112,8 @@ go run ./cmd/gateway
 ./scripts/ui-preview.sh
 ```
 
+> 前端 TypeScript 修复需保持类型安全，禁止使用 `any`/`as any`/`// @ts-ignore` 压制类型错误。
+
 ```powershell
 .\scripts\ui-build.ps1
 .\scripts\ui-preview.ps1
