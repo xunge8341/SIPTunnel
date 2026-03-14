@@ -59,7 +59,7 @@ New-Item -ItemType Directory -Force -Path $ErrorsDir | Out-Null
 if (-not (Test-Path (Join-Path $ErrorsDir '404.html'))) {
   Set-Content -Path (Join-Path $ErrorsDir '404.html') -Encoding UTF8 -Value @'
 <!doctype html>
-<html><head><meta charset="utf-8"><title>404 Not Found</title></head><body><h1>404 Not Found</h1><p>页面未找到 / Requested resource was not found.</p></body></html>
+<html><head><meta charset="utf-8"><title>404 Not Found</title></head><body><h1>404 Not Found</h1><p>页面未找�?/ Requested resource was not found.</p></body></html>
 '@
 }
 if (-not (Test-Path (Join-Path $ErrorsDir '500.html'))) {
@@ -90,7 +90,7 @@ function Get-DirectoryContentHash {
   $records = Get-ChildItem -Path $Directory -Recurse -File |
     Where-Object { $ExcludeNames -notcontains $_.Name } |
     ForEach-Object {
-      $relative = $_.FullName.Substring($Directory.Length).TrimStart('\\', '/') -replace '\\', '/'
+      $relative = $_.FullName.Substring($Directory.Length).TrimStart([char]'\', [char]'/') -replace '\\', '/'
       $hash = (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
       "${relative}:${hash}"
     } |

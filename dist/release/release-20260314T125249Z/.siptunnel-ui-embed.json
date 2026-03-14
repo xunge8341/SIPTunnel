@@ -1,0 +1,11 @@
+﻿{
+    "schema_version":  1,
+    "generated_by":  "scripts/embed-ui.ps1",
+    "build_nonce":  "badc5af9-c2b4-49c7-85b2-3ef096f9bd3c",
+    "embedded_at_utc":  "2026-03-14T12:53:09Z",
+    "ui_source_latest_write_utc":  "2026-03-14T12:53:09Z",
+    "dist_hash_sha256":  "a7ca05897f70922deffdd413db83cfbb853eba9df4986d6eb1ce27b2e1bbf9b4",
+    "embedded_hash_sha256":  "d83e908f718065fd2b21e6efa95277d490493d2992f673db242c5053a2c55cfe",
+    "dist_dir":  "D:\\SIPTunnel\\gateway-ui\\dist",
+    "embedded_dir":  "D:\\SIPTunnel\\gateway-server\\internal\\server\\embedded-ui"
+}

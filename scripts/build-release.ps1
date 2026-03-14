@@ -32,7 +32,7 @@ function Get-DirectoryContentHash {
   $records = Get-ChildItem -Path $Directory -Recurse -File |
     Where-Object { $ExcludeNames -notcontains $_.Name } |
     ForEach-Object {
-      $relative = $_.FullName.Substring($Directory.Length).TrimStart('\\', '/') -replace '\\', '/'
+      $relative = $_.FullName.Substring($Directory.Length).TrimStart([char]'\', [char]'/') -replace '\\', '/'
       $hash = (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
       "${relative}:${hash}"
     } |
