@@ -6,7 +6,8 @@ vi.mock('../../api/gateway', () => ({
   gatewayApi: {
     fetchDashboard: vi.fn(),
     fetchDeploymentMode: vi.fn(),
-    fetchStartupSummary: vi.fn()
+    fetchStartupSummary: vi.fn(),
+    fetchSystemStatus: vi.fn()
   }
 }))
 
@@ -88,12 +89,27 @@ describe('DashboardView', () => {
       }
     })
 
+
+    vi.mocked(gatewayApi.fetchSystemStatus).mockResolvedValue({
+      tunnel_status: 'connected',
+      connection_reason: 'SIP 控制面与 RTP 文件面链路正常',
+      network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+      capability: {
+        supports_small_request_body: true,
+        supports_large_response_body: true,
+        supports_streaming_response: true,
+        supports_large_file_upload: false,
+        supports_bidirectional_http_tunnel: false
+      }
+    })
+
     const wrapper = mount(DashboardView)
     await flushPromises()
 
     expect(gatewayApi.fetchDashboard).toHaveBeenCalledTimes(1)
     expect(gatewayApi.fetchDeploymentMode).toHaveBeenCalledTimes(1)
     expect(gatewayApi.fetchStartupSummary).toHaveBeenCalledTimes(1)
+    expect(gatewayApi.fetchSystemStatus).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).toContain('成功率')
     expect(wrapper.text()).toContain('当前 SIP transport')
     expect(wrapper.text()).toContain('最近 1h transport error')
@@ -103,6 +119,9 @@ describe('DashboardView', () => {
     expect(wrapper.text()).toContain('不会执行 A 网 HTTP 落地')
     expect(wrapper.text()).toContain('sip_body_only')
     expect(wrapper.text()).toContain('rtp_stream')
+    expect(wrapper.text()).toContain('隧道连接状态')
+    expect(wrapper.text()).toContain('连接原因')
+    expect(wrapper.text()).toContain('能力矩阵')
     expect(wrapper.findAll('circle')).toHaveLength(2)
   })
 })

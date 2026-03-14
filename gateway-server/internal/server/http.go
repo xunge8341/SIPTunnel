@@ -133,6 +133,21 @@ type NodeNetworkStatus struct {
 	RecentNetworkErrors []string                         `json:"recent_network_errors"`
 }
 
+type SystemStatusCapability struct {
+	SupportsSmallRequestBody        bool `json:"supports_small_request_body"`
+	SupportsLargeResponseBody       bool `json:"supports_large_response_body"`
+	SupportsStreamingResponse       bool `json:"supports_streaming_response"`
+	SupportsLargeFileUpload         bool `json:"supports_large_file_upload"`
+	SupportsBidirectionalHTTPTunnel bool `json:"supports_bidirectional_http_tunnel"`
+}
+
+type SystemStatusResponse struct {
+	TunnelStatus     string                 `json:"tunnel_status"`
+	ConnectionReason string                 `json:"connection_reason"`
+	NetworkMode      config.NetworkMode     `json:"network_mode"`
+	Capability       SystemStatusCapability `json:"capability"`
+}
+
 type NodeDetailResponse struct {
 	LocalNode           nodeconfig.LocalNodeConfig `json:"local_node"`
 	CurrentNetworkMode  config.NetworkMode         `json:"current_network_mode"`
@@ -433,6 +448,7 @@ func newMux(deps handlerDeps) http.Handler {
 	mux.HandleFunc("/api/audits", deps.handleAudits)
 	mux.HandleFunc("/api/selfcheck", deps.handleSelfCheck)
 	mux.HandleFunc("/api/startup-summary", deps.handleStartupSummary)
+	mux.HandleFunc("/api/system/status", deps.handleSystemStatus)
 	mux.HandleFunc("/api/node/network-status", deps.handleNodeNetworkStatus)
 	mux.HandleFunc("/api/node", deps.handleNode)
 	mux.HandleFunc("/api/peers", deps.handlePeers)
@@ -1365,6 +1381,42 @@ func (d handlerDeps) handleStartupSummary(w http.ResponseWriter, r *http.Request
 		summary.CompatibilityStatus = compat.CompatibilityCheck
 	}
 	writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: summary})
+}
+
+func deriveTunnelStatus(status NodeNetworkStatus) (string, string) {
+	if status.SIP.ListenPort <= 0 || status.RTP.PortStart <= 0 || status.RTP.PortEnd <= 0 {
+		return "disconnected", "SIP 或 RTP 监听未就绪"
+	}
+	if status.RTP.AvailablePorts <= 0 {
+		return "degraded", "RTP 端口池已耗尽"
+	}
+	if len(status.RecentNetworkErrors) > 0 {
+		return "degraded", status.RecentNetworkErrors[0]
+	}
+	return "connected", "SIP 控制面与 RTP 文件面链路正常"
+}
+
+func (d handlerDeps) handleSystemStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
+		return
+	}
+	status := d.networkStatusFunc(r.Context())
+	tunnelStatus, reason := deriveTunnelStatus(status)
+	resp := SystemStatusResponse{
+		TunnelStatus:     tunnelStatus,
+		ConnectionReason: reason,
+		NetworkMode:      status.NetworkMode,
+		Capability: SystemStatusCapability{
+			SupportsSmallRequestBody:        status.Capability.SupportsSmallRequestBody,
+			SupportsLargeResponseBody:       status.Capability.SupportsLargeResponseBody,
+			SupportsStreamingResponse:       status.Capability.SupportsStreamingResponse,
+			SupportsLargeFileUpload:         status.Capability.SupportsLargeRequestBody,
+			SupportsBidirectionalHTTPTunnel: status.Capability.SupportsBidirectionalHTTPTunnel,
+		},
+	}
+	d.recordOpsAudit(r, readOperator(r), "QUERY_SYSTEM_STATUS", map[string]any{"path": r.URL.Path})
+	writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: resp})
 }
 
 func (d handlerDeps) handleDiagnosticsExport(w http.ResponseWriter, r *http.Request) {
