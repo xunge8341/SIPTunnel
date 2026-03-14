@@ -52,6 +52,8 @@ export function evaluateMappingCapability(
   const requestLimit = resolveBodyLimit(startupSummary.transport_plan.request_body_size_limit)
   const responseLimit = resolveBodyLimit(startupSummary.transport_plan.response_body_size_limit)
 
+  const allowedMethods = mapping.allowed_methods ?? []
+
   const blockingIssues: string[] = []
   if (!cap.supports_large_request_body && requestLimit > 0 && mapping.max_request_body_bytes > requestLimit) {
     blockingIssues.push(`当前模式仅支持小请求体，max_request_body_bytes 不能超过 ${requestLimit}`)
@@ -62,12 +64,12 @@ export function evaluateMappingCapability(
   if (mapping.require_streaming_response && !cap.supports_streaming_response) {
     blockingIssues.push('当前模式不支持流式响应，请关闭“流式响应”开关')
   }
-  if (!cap.supports_bidirectional_http_tunnel && mapping.allowed_methods.some((method) => transparentTunnelMethodSet.has(method.toUpperCase()))) {
+  if (!cap.supports_bidirectional_http_tunnel && allowedMethods.some((method) => transparentTunnelMethodSet.has(method.toUpperCase()))) {
     blockingIssues.push('当前模式不支持双向透明 HTTP tunnel，请移除 CONNECT/TRACE 方法')
   }
 
   const advisoryWarnings: string[] = []
-  if (!cap.supports_bidirectional_http_tunnel && mapping.allowed_methods.some((method) => stableMethodWarningSet.has(method.toUpperCase()))) {
+  if (!cap.supports_bidirectional_http_tunnel && allowedMethods.some((method) => stableMethodWarningSet.has(method.toUpperCase()))) {
     advisoryWarnings.push('当前模式下 PUT/PATCH/DELETE 可能不稳定，建议压测后再上线')
   }
 

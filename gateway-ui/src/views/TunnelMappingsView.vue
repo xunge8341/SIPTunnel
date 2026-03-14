@@ -2,8 +2,8 @@
   <a-space direction="vertical" size="middle" style="width: 100%">
     <a-card title="映射规则查询">
       <a-form layout="inline">
-        <a-form-item label="名称 / 规则ID">
-          <a-input v-model:value="keyword" allow-clear placeholder="输入名称或规则ID" />
+        <a-form-item label="规则ID">
+          <a-input v-model:value="keyword" allow-clear placeholder="输入规则ID" />
         </a-form-item>
         <a-form-item>
           <a-space>
@@ -57,29 +57,20 @@
       />
       <a-alert v-if="warnings.length" type="warning" show-icon :message="warnings.join('；')" style="margin-bottom: 12px" />
       <a-table :columns="columns" :data-source="filteredMappings" row-key="mapping_id" :pagination="false">
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'enabled'">
-            <a-switch :checked="record.enabled" disabled />
-          </template>
-          <template v-if="column.key === 'local'">
+        <template #bodyCell="{ column, record, index }">
+          <template v-if="column.key === 'index'">{{ index + 1 }}</template>
+          <template v-else-if="column.key === 'local'">
             {{ endpointText(record.local_bind_ip, record.local_bind_port, record.local_base_path) }}
           </template>
-          <template v-if="column.key === 'remote'">
+          <template v-else-if="column.key === 'remote'">
             {{ endpointText(record.remote_target_ip, record.remote_target_port, record.remote_base_path) }}
           </template>
-          <template v-if="column.key === 'methods'">
-            {{ record.allowed_methods.join(', ') }}
-          </template>
-          <template v-if="column.key === 'timeouts'">
-            req {{ record.request_timeout_ms }}ms / resp {{ record.response_timeout_ms }}ms
-          </template>
-          <template v-if="column.key === 'bodyLimits'">
-            req {{ record.max_request_body_bytes }} / resp {{ record.max_response_body_bytes }}
-          </template>
-          <template v-if="column.key === 'linkStatus'">
+          <template v-else-if="column.key === 'protocol'">HTTP</template>
+          <template v-else-if="column.key === 'status'">
             <a-tag :color="record.enabled ? 'green' : 'default'">{{ record.enabled ? '已启用' : '未启用' }}</a-tag>
           </template>
-          <template v-if="column.key === 'action'">
+          <template v-else-if="column.key === 'updated_at'">{{ record.updated_at || '-' }}</template>
+          <template v-else-if="column.key === 'action'">
             <a-space>
               <a-button type="link" @click="openEditor(record)">编辑</a-button>
               <a-popconfirm title="确认删除该映射？" @confirm="removeMapping(record.mapping_id)">
@@ -112,9 +103,7 @@
         <a-form-item label="规则ID">
           <a-input v-model:value="editing.mapping_id" :disabled="editingMode === 'edit'" />
         </a-form-item>
-        <a-form-item label="名称"><a-input v-model:value="editing.name" /></a-form-item>
         <a-form-item label="启用"><a-switch v-model:checked="editing.enabled" /></a-form-item>
-        <a-form-item label="对端节点"><a-input v-model:value="editing.peer_node_id" /></a-form-item>
         <a-row :gutter="12">
           <a-col :span="8"><a-form-item label="本端 IP"><a-input v-model:value="editing.local_bind_ip" /></a-form-item></a-col>
           <a-col :span="8"><a-form-item label="本端端口"><a-input-number v-model:value="editing.local_bind_port" :min="1" :max="65535" style="width: 100%" /></a-form-item></a-col>
@@ -125,7 +114,6 @@
           <a-col :span="8"><a-form-item label="对端端口"><a-input-number v-model:value="editing.remote_target_port" :min="1" :max="65535" style="width: 100%" /></a-form-item></a-col>
           <a-col :span="8"><a-form-item label="对端路径"><a-input v-model:value="editing.remote_base_path" /></a-form-item></a-col>
         </a-row>
-        <a-form-item label="方法白名单（逗号分隔）"><a-input v-model:value="allowedMethodsText" /></a-form-item>
         <a-row :gutter="12">
           <a-col :span="12"><a-form-item label="请求超时（毫秒）"><a-input-number v-model:value="editing.request_timeout_ms" :min="1" style="width: 100%" /></a-form-item></a-col>
           <a-col :span="12"><a-form-item label="响应超时（毫秒）"><a-input-number v-model:value="editing.response_timeout_ms" :min="1" style="width: 100%" /></a-form-item></a-col>
@@ -170,16 +158,13 @@ const mappingTestResult = ref<MappingTestPayload>()
 
 const emptyMapping = (): TunnelMapping => ({
   mapping_id: '',
-  name: '',
   enabled: true,
-  peer_node_id: '',
   local_bind_ip: '',
   local_bind_port: 18080,
   local_base_path: '/',
   remote_target_ip: '',
   remote_target_port: 8080,
   remote_base_path: '/',
-  allowed_methods: ['POST'],
   connect_timeout_ms: 500,
   request_timeout_ms: 3000,
   response_timeout_ms: 3000,
@@ -190,15 +175,6 @@ const emptyMapping = (): TunnelMapping => ({
 })
 
 const editing = reactive<TunnelMapping>(emptyMapping())
-const allowedMethodsText = computed({
-  get: () => editing.allowed_methods.join(', '),
-  set: (value: string) => {
-    editing.allowed_methods = value
-      .split(',')
-      .map((item) => item.trim().toUpperCase())
-      .filter(Boolean)
-  }
-})
 
 const endpointText = (ip: string, port: number, path: string) => `${ip}:${port}${path}`
 const capabilitySummaryText = computed(() => {
@@ -222,29 +198,25 @@ const editorCapabilityEvaluation = computed(() => evaluateMappingCapability(edit
 const editorBlockingIssues = computed(() => editorCapabilityEvaluation.value.blockingIssues)
 const editorAdvisoryWarnings = computed(() => editorCapabilityEvaluation.value.advisoryWarnings)
 
-
 const mappingTestPassed = computed(() => {
   if (!mappingTestResult.value) return false
   return mappingTestResult.value.sip_request === 'success' && mappingTestResult.value.rtp_channel === 'success'
 })
 
 const columns = [
-  { title: '名称', dataIndex: 'name', key: 'name' },
-  { title: '启用', key: 'enabled' },
-  { title: '对端节点', dataIndex: 'peer_node_id', key: 'peer_node_id' },
+  { title: '序号', key: 'index' },
   { title: '本端入口', key: 'local' },
   { title: '对端目标', key: 'remote' },
-  { title: '方法白名单', key: 'methods' },
-  { title: '请求/响应超时', key: 'timeouts' },
-  { title: '请求/响应体大小限制', key: 'bodyLimits' },
-  { title: '连接状态', key: 'linkStatus' },
+  { title: '协议', key: 'protocol' },
+  { title: '状态', key: 'status' },
+  { title: '更新时间', key: 'updated_at' },
   { title: '操作', key: 'action' }
 ]
 
 const filteredMappings = computed(() => {
   const k = keyword.value.trim().toLowerCase()
   if (!k) return mappings.value
-  return mappings.value.filter((item) => item.name.toLowerCase().includes(k) || item.mapping_id.toLowerCase().includes(k))
+  return mappings.value.filter((item) => item.mapping_id.toLowerCase().includes(k))
 })
 
 const drawerTitle = computed(() => (editingMode.value === 'create' ? '新建映射规则' : '编辑映射规则'))
@@ -271,7 +243,6 @@ const loadReadonlyContext = async () => {
   startupSummary.value = await gatewayApi.fetchStartupSummary()
 }
 
-
 const runMappingTest = async () => {
   testingMapping.value = true
   try {
@@ -291,14 +262,18 @@ const save = async () => {
     message.error(editorBlockingIssues.value.join('；'))
     return
   }
+  const payload: TunnelMapping = {
+    ...JSON.parse(JSON.stringify(editing)),
+    allowed_methods: ['*']
+  }
   if (editingMode.value === 'create') {
-    const result = await gatewayApi.createMapping(JSON.parse(JSON.stringify(editing)))
+    const result = await gatewayApi.createMapping(payload)
     message.success('映射规则已创建')
     if (result.warnings?.length) {
       message.warning(`后端提示：${result.warnings.join('；')}`)
     }
   } else {
-    const result = await gatewayApi.updateMapping(editing.mapping_id, JSON.parse(JSON.stringify(editing)))
+    const result = await gatewayApi.updateMapping(editing.mapping_id, payload)
     message.success('映射规则已更新')
     if (result.warnings?.length) {
       message.warning(`后端提示：${result.warnings.join('；')}`)

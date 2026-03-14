@@ -58,14 +58,15 @@ let mappingState: TunnelMapping[] = [
     remote_target_ip: '172.16.8.12',
     remote_target_port: 8080,
     remote_base_path: '/api/v1/orders',
-    allowed_methods: ['POST', 'PUT'],
+    allowed_methods: ['*'],
     connect_timeout_ms: 500,
     request_timeout_ms: 3000,
     response_timeout_ms: 3000,
     max_request_body_bytes: 1048576,
     max_response_body_bytes: 10485760,
     require_streaming_response: false,
-    description: '用于订单写入与状态更新。'
+    description: '用于订单写入与状态更新。',
+    updated_at: '2026-03-14T09:00:00Z'
   },
   {
     mapping_id: 'map-query',
@@ -78,14 +79,15 @@ let mappingState: TunnelMapping[] = [
     remote_target_ip: '172.16.8.18',
     remote_target_port: 8081,
     remote_base_path: '/query',
-    allowed_methods: ['GET'],
+    allowed_methods: ['*'],
     connect_timeout_ms: 500,
     request_timeout_ms: 2000,
     response_timeout_ms: 2000,
     max_request_body_bytes: 1048576,
     max_response_body_bytes: 5242880,
     require_streaming_response: false,
-    description: '用于只读查询。'
+    description: '用于只读查询。',
+    updated_at: '2026-03-14T09:10:00Z'
   }
 ]
 
@@ -375,8 +377,9 @@ export async function fetchMappingsMock(): Promise<TunnelMappingListPayload> {
 
 export async function createMappingMock(payload: TunnelMapping): Promise<TunnelMappingSavePayload> {
   await wait()
-  mappingState.push(JSON.parse(JSON.stringify(payload)))
-  return { mapping: JSON.parse(JSON.stringify(payload)), warnings: [] }
+  const next = { ...JSON.parse(JSON.stringify(payload)), allowed_methods: payload.allowed_methods?.length ? payload.allowed_methods : ["*"], updated_at: new Date().toISOString() }
+  mappingState.push(next)
+  return { mapping: JSON.parse(JSON.stringify(next)), warnings: [] }
 }
 
 export async function updateMappingMock(id: string, payload: TunnelMapping): Promise<TunnelMappingSavePayload> {
@@ -385,8 +388,9 @@ export async function updateMappingMock(id: string, payload: TunnelMapping): Pro
   if (index < 0) {
     throw new Error('MAPPING_NOT_FOUND')
   }
-  mappingState[index] = JSON.parse(JSON.stringify(payload))
-  return { mapping: JSON.parse(JSON.stringify(payload)), warnings: [] }
+  const next = { ...JSON.parse(JSON.stringify(payload)), allowed_methods: payload.allowed_methods?.length ? payload.allowed_methods : ["*"], updated_at: new Date().toISOString() }
+  mappingState[index] = next
+  return { mapping: JSON.parse(JSON.stringify(next)), warnings: [] }
 }
 
 export async function deleteMappingMock(id: string): Promise<void> {

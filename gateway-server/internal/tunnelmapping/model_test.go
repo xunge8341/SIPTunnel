@@ -42,9 +42,23 @@ func TestTunnelMappingValidate(t *testing.T) {
 	if err := invalid.Validate(); err == nil {
 		t.Fatalf("expected remote base path error")
 	}
-	invalid = validMapping()
-	invalid.AllowedMethods = nil
-	if err := invalid.Validate(); err == nil {
-		t.Fatalf("expected methods error")
+}
+
+func TestTunnelMappingNormalizeDefaultsAllowedMethods(t *testing.T) {
+	m := validMapping()
+	m.AllowedMethods = nil
+	m.Normalize()
+	if len(m.AllowedMethods) != 1 || m.AllowedMethods[0] != "*" {
+		t.Fatalf("expected allowed_methods default to [*], got: %#v", m.AllowedMethods)
+	}
+}
+
+func TestTunnelMappingValidateAllowsMissingLegacyFields(t *testing.T) {
+	m := validMapping()
+	m.Name = ""
+	m.PeerNodeID = ""
+	m.AllowedMethods = nil
+	if err := m.Validate(); err != nil {
+		t.Fatalf("expected validation pass for optional legacy fields: %v", err)
 	}
 }

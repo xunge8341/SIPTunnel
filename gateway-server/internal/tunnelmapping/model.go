@@ -27,17 +27,36 @@ type TunnelMapping struct {
 	MaxResponseBodyBytes     int64    `json:"max_response_body_bytes"`
 	RequireStreamingResponse bool     `json:"require_streaming_response"`
 	Description              string   `json:"description"`
+	UpdatedAt                string   `json:"updated_at,omitempty"`
+}
+
+var defaultAllowedMethods = []string{"*"}
+
+func (m *TunnelMapping) Normalize() {
+	if m == nil {
+		return
+	}
+	if len(m.AllowedMethods) == 0 {
+		m.AllowedMethods = append([]string{}, defaultAllowedMethods...)
+	}
+	normalized := make([]string, 0, len(m.AllowedMethods))
+	for _, method := range m.AllowedMethods {
+		v := strings.ToUpper(strings.TrimSpace(method))
+		if v == "" {
+			continue
+		}
+		normalized = append(normalized, v)
+	}
+	if len(normalized) == 0 {
+		normalized = append([]string{}, defaultAllowedMethods...)
+	}
+	m.AllowedMethods = normalized
 }
 
 func (m TunnelMapping) Validate() error {
+	m.Normalize()
 	if strings.TrimSpace(m.MappingID) == "" {
 		return errors.New("mapping_id is required")
-	}
-	if strings.TrimSpace(m.Name) == "" {
-		return errors.New("name is required")
-	}
-	if strings.TrimSpace(m.PeerNodeID) == "" {
-		return errors.New("peer_node_id is required")
 	}
 	if net.ParseIP(strings.TrimSpace(m.LocalBindIP)) == nil {
 		return fmt.Errorf("local_bind_ip is invalid: %s", m.LocalBindIP)
@@ -56,9 +75,6 @@ func (m TunnelMapping) Validate() error {
 	}
 	if strings.TrimSpace(m.RemoteBasePath) == "" || !strings.HasPrefix(strings.TrimSpace(m.RemoteBasePath), "/") {
 		return errors.New("remote_base_path must start with /")
-	}
-	if len(m.AllowedMethods) == 0 {
-		return errors.New("allowed_methods is required")
 	}
 	for _, method := range m.AllowedMethods {
 		if strings.TrimSpace(method) == "" {
