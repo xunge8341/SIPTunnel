@@ -1154,7 +1154,7 @@ func (d handlerDeps) checkMappingForwardReadinessStage(sessionReady bool) Mappin
 			notReady = append(notReady, fmt.Sprintf("%s: 运行时状态缺失", item.MappingID))
 			continue
 		}
-		if rs.State != mappingStateListening && rs.State != "connected" {
+		if rs.State != mappingStateListening && rs.State != mappingStateForwarding && rs.State != "connected" {
 			notReady = append(notReady, fmt.Sprintf("%s: %s", item.MappingID, normalizeValue(rs.Reason, rs.State)))
 		}
 	}
@@ -1283,7 +1283,11 @@ func mappingStatusDiagnosis(state, reason string) (statusText, failureReason, su
 	case mappingStateDisabled:
 		return "未启用", "映射规则未启用。", "按需开启规则后再观察链路状态。"
 	case mappingStateListening:
-		return "监听中", "本端入口监听已建立，等待对端完成业务连接。", "可发起联调请求，确认信令请求与响应通道状态。"
+		return "监听中", "本端入口监听已建立，等待业务请求。", "可发起联调请求，确认转发链路状态。"
+	case mappingStateForwarding:
+		return "转发中", normalizeValue(trimmedReason, "映射链路正在转发请求。"), "持续观察吞吐与延迟指标，确认请求成功率。"
+	case mappingStateDegraded:
+		return "降级", normalizeValue(trimmedReason, "映射链路出现转发异常。"), "检查对端目标可达性、超时与请求体大小配置后重试。"
 	case "connected":
 		return "已连接", "映射链路已连接。", "无需处理，持续观察心跳与延迟指标。"
 	case mappingStateInterrupted:

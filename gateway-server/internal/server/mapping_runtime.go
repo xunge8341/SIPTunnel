@@ -1,13 +1,19 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"net"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"siptunnel/internal/tunnelmapping"
 )
@@ -15,18 +21,85 @@ import (
 const (
 	mappingStateDisabled    = "disabled"
 	mappingStateListening   = "listening"
+	mappingStateForwarding  = "forwarding"
+	mappingStateDegraded    = "degraded"
 	mappingStateStartFailed = "start_failed"
 	mappingStateInterrupted = "interrupted"
 )
 
 type mappingForwarder interface {
-	PrepareForward(context.Context, tunnelmapping.TunnelMapping, *http.Request) error
+	Forward(context.Context, tunnelmapping.TunnelMapping, *http.Request) (*http.Response, error)
 }
 
-type noopMappingForwarder struct{}
+type directHTTPMappingForwarder struct{}
 
-func (noopMappingForwarder) PrepareForward(context.Context, tunnelmapping.TunnelMapping, *http.Request) error {
-	return nil
+func newDirectHTTPMappingForwarder() mappingForwarder {
+	return directHTTPMappingForwarder{}
+}
+
+func (directHTTPMappingForwarder) Forward(ctx context.Context, mapping tunnelmapping.TunnelMapping, req *http.Request) (*http.Response, error) {
+	if !methodAllowed(mapping.AllowedMethods, req.Method) {
+		return nil, fmt.Errorf("method %s is not allowed", req.Method)
+	}
+	body, err := io.ReadAll(io.LimitReader(req.Body, mapping.MaxRequestBodyBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("read request body: %w", err)
+	}
+	if int64(len(body)) > mapping.MaxRequestBodyBytes {
+		return nil, fmt.Errorf("request body exceeds max_request_body_bytes=%d", mapping.MaxRequestBodyBytes)
+	}
+
+	targetURL, err := buildTargetURL(mapping, req.URL)
+	if err != nil {
+		return nil, err
+	}
+
+	outReq, err := http.NewRequestWithContext(ctx, req.Method, targetURL.String(), bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("build upstream request: %w", err)
+	}
+	copyHeaders(outReq.Header, req.Header)
+	trimmedHost := strings.TrimSpace(req.Host)
+	if trimmedHost != "" {
+		outReq.Header.Set("X-Forwarded-Host", trimmedHost)
+	}
+	outReq.Header.Set("X-Forwarded-Proto", normalizeScheme(req))
+	outReq.Header.Set("X-SIPTunnel-Mapping-ID", mapping.MappingID)
+
+	client := &http.Client{
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout: time.Duration(mapping.ConnectTimeoutMS) * time.Millisecond,
+			}).DialContext,
+			ResponseHeaderTimeout: time.Duration(mapping.ResponseTimeoutMS) * time.Millisecond,
+		},
+		Timeout: time.Duration(mapping.RequestTimeoutMS) * time.Millisecond,
+	}
+
+	resp, err := client.Do(outReq)
+	if err != nil {
+		return nil, fmt.Errorf("forward request to %s: %w", targetURL.String(), err)
+	}
+	if mapping.MaxResponseBodyBytes > 0 {
+		resp.Body = &limitedReadCloser{ReadCloser: resp.Body, limit: mapping.MaxResponseBodyBytes}
+	}
+	return resp, nil
+}
+
+type limitedReadCloser struct {
+	io.ReadCloser
+	read  int64
+	limit int64
+}
+
+func (l *limitedReadCloser) Read(p []byte) (int, error) {
+	n, err := l.ReadCloser.Read(p)
+	l.read += int64(n)
+	if l.read > l.limit {
+		return n, fmt.Errorf("response body exceeds max_response_body_bytes=%d", l.limit)
+	}
+	return n, err
 }
 
 type mappingRuntimeStatus struct {
@@ -40,6 +113,7 @@ type mappingRuntimeRunner struct {
 	mapping  tunnelmapping.TunnelMapping
 	listener net.Listener
 	server   *http.Server
+	active   int
 	stopping bool
 }
 
@@ -53,7 +127,7 @@ type mappingRuntimeManager struct {
 
 func newMappingRuntimeManager(forward mappingForwarder) *mappingRuntimeManager {
 	if forward == nil {
-		forward = noopMappingForwarder{}
+		forward = newDirectHTTPMappingForwarder()
 	}
 	return &mappingRuntimeManager{
 		listenFn: net.Listen,
@@ -156,11 +230,26 @@ func (m *mappingRuntimeManager) syncOneLocked(item TunnelMapping) {
 
 	r := &mappingRuntimeRunner{id: item.MappingID, endpoint: endpoint, mapping: item, listener: ln}
 	r.server = &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		if err := m.forward.PrepareForward(req.Context(), r.mapping, req); err != nil {
-			http.Error(w, "请求已接收，但准备转发到对端失败："+err.Error(), http.StatusBadGateway)
+		start := time.Now()
+		m.beginForward(r.id)
+		resp, err := m.forward.Forward(req.Context(), r.mapping, req)
+		if err != nil {
+			m.endForward(r.id, false, "转发失败："+err.Error())
+			log.Printf("mapping-runtime audit mapping=%s method=%s path=%s result=error err=%v", r.id, req.Method, req.URL.String(), err)
+			http.Error(w, "请求转发到对端失败："+err.Error(), http.StatusBadGateway)
 			return
 		}
-		http.Error(w, "请求已接收，转发到对端链路待接入", http.StatusNotImplemented)
+		defer resp.Body.Close()
+		copyHeaders(w.Header(), resp.Header)
+		w.WriteHeader(resp.StatusCode)
+		if _, copyErr := io.Copy(w, resp.Body); copyErr != nil {
+			m.endForward(r.id, false, "回传响应失败："+copyErr.Error())
+			log.Printf("mapping-runtime audit mapping=%s method=%s path=%s status=%d result=copy_error err=%v", r.id, req.Method, req.URL.String(), resp.StatusCode, copyErr)
+			return
+		}
+		elapsed := time.Since(start)
+		m.endForward(r.id, true, fmt.Sprintf("最近转发成功：status=%d duration=%s", resp.StatusCode, elapsed.Round(time.Millisecond)))
+		log.Printf("mapping-runtime audit mapping=%s method=%s path=%s status=%d duration_ms=%d", r.id, req.Method, req.URL.String(), resp.StatusCode, elapsed.Milliseconds())
 	})}
 	m.runners[item.MappingID] = r
 	m.status[item.MappingID] = mappingRuntimeStatus{State: mappingStateListening, Reason: "监听中"}
@@ -170,6 +259,114 @@ func (m *mappingRuntimeManager) syncOneLocked(item TunnelMapping) {
 			m.markInterrupted(id, fmt.Sprintf("监听异常中断：%v", err))
 		}
 	}(item.MappingID, r.server, r.listener)
+}
+
+func (m *mappingRuntimeManager) beginForward(id string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	runner, ok := m.runners[id]
+	if !ok {
+		return
+	}
+	runner.active++
+	m.status[id] = mappingRuntimeStatus{State: mappingStateForwarding, Reason: "转发中"}
+}
+
+func (m *mappingRuntimeManager) endForward(id string, ok bool, reason string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	runner, exists := m.runners[id]
+	if !exists {
+		return
+	}
+	if runner.active > 0 {
+		runner.active--
+	}
+	if runner.active > 0 {
+		m.status[id] = mappingRuntimeStatus{State: mappingStateForwarding, Reason: "转发中"}
+		return
+	}
+	if ok {
+		m.status[id] = mappingRuntimeStatus{State: mappingStateListening, Reason: reason}
+		return
+	}
+	m.status[id] = mappingRuntimeStatus{State: mappingStateDegraded, Reason: reason}
+}
+
+func buildTargetURL(mapping tunnelmapping.TunnelMapping, in *url.URL) (*url.URL, error) {
+	localBase := normalizePath(mapping.LocalBasePath)
+	remoteBase := normalizePath(mapping.RemoteBasePath)
+	inPath := normalizePath(in.Path)
+	suffix, ok := pathSuffix(localBase, inPath)
+	if !ok {
+		return nil, fmt.Errorf("path %s does not match local_base_path %s", in.Path, localBase)
+	}
+	remotePath := strings.TrimSuffix(remoteBase, "/") + suffix
+	return &url.URL{
+		Scheme:   "http",
+		Host:     net.JoinHostPort(strings.TrimSpace(mapping.RemoteTargetIP), strconv.Itoa(mapping.RemoteTargetPort)),
+		Path:     remotePath,
+		RawQuery: in.RawQuery,
+	}, nil
+}
+
+func pathSuffix(base, path string) (string, bool) {
+	if base == "/" {
+		return path, true
+	}
+	if path == base {
+		return "", true
+	}
+	prefix := base + "/"
+	if strings.HasPrefix(path, prefix) {
+		return strings.TrimPrefix(path, base), true
+	}
+	return "", false
+}
+
+func normalizePath(v string) string {
+	trimmed := strings.TrimSpace(v)
+	if trimmed == "" {
+		return "/"
+	}
+	if !strings.HasPrefix(trimmed, "/") {
+		trimmed = "/" + trimmed
+	}
+	if len(trimmed) > 1 {
+		trimmed = strings.TrimSuffix(trimmed, "/")
+	}
+	return trimmed
+}
+
+func methodAllowed(allowed []string, method string) bool {
+	if len(allowed) == 0 {
+		return true
+	}
+	for _, m := range allowed {
+		v := strings.ToUpper(strings.TrimSpace(m))
+		if v == "*" || v == strings.ToUpper(method) {
+			return true
+		}
+	}
+	return false
+}
+
+func copyHeaders(dst, src http.Header) {
+	for key, values := range src {
+		for _, value := range values {
+			dst.Add(key, value)
+		}
+	}
+}
+
+func normalizeScheme(req *http.Request) string {
+	if req.TLS != nil {
+		return "https"
+	}
+	if req.URL != nil && strings.TrimSpace(req.URL.Scheme) != "" {
+		return req.URL.Scheme
+	}
+	return "http"
 }
 
 func (m *mappingRuntimeManager) markInterrupted(id, reason string) {
