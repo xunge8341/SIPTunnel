@@ -36,15 +36,16 @@ func buildTestHandler(t *testing.T) (http.Handler, repository.TaskRepository, ob
 	}
 	_, _ = mappingStore.Create(TunnelMapping{MappingID: "asset.sync", Name: "asset.sync", Enabled: true, PeerNodeID: "peer-legacy", LocalBindIP: "127.0.0.1", LocalBindPort: 18080, LocalBasePath: "/sync", RemoteTargetIP: "127.0.0.1", RemoteTargetPort: 8080, RemoteBasePath: "/sync", AllowedMethods: []string{"POST"}, ConnectTimeoutMS: 500, RequestTimeoutMS: 1000, ResponseTimeoutMS: 1000, MaxRequestBodyBytes: 1024, MaxResponseBodyBytes: 2048})
 	deps := handlerDeps{
-		logger:    observability.NewStructuredLogger(nil),
-		audit:     audit,
-		repo:      repo,
-		engine:    taskengine.NewEngine(repo, service.RetryPolicy{MaxAttempts: 3, BaseBackoff: time.Second}),
-		limits:    OpsLimits{RPS: 100, Burst: 200, MaxConcurrent: 50},
-		routes:    map[string]OpsRoute{"asset.sync": {APICode: "asset.sync", HTTPMethod: "POST", HTTPPath: "/sync", Enabled: true}},
-		mappings:  mappingStore,
-		nodes:     []OpsNode{{NodeID: "n1", Role: "gateway", Status: "ready", Endpoint: "127.0.0.1:18080"}},
-		nodeStore: nodeStore,
+		logger:           observability.NewStructuredLogger(nil),
+		audit:            audit,
+		repo:             repo,
+		engine:           taskengine.NewEngine(repo, service.RetryPolicy{MaxAttempts: 3, BaseBackoff: time.Second}),
+		limits:           OpsLimits{RPS: 100, Burst: 200, MaxConcurrent: 50},
+		routes:           map[string]OpsRoute{"asset.sync": {APICode: "asset.sync", HTTPMethod: "POST", HTTPPath: "/sync", Enabled: true}},
+		mappings:         mappingStore,
+		nodeStore:        nodeStore,
+		nodeConfigSource: "file:/tmp/test/node_config.json",
+		mappingSource:    "file:/tmp/test/tunnel_mappings.json",
 		selfCheckProvider: func(_ context.Context) selfcheck.Report {
 			return selfcheck.Report{Overall: selfcheck.LevelInfo, Summary: selfcheck.Summary{Info: 1, Warn: 1, Error: 1}, Items: []selfcheck.Item{{Name: "sample-info", Level: selfcheck.LevelInfo, Message: "ok", Suggestion: "none", ActionHint: "keep"}, {Name: "sample-warn", Level: selfcheck.LevelWarn, Message: "warn", Suggestion: "check", ActionHint: "verify"}, {Name: "sample-error", Level: selfcheck.LevelError, Message: "err", Suggestion: "fix", ActionHint: "recover"}}}
 		},
@@ -561,6 +562,25 @@ func TestStartupSummaryIncludesCompatibilityFields(t *testing.T) {
 	}
 	if !strings.Contains(rr.Body.String(), "current_network_mode") || !strings.Contains(rr.Body.String(), "compatibility_status") {
 		t.Fatalf("startup summary missing compatibility fields: %s", rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "data_sources") || !strings.Contains(rr.Body.String(), "node_config") {
+		t.Fatalf("startup summary missing data source fields: %s", rr.Body.String())
+	}
+}
+
+func TestNodesReadFromNodeStoreNotHardcoded(t *testing.T) {
+	h, _, _ := buildTestHandler(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/nodes", nil)
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "gateway-a-01") {
+		t.Fatalf("expected node id from node store, got %s", rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "data_source") || !strings.Contains(rr.Body.String(), "node_config.json") {
+		t.Fatalf("expected node data source annotation, got %s", rr.Body.String())
 	}
 }
 

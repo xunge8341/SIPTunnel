@@ -1,7 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { gatewayApi } from '../gateway'
 
 describe('gatewayApi mappings adapter', () => {
+  beforeAll(() => {
+    vi.stubEnv('VITE_API_MODE', 'mock')
+  })
+
+  afterAll(() => {
+    vi.unstubAllEnvs()
+  })
+
   it('supports CRUD via mappings endpoints (mock mode primary adapter)', async () => {
     const initial = await gatewayApi.fetchMappings()
 

@@ -31,6 +31,15 @@ type Summary struct {
 	StorageDirs         StorageDirs                `json:"storage_dirs"`
 	BusinessExecution   BusinessExecutionStatus    `json:"business_execution"`
 	SelfCheckSummary    SelfCheckSummary           `json:"self_check_summary"`
+	DataSources         DataSources                `json:"data_sources"`
+}
+
+type DataSources struct {
+	NodeConfig string `json:"node_config"`
+	Peers      string `json:"peers"`
+	Mappings   string `json:"mappings"`
+	Mode       string `json:"mode"`
+	Capability string `json:"capability"`
 }
 
 type BusinessExecutionStatus struct {
@@ -95,6 +104,7 @@ func (s Summary) ToLogText() string {
 		fmt.Sprintf("- storage_dirs: temp=%s final=%s audit=%s log=%s", safeValue(s.StorageDirs.TempDir), safeValue(s.StorageDirs.FinalDir), safeValue(s.StorageDirs.AuditDir), safeValue(s.StorageDirs.LogDir)),
 		fmt.Sprintf("- business_execution: state=%s route_count=%d message=%s impact=%s", safeValue(s.BusinessExecution.State), s.BusinessExecution.RouteCount, safeValue(s.BusinessExecution.Message), safeValue(s.BusinessExecution.Impact)),
 		fmt.Sprintf("- self_check_summary: generated_at=%s overall=%s info=%d warn=%d error=%d", generatedAt, safeValue(s.SelfCheckSummary.Overall), s.SelfCheckSummary.Info, s.SelfCheckSummary.Warn, s.SelfCheckSummary.Error),
+		fmt.Sprintf("- data_sources: node_config=%s peers=%s mappings=%s mode=%s capability=%s", safeValue(s.DataSources.NodeConfig), safeValue(s.DataSources.Peers), safeValue(s.DataSources.Mappings), safeValue(s.DataSources.Mode), safeValue(s.DataSources.Capability)),
 	}
 	if len(s.ConfigCandidates) > 0 {
 		lines = append(lines, fmt.Sprintf("- config_candidates: %s", strings.Join(s.ConfigCandidates, " | ")))

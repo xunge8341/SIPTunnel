@@ -29,7 +29,7 @@ SIPTunnel 是跨安全边界业务交换网关，当前仓库为 monorepo 结构
 该脚本会同时启动后端与前端（real API 模式）。若只需要单独运行前端，可使用：
 
 ```bash
-# mock 模式（默认）
+# mock 模式（可选）
 ./scripts/ui-dev.sh
 
 # real 模式（对接本地后端）
@@ -37,7 +37,7 @@ SIPTunnel 是跨安全边界业务交换网关，当前仓库为 monorepo 结构
 ```
 
 ```powershell
-# mock 模式（默认）
+# mock 模式（可选）
 .\scripts\ui-dev.ps1
 
 # real 模式（对接本地后端）
@@ -110,7 +110,7 @@ Windows 交付包组装：
 
 ## 前端联调模式
 
-前端默认使用 mock 数据，联调时请切换 real 模式：
+前端默认使用真实后端（`VITE_API_MODE=real`）；仅当显式设置 `VITE_API_MODE=mock` 时才走 mock：
 
 ```bash
 VITE_API_BASE_URL=http://127.0.0.1:18080/api ./scripts/ui-dev.sh real

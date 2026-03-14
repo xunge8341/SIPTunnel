@@ -54,6 +54,7 @@ func TestSummaryToLogText(t *testing.T) {
 		"storage_dirs: temp=./data/temp final=./data/final audit=./data/audit log=./data/logs",
 		"business_execution: state=protocol_only route_count=0 message=协议层可启动，业务执行层未激活（未加载下游 HTTP 路由） impact=仅完成 SIP/RTP 协议交互，不会执行 A 网 HTTP 落地",
 		"self_check_summary: generated_at=2026-01-02T03:04:05Z overall=warn info=6 warn=1 error=0",
+		"data_sources:",
 	} {
 		if !strings.Contains(text, expected) {
 			t.Fatalf("expected text contains %q\nfull:\n%s", expected, text)
@@ -104,4 +105,5 @@ func ExampleSummary_ToLogText() {
 	// - storage_dirs: temp=./data/temp final=./data/final audit=./data/audit log=./data/logs
 	// - business_execution: state=active route_count=2 message=业务执行层已激活，下游 HTTP 路由映射可用 impact=A 网 HTTP 落地可执行
 	// - self_check_summary: generated_at=2026-01-02T03:04:05Z overall=info info=7 warn=0 error=0
+	// - data_sources: node_config=- peers=- mappings=- mode=- capability=-
 }

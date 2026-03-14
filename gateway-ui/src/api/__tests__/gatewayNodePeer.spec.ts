@@ -1,7 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { gatewayApi } from '../gateway'
 
 describe('gatewayApi node/peer adapter', () => {
+  beforeAll(() => {
+    vi.stubEnv('VITE_API_MODE', 'mock')
+  })
+
+  afterAll(() => {
+    vi.unstubAllEnvs()
+  })
+
   it('supports local node read/write and peer CRUD in mock mode', async () => {
     const detail = await gatewayApi.fetchNodeDetail()
     expect(detail.local_node.node_id).toBeTruthy()

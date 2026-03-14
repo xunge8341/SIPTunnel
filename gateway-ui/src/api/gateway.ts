@@ -56,7 +56,7 @@ import type {
   NodeNetworkStatusPayload
 } from '../types/gateway'
 
-const useMock = import.meta.env.VITE_API_MODE !== 'real'
+const useMockMode = () => ((import.meta.env.VITE_API_MODE ?? 'real').toLowerCase() === 'mock')
 
 const unwrap = async <T>(promise: Promise<{ data: T }>) => {
   const response = await promise
@@ -90,7 +90,7 @@ const mapTask = (item: TaskApiModel): CommandTask => ({
 
 export const gatewayApi = {
   async fetchDashboard() {
-    if (useMock) {
+    if (useMockMode()) {
       return fetchDashboardMock()
     }
     const [commandTasks, fileTasks] = await Promise.all([
@@ -123,7 +123,7 @@ export const gatewayApi = {
     } as DashboardPayload
   },
   async fetchCommandTasks(filters: TaskListFilters, page: number, pageSize: number) {
-    if (useMock) {
+    if (useMockMode()) {
       return fetchCommandTasksMock(filters, page, pageSize)
     }
     const result = await unwrap(
@@ -147,7 +147,7 @@ export const gatewayApi = {
     } as TaskListResult<CommandTask>
   },
   async fetchFileTasks(filters: TaskListFilters, page: number, pageSize: number) {
-    if (useMock) {
+    if (useMockMode()) {
       return fetchFileTasksMock(filters, page, pageSize)
     }
     const result = await unwrap(
@@ -184,7 +184,7 @@ export const gatewayApi = {
     } as TaskListResult<FileTask>
   },
   async fetchTaskDetail(id: string, taskKind: TaskKind) {
-    if (useMock) {
+    if (useMockMode()) {
       return fetchTaskDetailMock(id, taskKind)
     }
     const task = await unwrap<TaskApiModel>(request(`/tasks/${id}`, { method: 'GET' }))
@@ -206,13 +206,13 @@ export const gatewayApi = {
   },
 
   async fetchNetworkConfig() {
-    if (useMock) {
+    if (useMockMode()) {
       return fetchNetworkConfigMock()
     }
     return unwrap(request<NetworkConfigPayload>('/network/config', { method: 'GET' }))
   },
   async updateNetworkConfig(payload: UpdateNetworkConfigPayload) {
-    if (useMock) {
+    if (useMockMode()) {
       return updateNetworkConfigMock(payload)
     }
     return unwrap(request<NetworkConfigPayload>('/network/config', { method: 'PUT', body: payload }))
@@ -220,7 +220,7 @@ export const gatewayApi = {
 
 
   async fetchConfigGovernance(filters: ConfigSnapshotFilters) {
-    if (useMock) {
+    if (useMockMode()) {
       return fetchConfigGovernanceMock(filters)
     }
     return unwrap(
@@ -237,7 +237,7 @@ export const gatewayApi = {
   },
 
   async rollbackConfig(version: string) {
-    if (useMock) {
+    if (useMockMode()) {
       return rollbackConfigMock(version)
     }
     return unwrap(request<ConfigGovernancePayload>('/config-governance/rollback', { method: 'POST', body: { version } }))
@@ -245,28 +245,28 @@ export const gatewayApi = {
 
 
   async createDiagnosticExport(payload: DiagnosticExportCreatePayload) {
-    if (useMock) {
+    if (useMockMode()) {
       return createDiagnosticExportMock(payload)
     }
     return unwrap(request<DiagnosticExportJob>('/diagnostics/exports', { method: 'POST', body: payload }))
   },
 
   async fetchDiagnosticExport(jobId: string) {
-    if (useMock) {
+    if (useMockMode()) {
       return getDiagnosticExportMock(jobId)
     }
     return unwrap(request<DiagnosticExportJob>(`/diagnostics/exports/${jobId}`, { method: 'GET' }))
   },
 
   async retryDiagnosticExport(jobId: string) {
-    if (useMock) {
+    if (useMockMode()) {
       return retryDiagnosticExportMock(jobId)
     }
     return unwrap(request<DiagnosticExportJob>(`/diagnostics/exports/${jobId}/retry`, { method: 'POST' }))
   },
 
   async exportConfigYaml(target: 'current' | 'pending') {
-    if (useMock) {
+    if (useMockMode()) {
       return exportConfigYamlMock(target)
     }
     const result = await unwrap<{ content: string }>(
@@ -276,7 +276,7 @@ export const gatewayApi = {
   },
 
   async fetchDeploymentMode() {
-    if (useMock) {
+    if (useMockMode()) {
       return fetchDeploymentModeMock()
     }
     return unwrap(request<DeploymentModePayload>('/system/deployment-mode', { method: 'GET' }))
@@ -284,7 +284,7 @@ export const gatewayApi = {
 
 
   async fetchStartupSummary() {
-    if (useMock) {
+    if (useMockMode()) {
       return fetchStartupSummaryMock()
     }
     return unwrap(request<StartupSummaryPayload>('/startup-summary', { method: 'GET' }))
@@ -292,49 +292,49 @@ export const gatewayApi = {
 
 
   async fetchNodeDetail() {
-    if (useMock) {
+    if (useMockMode()) {
       return fetchNodeDetailMock()
     }
     return unwrap(request<NodeDetailPayload>('/node', { method: 'GET' }))
   },
 
   async updateLocalNode(payload: LocalNodeConfig) {
-    if (useMock) {
+    if (useMockMode()) {
       return updateLocalNodeMock(payload)
     }
     return unwrap(request<LocalNodeConfig>('/node', { method: 'PUT', body: payload }))
   },
 
   async fetchPeers() {
-    if (useMock) {
+    if (useMockMode()) {
       return fetchPeersMock()
     }
     return unwrap<{ items: PeerNodeConfig[] }>(request('/peers', { method: 'GET' }))
   },
 
   async createPeer(payload: PeerNodeConfig) {
-    if (useMock) {
+    if (useMockMode()) {
       return createPeerMock(payload)
     }
     return unwrap(request<PeerNodeConfig>('/peers', { method: 'POST', body: payload }))
   },
 
   async updatePeer(peerNodeId: string, payload: Omit<PeerNodeConfig, 'peer_node_id'>) {
-    if (useMock) {
+    if (useMockMode()) {
       return updatePeerMock(peerNodeId, payload)
     }
     return unwrap(request<PeerNodeConfig>(`/peers/${peerNodeId}`, { method: 'PUT', body: payload }))
   },
 
   async deletePeer(peerNodeId: string) {
-    if (useMock) {
+    if (useMockMode()) {
       return deletePeerMock(peerNodeId)
     }
     return unwrap<{ peer_node_id: string }>(request(`/peers/${peerNodeId}`, { method: 'DELETE' }))
   },
 
   async fetchNodeNetworkStatus() {
-    if (useMock) {
+    if (useMockMode()) {
       return fetchNodeNetworkStatusMock()
     }
     return unwrap<NodeNetworkStatusPayload>(request('/node/network-status', { method: 'GET' }))
@@ -355,25 +355,25 @@ export const gatewayApi = {
     return result.items
   },
   async fetchMappings() {
-    if (useMock) {
+    if (useMockMode()) {
       return fetchMappingsMock()
     }
     return unwrap<TunnelMappingListPayload>(request('/mappings', { method: 'GET' }))
   },
   async createMapping(payload: TunnelMapping) {
-    if (useMock) {
+    if (useMockMode()) {
       return createMappingMock(payload)
     }
     return unwrap<TunnelMappingSavePayload>(request('/mappings', { method: 'POST', body: payload }))
   },
   async updateMapping(id: string, payload: TunnelMapping) {
-    if (useMock) {
+    if (useMockMode()) {
       return updateMappingMock(id, payload)
     }
     return unwrap<TunnelMappingSavePayload>(request(`/mappings/${id}`, { method: 'PUT', body: payload }))
   },
   async deleteMapping(id: string) {
-    if (useMock) {
+    if (useMockMode()) {
       return deleteMappingMock(id)
     }
     await unwrap<Record<string, never>>(request(`/mappings/${id}`, { method: 'DELETE' }))
@@ -397,7 +397,7 @@ export const gatewayApi = {
     }
   },
   async runLinkTest() {
-    if (useMock) {
+    if (useMockMode()) {
       return {
         passed: true,
         status: 'passed',

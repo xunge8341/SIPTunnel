@@ -352,6 +352,13 @@ func buildStartupSummary(nodeID string, cfgLoad configLoadResult, uiCfg config.U
 			Warn:        report.Summary.Warn,
 			Error:       report.Summary.Error,
 		},
+		DataSources: startupsummary.DataSources{
+			NodeConfig: fmt.Sprintf("file:%s/node_config.json", filepath.Clean(storagePaths.FinalDir)),
+			Peers:      fmt.Sprintf("file:%s/node_config.json", filepath.Clean(storagePaths.FinalDir)),
+			Mappings:   fmt.Sprintf("file:%s/tunnel_mappings.json", filepath.Clean(storagePaths.FinalDir)),
+			Mode:       fmt.Sprintf("runtime_config:%s", cfgLoad.Path),
+			Capability: "derived_from_network_mode",
+		},
 	}
 }
 
