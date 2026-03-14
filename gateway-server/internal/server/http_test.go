@@ -563,3 +563,53 @@ func TestStartupSummaryIncludesCompatibilityFields(t *testing.T) {
 		t.Fatalf("startup summary missing compatibility fields: %s", rr.Body.String())
 	}
 }
+
+func TestMappingsCapabilityValidationErrorOnCreate(t *testing.T) {
+	h, _, _ := buildTestHandler(t)
+	body := `{"mapping_id":"map-large","name":"orders","enabled":true,"peer_node_id":"peer-b","local_bind_ip":"127.0.0.1","local_bind_port":18090,"local_base_path":"/orders","remote_target_ip":"10.0.0.2","remote_target_port":8090,"remote_base_path":"/api/orders","allowed_methods":["POST"],"connect_timeout_ms":500,"request_timeout_ms":3000,"response_timeout_ms":3000,"max_request_body_bytes":2097152,"max_response_body_bytes":1048576,"description":"orders mapping"}`
+
+	req := httptest.NewRequest(http.MethodPost, "/api/mappings", bytes.NewBufferString(body))
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "MAPPING_CAPABILITY_INVALID") {
+		t.Fatalf("expected capability error code, got %s", rr.Body.String())
+	}
+}
+
+func TestMappingsCapabilityWarningsInAPIAndSelfCheck(t *testing.T) {
+	h, _, _ := buildTestHandler(t)
+	body := `{"mapping_id":"map-warn","name":"orders","enabled":true,"peer_node_id":"peer-b","local_bind_ip":"127.0.0.1","local_bind_port":18090,"local_base_path":"/orders","remote_target_ip":"10.0.0.2","remote_target_port":8090,"remote_base_path":"/api/orders","allowed_methods":["PUT"],"connect_timeout_ms":500,"request_timeout_ms":3000,"response_timeout_ms":3000,"max_request_body_bytes":1048576,"max_response_body_bytes":1048576,"description":"orders mapping"}`
+
+	createReq := httptest.NewRequest(http.MethodPost, "/api/mappings", bytes.NewBufferString(body))
+	createRR := httptest.NewRecorder()
+	h.ServeHTTP(createRR, createReq)
+	if createRR.Code != http.StatusCreated {
+		t.Fatalf("expected create success, got %d body=%s", createRR.Code, createRR.Body.String())
+	}
+	if !strings.Contains(createRR.Body.String(), "warnings") {
+		t.Fatalf("expected warnings in create response: %s", createRR.Body.String())
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/mappings", nil)
+	listRR := httptest.NewRecorder()
+	h.ServeHTTP(listRR, listReq)
+	if listRR.Code != http.StatusOK {
+		t.Fatalf("expected list success, got %d body=%s", listRR.Code, listRR.Body.String())
+	}
+	if !strings.Contains(listRR.Body.String(), "warnings") {
+		t.Fatalf("expected warnings in list response: %s", listRR.Body.String())
+	}
+
+	selfReq := httptest.NewRequest(http.MethodGet, "/api/selfcheck", nil)
+	selfRR := httptest.NewRecorder()
+	h.ServeHTTP(selfRR, selfReq)
+	if selfRR.Code != http.StatusOK {
+		t.Fatalf("expected selfcheck success, got %d body=%s", selfRR.Code, selfRR.Body.String())
+	}
+	if !strings.Contains(selfRR.Body.String(), "mappings_capability_validation") {
+		t.Fatalf("expected mappings capability selfcheck item: %s", selfRR.Body.String())
+	}
+}

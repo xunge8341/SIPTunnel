@@ -9,23 +9,24 @@ import (
 
 // TunnelMapping 描述“本端入口 ↔ 对端目标”的 HTTP 隧道映射。
 type TunnelMapping struct {
-	MappingID            string   `json:"mapping_id"`
-	Name                 string   `json:"name"`
-	Enabled              bool     `json:"enabled"`
-	PeerNodeID           string   `json:"peer_node_id"`
-	LocalBindIP          string   `json:"local_bind_ip"`
-	LocalBindPort        int      `json:"local_bind_port"`
-	LocalBasePath        string   `json:"local_base_path"`
-	RemoteTargetIP       string   `json:"remote_target_ip"`
-	RemoteTargetPort     int      `json:"remote_target_port"`
-	RemoteBasePath       string   `json:"remote_base_path"`
-	AllowedMethods       []string `json:"allowed_methods"`
-	ConnectTimeoutMS     int      `json:"connect_timeout_ms"`
-	RequestTimeoutMS     int      `json:"request_timeout_ms"`
-	ResponseTimeoutMS    int      `json:"response_timeout_ms"`
-	MaxRequestBodyBytes  int64    `json:"max_request_body_bytes"`
-	MaxResponseBodyBytes int64    `json:"max_response_body_bytes"`
-	Description          string   `json:"description"`
+	MappingID                string   `json:"mapping_id"`
+	Name                     string   `json:"name"`
+	Enabled                  bool     `json:"enabled"`
+	PeerNodeID               string   `json:"peer_node_id"`
+	LocalBindIP              string   `json:"local_bind_ip"`
+	LocalBindPort            int      `json:"local_bind_port"`
+	LocalBasePath            string   `json:"local_base_path"`
+	RemoteTargetIP           string   `json:"remote_target_ip"`
+	RemoteTargetPort         int      `json:"remote_target_port"`
+	RemoteBasePath           string   `json:"remote_base_path"`
+	AllowedMethods           []string `json:"allowed_methods"`
+	ConnectTimeoutMS         int      `json:"connect_timeout_ms"`
+	RequestTimeoutMS         int      `json:"request_timeout_ms"`
+	ResponseTimeoutMS        int      `json:"response_timeout_ms"`
+	MaxRequestBodyBytes      int64    `json:"max_request_body_bytes"`
+	MaxResponseBodyBytes     int64    `json:"max_response_body_bytes"`
+	RequireStreamingResponse bool     `json:"require_streaming_response"`
+	Description              string   `json:"description"`
 }
 
 func (m TunnelMapping) Validate() error {

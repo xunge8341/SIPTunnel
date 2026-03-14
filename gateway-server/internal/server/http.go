@@ -91,6 +91,18 @@ type OpsRoute struct {
 
 type TunnelMapping = tunnelmapping.TunnelMapping
 
+type MappingCapabilityValidation = tunnelmapping.CapabilityValidationResult
+
+type MappingWithWarnings struct {
+	Mapping  TunnelMapping `json:"mapping"`
+	Warnings []string      `json:"warnings,omitempty"`
+}
+
+type mappingListResponse struct {
+	Items    []TunnelMapping `json:"items"`
+	Warnings []string        `json:"warnings,omitempty"`
+}
+
 type OpsNode struct {
 	NodeID   string `json:"node_id"`
 	Role     string `json:"role"`
@@ -774,10 +786,15 @@ func (d handlerDeps) handleRoutes(w http.ResponseWriter, r *http.Request) {
 				ConnectTimeoutMS:     500,
 				RequestTimeoutMS:     3000,
 				ResponseTimeoutMS:    3000,
-				MaxRequestBodyBytes:  10 * 1024 * 1024,
+				MaxRequestBodyBytes:  tunnelmapping.SmallBodyLimitBytes,
 				MaxResponseBodyBytes: 20 * 1024 * 1024,
 				Description:          "deprecated /api/routes compatibility mapping",
 			})
+		}
+		validation := d.validateMappingsAgainstCapability(created)
+		if validation.HasErrors() {
+			writeError(w, http.StatusBadRequest, "MAPPING_CAPABILITY_INVALID", strings.Join(validation.Errors, "; "))
+			return
 		}
 		for _, item := range d.mappings.List() {
 			_ = d.mappings.Delete(item.MappingID)
@@ -789,7 +806,7 @@ func (d handlerDeps) handleRoutes(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		d.recordOpsAudit(r, readOperator(r), "UPDATE_ROUTES", map[string]any{"count": len(req.Routes)})
-		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: map[string]any{"items": req.Routes}})
+		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: map[string]any{"items": req.Routes, "warnings": validation.Warnings}})
 	default:
 		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
 	}
@@ -807,7 +824,8 @@ func (d handlerDeps) handleMappings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		items := d.mappings.List()
-		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: map[string]any{"items": items}})
+		validation := d.validateMappingsAgainstCapability(items)
+		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: mappingListResponse{Items: items, Warnings: validation.Warnings}})
 	case http.MethodPost:
 		if id != "" {
 			writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
@@ -816,6 +834,11 @@ func (d handlerDeps) handleMappings(w http.ResponseWriter, r *http.Request) {
 		var req TunnelMapping
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid json body")
+			return
+		}
+		validation := d.validateMappingAgainstCapability(req)
+		if validation.HasErrors() {
+			writeError(w, http.StatusBadRequest, "MAPPING_CAPABILITY_INVALID", strings.Join(validation.Errors, "; "))
 			return
 		}
 		created, err := d.mappings.Create(req)
@@ -830,7 +853,7 @@ func (d handlerDeps) handleMappings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		d.recordOpsAudit(r, readOperator(r), "CREATE_MAPPING", map[string]any{"mapping_id": created.MappingID})
-		writeJSON(w, http.StatusCreated, responseEnvelope{Code: "OK", Message: "success", Data: created})
+		writeJSON(w, http.StatusCreated, responseEnvelope{Code: "OK", Message: "success", Data: MappingWithWarnings{Mapping: created, Warnings: validation.Warnings}})
 	case http.MethodPut:
 		if id == "" {
 			writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", "mapping id is required in path")
@@ -839,6 +862,11 @@ func (d handlerDeps) handleMappings(w http.ResponseWriter, r *http.Request) {
 		var req TunnelMapping
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			writeError(w, http.StatusBadRequest, "BAD_REQUEST", "invalid json body")
+			return
+		}
+		validation := d.validateMappingAgainstCapability(req)
+		if validation.HasErrors() {
+			writeError(w, http.StatusBadRequest, "MAPPING_CAPABILITY_INVALID", strings.Join(validation.Errors, "; "))
 			return
 		}
 		updated, err := d.mappings.Update(id, req)
@@ -853,7 +881,7 @@ func (d handlerDeps) handleMappings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		d.recordOpsAudit(r, readOperator(r), "UPDATE_MAPPING", map[string]any{"mapping_id": updated.MappingID})
-		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: updated})
+		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: MappingWithWarnings{Mapping: updated, Warnings: validation.Warnings}})
 	case http.MethodDelete:
 		if id == "" {
 			writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", "mapping id is required in path")
@@ -1187,6 +1215,25 @@ func (d handlerDeps) handleSelfCheck(w http.ResponseWriter, r *http.Request) {
 			selfcheck.Item{Name: "peer_node_config_valid", Level: selfcheck.Level(compat.PeerNodeCheck.Level), Message: compat.PeerNodeCheck.Message, Suggestion: compat.PeerNodeCheck.Suggestion, ActionHint: compat.PeerNodeCheck.ActionHint},
 			selfcheck.Item{Name: "network_mode_compatibility", Level: selfcheck.Level(compat.CompatibilityCheck.Level), Message: compat.CompatibilityCheck.Message, Suggestion: compat.CompatibilityCheck.Suggestion, ActionHint: compat.CompatibilityCheck.ActionHint},
 		)
+	}
+	mappingValidation := d.validateMappingsAgainstCapability(d.mappings.List())
+	mappingLevel := selfcheck.LevelInfo
+	mappingMessage := "all mappings are compatible with current capability"
+	mappingSuggestion := "继续按当前 network_mode 维护映射配置"
+	mappingHint := "每次变更后复核 /api/mappings 与 /api/selfcheck。"
+	if mappingValidation.HasErrors() {
+		mappingLevel = selfcheck.LevelError
+		mappingMessage = strings.Join(mappingValidation.Errors, "; ")
+		mappingSuggestion = "调整 mapping 参数（body 限制/方法/流式要求）或切换 network_mode。"
+		mappingHint = "修复后重新执行 /api/selfcheck。"
+	} else if len(mappingValidation.Warnings) > 0 {
+		mappingLevel = selfcheck.LevelWarn
+		mappingMessage = strings.Join(mappingValidation.Warnings, "; ")
+		mappingSuggestion = "建议收敛 mapping 配置以降低在受限模式下的不稳定风险。"
+		mappingHint = "根据 warnings 逐条确认并保留运行记录。"
+	}
+	report.Items = append(report.Items, selfcheck.Item{Name: "mappings_capability_validation", Level: mappingLevel, Message: mappingMessage, Suggestion: mappingSuggestion, ActionHint: mappingHint})
+	if d.nodeStore != nil {
 		report.Overall, report.Summary = summarizeSelfCheckItems(report.Items)
 	}
 	if level := strings.TrimSpace(r.URL.Query().Get("level")); level != "" {
@@ -1344,7 +1391,7 @@ func (d handlerDeps) handleDiagnosticsExport(w http.ResponseWriter, r *http.Requ
 	files := []DiagFile{
 		{Name: "00_startup_summary.json", Description: "统一启动与运行摘要", Content: d.startupSummaryFn(r.Context())},
 		{Name: "README.md", Description: "诊断包文件说明", Content: map[string]any{"filters": map[string]any{"request_id": requestID, "trace_id": traceID}, "files": readmeLines}},
-		{Name: "01_transport_config.json", Description: "当前 transport 配置", Content: map[string]any{"network_mode": status.NetworkMode, "capability": status.Capability, "capability_summary": status.CapabilitySummary, "transport_plan": status.TransportPlan, "current_network_mode": compat.CurrentNetworkMode, "current_capability": compat.CurrentCapability, "compatibility_status": compat.CompatibilityCheck, "sip": map[string]any{"listen_ip": status.SIP.ListenIP, "listen_port": status.SIP.ListenPort, "transport": status.SIP.Transport}, "rtp": map[string]any{"listen_ip": status.RTP.ListenIP, "port_start": status.RTP.PortStart, "port_end": status.RTP.PortEnd, "transport": status.RTP.Transport}}},
+		{Name: "01_transport_config.json", Description: "当前 transport 配置", Content: map[string]any{"network_mode": status.NetworkMode, "capability": status.Capability, "capability_summary": status.CapabilitySummary, "transport_plan": status.TransportPlan, "current_network_mode": compat.CurrentNetworkMode, "current_capability": compat.CurrentCapability, "compatibility_status": compat.CompatibilityCheck, "sip": map[string]any{"listen_ip": status.SIP.ListenIP, "listen_port": status.SIP.ListenPort, "transport": status.SIP.Transport}, "rtp": map[string]any{"listen_ip": status.RTP.ListenIP, "port_start": status.RTP.PortStart, "port_end": status.RTP.PortEnd, "transport": status.RTP.Transport}, "mappings_capability_validation": d.validateMappingsAgainstCapability(d.mappings.List())}},
 		{Name: "02_connection_stats_snapshot.json", Description: "连接统计快照", Content: map[string]any{"sip": map[string]any{"current_sessions": status.SIP.CurrentSessions, "current_connections": status.SIP.CurrentConnections, "accepted_connections_total": status.SIP.AcceptedConnectionsTotal, "closed_connections_total": status.SIP.ClosedConnectionsTotal, "read_timeout_total": status.SIP.ReadTimeoutTotal, "write_timeout_total": status.SIP.WriteTimeoutTotal, "connection_error_total": status.SIP.ConnectionErrorTotal}, "rtp": map[string]any{"active_transfers": status.RTP.ActiveTransfers, "rtp_tcp_sessions_current": status.RTP.TCPSessionsCurrent, "rtp_tcp_sessions_total": status.RTP.TCPSessionsTotal, "rtp_tcp_read_errors_total": status.RTP.TCPReadErrorsTotal, "rtp_tcp_write_errors_total": status.RTP.TCPWriteErrorsTotal}}},
 		{Name: "03_port_pool_status.json", Description: "端口池状态", Content: map[string]any{"used_ports": status.RTP.UsedPorts, "available_ports": status.RTP.AvailablePorts, "rtp_port_pool_total": status.RTP.PortPoolTotal, "rtp_port_pool_used": status.RTP.PortPoolUsed, "rtp_port_alloc_fail_total": status.RTP.PortAllocFailTotal}},
 		{Name: "04_transport_error_summary.json", Description: "最近 transport 错误摘要", Content: map[string]any{"recent_bind_errors": maskStringSlice(status.RecentBindErrors), "recent_network_errors": maskStringSlice(status.RecentNetworkErrors)}},
@@ -1390,6 +1437,16 @@ func safeExportToken(v string) string {
 		return '_'
 	}, v)
 	return strings.Trim(safe, "_")
+}
+
+func (d handlerDeps) validateMappingAgainstCapability(mapping TunnelMapping) MappingCapabilityValidation {
+	status := d.networkStatusFunc(context.Background())
+	return tunnelmapping.ValidateMappingCapability(mapping, status.NetworkMode, status.Capability)
+}
+
+func (d handlerDeps) validateMappingsAgainstCapability(mappings []TunnelMapping) MappingCapabilityValidation {
+	status := d.networkStatusFunc(context.Background())
+	return tunnelmapping.ValidateMappingsCapability(mappings, status.NetworkMode, status.Capability)
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload responseEnvelope) {
