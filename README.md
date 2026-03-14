@@ -444,6 +444,7 @@ SIP `transport` 使用建议：
 
 - **metrics**：`sip_control_route_total/sip_control_route_duration` 增加 `transport` 标签（`TCP|UDP`）。
 - **节点状态 API**：`GET /api/node/network-status` 的 `data.sip` 增加连接级指标（`current_connections/accepted_connections_total/closed_connections_total/read_timeout_total/write_timeout_total/connection_error_total`）以及 TCP 生命周期配置回显字段。
+- **系统状态 API**：`GET /api/system/status` 返回 `tunnel_status`、`connection_reason`、`network_mode` 与首页能力矩阵字段（`supports_small_request_body`、`supports_large_response_body`、`supports_streaming_response`、`supports_large_file_upload`、`supports_bidirectional_http_tunnel`）。
 - **RTP 端口池指标**：`rtp_port_pool_total/rtp_port_pool_used/rtp_port_alloc_fail_total` 用于观测文件传输端口池容量、占用和分配失败次数。
 - **RTP TCP 传输指标**：`rtp_tcp_sessions_current/rtp_tcp_sessions_total/rtp_tcp_read_errors_total/rtp_tcp_write_errors_total` 用于观测 TCP 会话与 I/O 健康度。
 - **日志字段**：SIP 控制面处理日志追加 `transport` 字段，启动日志打印 `sip_transport/rtp_transport`。

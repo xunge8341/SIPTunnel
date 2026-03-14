@@ -22,7 +22,8 @@ import type {
   NodeDetailPayload,
   LocalNodeConfig,
   PeerNodeConfig,
-  NodeNetworkStatusPayload
+  NodeNetworkStatusPayload,
+  SystemStatusPayload
 } from '../types/gateway'
 
 const wait = (ms = 200) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -257,6 +258,23 @@ export async function fetchStartupSummaryMock(): Promise<StartupSummaryPayload> 
   }
 }
 
+
+
+export async function fetchSystemStatusMock(): Promise<SystemStatusPayload> {
+  await wait()
+  return {
+    tunnel_status: 'connected',
+    connection_reason: 'SIP 控制面握手成功，RTP 回传链路可用',
+    network_mode: 'A_TO_B_SIP__B_TO_A_RTP',
+    capability: {
+      supports_small_request_body: true,
+      supports_large_response_body: true,
+      supports_streaming_response: true,
+      supports_large_file_upload: false,
+      supports_bidirectional_http_tunnel: false
+    }
+  }
+}
 export async function fetchCommandTasksMock(
   filters: TaskListFilters,
   page: number,

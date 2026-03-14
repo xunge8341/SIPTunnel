@@ -32,6 +32,28 @@
       </a-col>
     </a-row>
 
+    <a-card title="系统状态" :bordered="false">
+      <a-row :gutter="[12, 12]">
+        <a-col :xs="24" :sm="12" :lg="6">
+          <a-statistic title="隧道连接状态" :value="systemStatus.tunnel_status" />
+        </a-col>
+        <a-col :xs="24" :sm="12" :lg="6">
+          <a-statistic title="连接原因" :value="systemStatus.connection_reason" />
+        </a-col>
+        <a-col :xs="24" :sm="12" :lg="6">
+          <a-statistic title="网络模式" :value="systemStatus.network_mode" />
+        </a-col>
+      </a-row>
+      <a-typography-title :level="5" style="margin-top: 12px">能力矩阵</a-typography-title>
+      <a-descriptions :column="1" size="small" bordered>
+        <a-descriptions-item label="支持小请求">{{ yesNo(systemStatus.capability.supports_small_request_body) }}</a-descriptions-item>
+        <a-descriptions-item label="支持大响应">{{ yesNo(systemStatus.capability.supports_large_response_body) }}</a-descriptions-item>
+        <a-descriptions-item label="支持流式响应">{{ yesNo(systemStatus.capability.supports_streaming_response) }}</a-descriptions-item>
+        <a-descriptions-item label="支持大文件上传">{{ yesNo(systemStatus.capability.supports_large_file_upload) }}</a-descriptions-item>
+        <a-descriptions-item label="支持HTTP双向">{{ yesNo(systemStatus.capability.supports_bidirectional_http_tunnel) }}</a-descriptions-item>
+      </a-descriptions>
+    </a-card>
+
     <a-card :bordered="false">
       <template #title>
         <a-space>
@@ -120,9 +142,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { gatewayApi } from '../api/gateway'
-import type { DashboardPayload, DeploymentModePayload, StartupSummaryPayload } from '../types/gateway'
+import type { DashboardPayload, DeploymentModePayload, StartupSummaryPayload, SystemStatusPayload } from '../types/gateway'
 
 const deploymentMode = ref<DeploymentModePayload>({
   uiMode: 'embedded',
@@ -178,6 +200,28 @@ const startupSummary = ref<StartupSummaryPayload>({
   }
 })
 
+
+const systemStatus = ref<SystemStatusPayload>({
+  tunnel_status: 'disconnected',
+  connection_reason: '-',
+  network_mode: '-',
+  capability: {
+    supports_small_request_body: false,
+    supports_large_response_body: false,
+    supports_streaming_response: false,
+    supports_large_file_upload: false,
+    supports_bidirectional_http_tunnel: false
+  }
+})
+
+const yesNo = (v: boolean) => (v ? '是' : '否')
+
+const loadSystemStatus = async () => {
+  systemStatus.value = await gatewayApi.fetchSystemStatus()
+}
+
+let statusPollingTimer: ReturnType<typeof setInterval> | undefined
+
 const dashboard = ref<DashboardPayload>({
   metrics: {
     successRate: 0,
@@ -208,6 +252,16 @@ onMounted(async () => {
   dashboard.value = dashboardPayload
   deploymentMode.value = deploymentPayload
   startupSummary.value = startupPayload
+  await loadSystemStatus()
+  statusPollingTimer = setInterval(() => {
+    void loadSystemStatus()
+  }, 5000)
+})
+
+onUnmounted(() => {
+  if (statusPollingTimer) {
+    clearInterval(statusPollingTimer)
+  }
 })
 
 const keyStatusCards = computed<Array<{ title: string; value: string | number; suffix?: string }>>(() => [

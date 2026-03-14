@@ -202,6 +202,7 @@ func TestLimitsRoutesNodesAndAudits(t *testing.T) {
 		{http.MethodPut, "/api/routes", `{"routes":[{"api_code":"asset.sync","http_method":"POST","http_path":"/sync","enabled":true}]}`, http.StatusOK},
 		{http.MethodGet, "/api/nodes", "", http.StatusOK},
 		{http.MethodGet, "/api/startup-summary", "", http.StatusOK},
+		{http.MethodGet, "/api/system/status", "", http.StatusOK},
 		{http.MethodGet, "/api/audits?trace_id=t1&page=1&page_size=10", "", http.StatusOK},
 	}
 	for _, tc := range cases {
@@ -631,5 +632,48 @@ func TestMappingsCapabilityWarningsInAPIAndSelfCheck(t *testing.T) {
 	}
 	if !strings.Contains(selfRR.Body.String(), "mappings_capability_validation") {
 		t.Fatalf("expected mappings capability selfcheck item: %s", selfRR.Body.String())
+	}
+}
+
+func TestSystemStatusEndpoint(t *testing.T) {
+	h, _, audit := buildTestHandler(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/system/status", nil)
+	req.Header.Set("X-Initiator", "ops-system")
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var payload struct {
+		Code string               `json:"code"`
+		Data SystemStatusResponse `json:"data"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal response failed: %v", err)
+	}
+	if payload.Code != "OK" {
+		t.Fatalf("unexpected code: %s", payload.Code)
+	}
+	if payload.Data.TunnelStatus != "degraded" {
+		t.Fatalf("unexpected tunnel status: %+v", payload.Data)
+	}
+	if payload.Data.NetworkMode != config.NetworkModeAToBSIPBToARTP {
+		t.Fatalf("unexpected network mode: %s", payload.Data.NetworkMode)
+	}
+	if !payload.Data.Capability.SupportsSmallRequestBody || !payload.Data.Capability.SupportsLargeResponseBody || payload.Data.Capability.SupportsLargeFileUpload {
+		t.Fatalf("unexpected capability matrix: %+v", payload.Data.Capability)
+	}
+
+	events, err := audit.List(t.Context(), observability.AuditQuery{Who: "ops-system", Limit: 10})
+	if err != nil {
+		t.Fatalf("query audit failed: %v", err)
+	}
+	if len(events) == 0 {
+		t.Fatalf("expected audit event for system status query")
+	}
+	if events[0].OpsAction != "QUERY_SYSTEM_STATUS" {
+		t.Fatalf("unexpected ops action: %s", events[0].OpsAction)
 	}
 }

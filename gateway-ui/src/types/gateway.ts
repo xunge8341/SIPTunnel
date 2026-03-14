@@ -91,6 +91,21 @@ export interface StartupSummaryPayload {
   }
 }
 
+export interface SystemStatusCapability {
+  supports_small_request_body: boolean
+  supports_large_response_body: boolean
+  supports_streaming_response: boolean
+  supports_large_file_upload: boolean
+  supports_bidirectional_http_tunnel: boolean
+}
+
+export interface SystemStatusPayload {
+  tunnel_status: 'connected' | 'disconnected' | 'degraded'
+  connection_reason: string
+  network_mode: string
+  capability: SystemStatusCapability
+}
+
 export interface Capability {
   supports_large_request_body: boolean
   supports_large_response_body: boolean
