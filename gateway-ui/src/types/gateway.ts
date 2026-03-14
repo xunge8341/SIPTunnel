@@ -260,6 +260,55 @@ export interface OpsNode {
   endpoint: string
 }
 
+export interface LocalNodeConfig {
+  node_id: string
+  node_name: string
+  node_role: string
+  network_mode: string
+  sip_listen_ip: string
+  sip_listen_port: number
+  sip_transport: TransportProtocol
+  rtp_listen_ip: string
+  rtp_port_start: number
+  rtp_port_end: number
+  rtp_transport: TransportProtocol
+}
+
+export interface PeerNodeConfig {
+  peer_node_id: string
+  peer_name: string
+  peer_signaling_ip: string
+  peer_signaling_port: number
+  peer_media_ip: string
+  peer_media_port_start: number
+  peer_media_port_end: number
+  supported_network_mode: string
+  enabled: boolean
+}
+
+export interface NodeConfigCheckResult {
+  level: 'info' | 'warn' | 'error'
+  message: string
+  suggestion: string
+  action_hint: string
+}
+
+export interface NodeDetailPayload {
+  local_node: LocalNodeConfig
+  current_network_mode: string
+  current_capability: Capability
+  compatibility_status: NodeConfigCheckResult
+}
+
+export interface NodeNetworkStatusPayload {
+  network_mode: string
+  capability: Capability
+  current_network_mode: string
+  current_capability: Capability
+  compatibility_status: NodeConfigCheckResult
+  capability_summary: CapabilitySummary
+}
+
 export interface OpsAuditEvent {
   who: string
   when: string

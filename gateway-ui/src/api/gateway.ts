@@ -17,7 +17,14 @@ import {
   fetchMappingsMock,
   createMappingMock,
   updateMappingMock,
-  deleteMappingMock
+  deleteMappingMock,
+  fetchNodeDetailMock,
+  updateLocalNodeMock,
+  fetchPeersMock,
+  createPeerMock,
+  updatePeerMock,
+  deletePeerMock,
+  fetchNodeNetworkStatusMock
 } from './mockGateway'
 import type {
   CommandTask,
@@ -42,7 +49,11 @@ import type {
   DiagnosticExportJob,
   DeploymentModePayload,
   StartupSummaryPayload,
-  OpsLinkTestReport
+  OpsLinkTestReport,
+  NodeDetailPayload,
+  LocalNodeConfig,
+  PeerNodeConfig,
+  NodeNetworkStatusPayload
 } from '../types/gateway'
 
 const useMock = import.meta.env.VITE_API_MODE !== 'real'
@@ -277,6 +288,56 @@ export const gatewayApi = {
       return fetchStartupSummaryMock()
     }
     return unwrap(request<StartupSummaryPayload>('/startup-summary', { method: 'GET' }))
+  },
+
+
+  async fetchNodeDetail() {
+    if (useMock) {
+      return fetchNodeDetailMock()
+    }
+    return unwrap(request<NodeDetailPayload>('/node', { method: 'GET' }))
+  },
+
+  async updateLocalNode(payload: LocalNodeConfig) {
+    if (useMock) {
+      return updateLocalNodeMock(payload)
+    }
+    return unwrap(request<LocalNodeConfig>('/node', { method: 'PUT', body: payload }))
+  },
+
+  async fetchPeers() {
+    if (useMock) {
+      return fetchPeersMock()
+    }
+    return unwrap<{ items: PeerNodeConfig[] }>(request('/peers', { method: 'GET' }))
+  },
+
+  async createPeer(payload: PeerNodeConfig) {
+    if (useMock) {
+      return createPeerMock(payload)
+    }
+    return unwrap(request<PeerNodeConfig>('/peers', { method: 'POST', body: payload }))
+  },
+
+  async updatePeer(peerNodeId: string, payload: Omit<PeerNodeConfig, 'peer_node_id'>) {
+    if (useMock) {
+      return updatePeerMock(peerNodeId, payload)
+    }
+    return unwrap(request<PeerNodeConfig>(`/peers/${peerNodeId}`, { method: 'PUT', body: payload }))
+  },
+
+  async deletePeer(peerNodeId: string) {
+    if (useMock) {
+      return deletePeerMock(peerNodeId)
+    }
+    return unwrap<{ peer_node_id: string }>(request(`/peers/${peerNodeId}`, { method: 'DELETE' }))
+  },
+
+  async fetchNodeNetworkStatus() {
+    if (useMock) {
+      return fetchNodeNetworkStatusMock()
+    }
+    return unwrap<NodeNetworkStatusPayload>(request('/node/network-status', { method: 'GET' }))
   },
 
   fetchLimits() {
