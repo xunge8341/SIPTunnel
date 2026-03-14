@@ -293,6 +293,9 @@ startup summary:
 .\scripts\embed-ui.ps1
 ```
 
+> 失败即中止：`embed-ui.ps1` 会在 `npm run build` 后显式检查 `$LASTEXITCODE`。
+> 一旦前端构建失败，脚本会抛出 `UI build failed with exit code ...` 并立即退出（非零退出码），不会继续复制旧 `dist`，也不会覆盖 `gateway-server/internal/server/embedded-ui`。脚本还会校验本次构建 nonce 标记，拒绝嵌入陈旧产物。
+
 2) 在 `gateway-server/configs/config.yaml` 中设置：
 
 ```yaml
