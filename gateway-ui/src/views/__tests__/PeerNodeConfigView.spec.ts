@@ -27,8 +27,8 @@ const stubs = {
   'a-popconfirm': { template: '<div><slot /></div>' },
   'a-drawer': { template: '<div><slot /><slot name="footer" /></div>' },
   'a-form': { template: '<form><slot /></form>' },
-  'a-row': { template: '<div><slot /></div>' },
-  'a-col': { template: '<div><slot /></div>' },
+  'a-row': { template: '<div class="stub-row"><slot /></div>' },
+  'a-col': { template: '<div class="stub-col"><slot /></div>' },
   'a-form-item': { template: '<div><slot /></div>' },
   'a-input': { template: '<input />' },
   'a-input-number': { template: '<input />' }
@@ -61,5 +61,6 @@ describe('PeerNodeConfigView', () => {
     expect(gatewayApi.fetchNodeNetworkStatus).toHaveBeenCalled()
     expect(wrapper.text()).toContain('A_TO_B_SIP__B_TO_A_RTP')
     expect(wrapper.text()).toContain('small_request')
+    expect(wrapper.findAll('.stub-row')).toHaveLength(0)
   })
 })

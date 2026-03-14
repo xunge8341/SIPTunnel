@@ -12,23 +12,15 @@
 
     <a-modal v-model:open="editVisible" title="编辑限流策略" @ok="savePolicy">
       <a-form layout="vertical">
-        <a-row :gutter="12">
-          <a-col :span="8">
-            <a-form-item label="RPS">
-              <a-input-number v-model:value="formState.rps" :min="1" style="width: 100%" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="8">
-            <a-form-item label="Burst">
-              <a-input-number v-model:value="formState.burst" :min="1" style="width: 100%" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="8">
-            <a-form-item label="最大并发">
-              <a-input-number v-model:value="formState.maxConcurrent" :min="1" style="width: 100%" />
-            </a-form-item>
-          </a-col>
-        </a-row>
+        <a-form-item label="RPS">
+          <a-input-number v-model:value="formState.rps" :min="1" style="width: 100%" />
+        </a-form-item>
+        <a-form-item label="Burst">
+          <a-input-number v-model:value="formState.burst" :min="1" style="width: 100%" />
+        </a-form-item>
+        <a-form-item label="最大并发">
+          <a-input-number v-model:value="formState.maxConcurrent" :min="1" style="width: 100%" />
+        </a-form-item>
       </a-form>
     </a-modal>
   </a-space>
