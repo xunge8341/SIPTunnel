@@ -41,6 +41,7 @@ SIPTunnel 同时支持两种产品模式，文档与 UI 必须明确区分：
 - 生产基线：限流、审计日志、trace 字段透传和结构化日志。
 - 网络模式能力矩阵：`NetworkMode -> Capability` 由后端统一推导，覆盖系统信息 API、启动摘要与诊断导出（见 `docs/README.md#网络模式与能力矩阵`）。
 - 映射能力联动校验：`TunnelMapping` 保存/更新会按当前 `NetworkMode/Capability` 校验 `max_request_body_bytes`、`max_response_body_bytes`、`allowed_methods`（默认 `[*]`，即全部允许）与 `require_streaming_response`，并在 API/selfcheck/诊断暴露 warnings 或 errors。
+- 映射入口端口校验：`local_bind_port` 现在会拦截浏览器已知受限端口（如 `6666`，会触发 Chrome `ERR_UNSAFE_PORT`），避免“监听成功但浏览器无法访问且无请求日志”的假故障场景。
 - 映射运行时主链路：`enabled=true` 时后端会自动监听 `local_bind_ip:local_bind_port`；`enabled=false` 或删除映射会自动释放监听。监听状态会回写到映射列表/状态页（后端状态字段：`disabled/listening/forwarding/degraded/connected/interrupted/start_failed`；统一中文展示：`未启用/监听中/转发中/降级/已连接/异常/启动失败`），并附带异常原因与建议动作（含中文端口冲突提示）。
 - 映射入口收到 HTTP 请求后会执行 direct HTTP forwarder：转发 method/path/query/header/body 到对端目标，并回传真实 status/header/body；链路失败时返回 `502 Bad Gateway`。
 
