@@ -74,7 +74,7 @@ const router = createRouter({
           path: 'tunnel-mappings',
           name: 'tunnel-mappings',
           component: TunnelMappingsView,
-          meta: { title: '隧道映射', description: '维护 TunnelMapping 核心业务字段，并只读展示全局 transport 决策。' }
+          meta: { title: '隧道映射', description: '维护 TunnelMapping 核心业务字段，展示 network mode 能力矩阵，并对超能力配置进行告警/拦截。' }
         },
         {
           path: 'rate-limits',

@@ -12,6 +12,13 @@
     </a-card>
 
     <a-card title="全局承载策略（只读）">
+      <a-alert
+        type="info"
+        show-icon
+        message="能力矩阵由后端 capability API 实时返回"
+        description="用于指导映射配置：超出当前网络模式能力的配置将提示告警，并在保存时拦截。"
+        style="margin-bottom: 12px"
+      />
       <a-descriptions bordered :column="2" size="small">
         <a-descriptions-item label="NetworkMode">{{ startupSummary?.network_mode ?? '-' }}</a-descriptions-item>
         <a-descriptions-item label="Capability 摘要">{{ capabilitySummaryText }}</a-descriptions-item>
@@ -20,6 +27,21 @@
         <a-descriptions-item label="response_meta_transport">{{ startupSummary?.transport_plan.response_meta_transport ?? '-' }}</a-descriptions-item>
         <a-descriptions-item label="response_body_transport">{{ startupSummary?.transport_plan.response_body_transport ?? '-' }}</a-descriptions-item>
       </a-descriptions>
+
+      <a-table
+        size="small"
+        :pagination="false"
+        :columns="capabilityColumns"
+        :data-source="capabilityMatrix"
+        row-key="key"
+        style="margin-top: 12px"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'supported'">
+            <a-tag :color="record.supported ? 'green' : 'red'">{{ record.supported ? '支持' : '不支持' }}</a-tag>
+          </template>
+        </template>
+      </a-table>
     </a-card>
 
     <a-card title="隧道映射列表">
@@ -60,6 +82,22 @@
     </a-card>
 
     <a-drawer v-model:open="drawerVisible" :title="drawerTitle" width="640" @close="drawerVisible = false">
+      <a-alert
+        type="warning"
+        show-icon
+        message="当前映射配置超出 network mode 能力"
+        :description="editorBlockingIssues.join('；')"
+        style="margin-bottom: 12px"
+        v-if="editorBlockingIssues.length"
+      />
+      <a-alert
+        type="info"
+        show-icon
+        message="配置风险提示"
+        :description="editorAdvisoryWarnings.join('；')"
+        style="margin-bottom: 12px"
+        v-if="editorAdvisoryWarnings.length"
+      />
       <a-form layout="vertical">
         <a-form-item label="mapping_id">
           <a-input v-model:value="editing.mapping_id" :disabled="editingMode === 'edit'" />
@@ -86,12 +124,18 @@
           <a-col :span="12"><a-form-item label="max_request_body_bytes"><a-input-number v-model:value="editing.max_request_body_bytes" :min="1" style="width: 100%" /></a-form-item></a-col>
           <a-col :span="12"><a-form-item label="max_response_body_bytes"><a-input-number v-model:value="editing.max_response_body_bytes" :min="1" style="width: 100%" /></a-form-item></a-col>
         </a-row>
+        <a-form-item>
+          <template #label>
+            流式响应（仅在 NetworkMode 支持时可启用）
+          </template>
+          <a-switch v-model:checked="editing.require_streaming_response" />
+        </a-form-item>
         <a-form-item label="description"><a-textarea v-model:value="editing.description" :rows="3" /></a-form-item>
       </a-form>
       <template #footer>
         <a-space style="width: 100%; justify-content: flex-end">
           <a-button @click="drawerVisible = false">取消</a-button>
-          <a-button type="primary" @click="save">保存</a-button>
+          <a-button type="primary" :disabled="editorBlockingIssues.length > 0" @click="save">保存</a-button>
         </a-space>
       </template>
     </a-drawer>
@@ -102,7 +146,8 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { gatewayApi } from '../api/gateway'
-import type { StartupSummaryPayload, TunnelMapping } from '../types/gateway'
+import type { CapabilityItem, StartupSummaryPayload, TunnelMapping } from '../types/gateway'
+import { buildCapabilityMatrix, evaluateMappingCapability } from '../utils/capability'
 
 const keyword = ref('')
 const drawerVisible = ref(false)
@@ -149,6 +194,22 @@ const capabilitySummaryText = computed(() => {
   return `支持: ${startupSummary.value.capability_summary.supported.join(', ') || '-'}；不支持: ${startupSummary.value.capability_summary.unsupported.join(', ') || '-'}`
 })
 
+const capabilityColumns = [
+  { title: '能力项', dataIndex: 'label', key: 'label' },
+  { title: '当前模式', key: 'supported' },
+  { title: '运维提示', dataIndex: 'note', key: 'note' }
+]
+
+const capabilityMatrix = computed<CapabilityItem[]>(() => {
+  const capability = startupSummary.value?.capability
+  if (!capability) return []
+  return buildCapabilityMatrix(capability, startupSummary.value?.capability_summary)
+})
+
+const editorCapabilityEvaluation = computed(() => evaluateMappingCapability(editing, startupSummary.value))
+const editorBlockingIssues = computed(() => editorCapabilityEvaluation.value.blockingIssues)
+const editorAdvisoryWarnings = computed(() => editorCapabilityEvaluation.value.advisoryWarnings)
+
 const columns = [
   { title: '名称', dataIndex: 'name', key: 'name' },
   { title: '启用', key: 'enabled' },
@@ -193,12 +254,22 @@ const loadReadonlyContext = async () => {
 }
 
 const save = async () => {
+  if (editorBlockingIssues.value.length > 0) {
+    message.error(editorBlockingIssues.value.join('；'))
+    return
+  }
   if (editingMode.value === 'create') {
-    await gatewayApi.createMapping(JSON.parse(JSON.stringify(editing)))
+    const result = await gatewayApi.createMapping(JSON.parse(JSON.stringify(editing)))
     message.success('隧道映射已创建')
+    if (result.warnings?.length) {
+      message.warning(`后端提示：${result.warnings.join('；')}`)
+    }
   } else {
-    await gatewayApi.updateMapping(editing.mapping_id, JSON.parse(JSON.stringify(editing)))
+    const result = await gatewayApi.updateMapping(editing.mapping_id, JSON.parse(JSON.stringify(editing)))
     message.success('隧道映射已更新')
+    if (result.warnings?.length) {
+      message.warning(`后端提示：${result.warnings.join('；')}`)
+    }
   }
   drawerVisible.value = false
   await loadMappings()
