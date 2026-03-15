@@ -1,29 +1,27 @@
 <template>
   <a-app>
     <a-layout class="layout-shell">
-      <a-layout-sider v-model:collapsed="appStore.collapsed" collapsible :trigger="null" :width="220" :collapsed-width="80">
-        <div class="logo">
+      <a-layout-sider v-model:collapsed="appStore.collapsed" collapsible :trigger="null" :width="240" :collapsed-width="80" class="layout-sider">
+        <div class="logo" :class="{ collapsed: appStore.collapsed }">
           <span class="logo-icon" aria-hidden="true">◉</span>
-          <span class="logo-text">隧道网关</span>
+          <span class="logo-text">SIPTunnel 控制台</span>
         </div>
-        <a-menu
-          theme="dark"
-          mode="inline"
-          :selected-keys="[activeMenuKey]"
-          :items="menuItems"
-          @click="handleMenuClick"
-        />
+        <a-menu theme="dark" mode="inline" :selected-keys="[activeMenuKey]" :items="menuItems" @click="handleMenuClick" />
       </a-layout-sider>
 
       <a-layout>
         <a-layout-header class="layout-header">
           <a-space>
-            <a-button type="text" @click="appStore.toggleSidebar()">
-              {{ appStore.collapsed ? '展开' : '收起' }}
-            </a-button>
-            <a-typography-title :level="5" style="margin: 0">{{ currentTitle }}</a-typography-title>
+            <a-button type="text" @click="appStore.toggleSidebar()">{{ appStore.collapsed ? '展开菜单' : '收起菜单' }}</a-button>
+            <a-breadcrumb>
+              <a-breadcrumb-item>企业运维控制台</a-breadcrumb-item>
+              <a-breadcrumb-item>{{ currentTitle }}</a-breadcrumb-item>
+            </a-breadcrumb>
           </a-space>
-          <a-tag color="blue">Lightweight Tunnel Gateway</a-tag>
+          <a-space>
+            <a-tag color="blue">统一运维范式</a-tag>
+            <a-tag color="green">中文控制台</a-tag>
+          </a-space>
         </a-layout-header>
 
         <a-layout-content class="layout-content">
@@ -46,7 +44,7 @@ const router = useRouter()
 const appStore = useAppStore()
 
 const activeMenuKey = computed(() => route.name?.toString() ?? 'dashboard')
-const currentTitle = computed(() => (route.meta.title as string) ?? '首页')
+const currentTitle = computed(() => (route.meta.title as string) ?? '总览监控')
 
 const menuItems = computed(() =>
   appStore.navigation.map((item) => ({
@@ -69,18 +67,29 @@ const handleMenuClick = ({ key }: { key: string }) => {
   min-height: 100vh;
 }
 
+.layout-sider {
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.2);
+}
+
 .logo {
   color: #fff;
-  height: 48px;
-  margin: 16px;
-  font-size: 17px;
+  height: 52px;
+  margin: 14px 12px;
+  font-size: 16px;
   font-weight: 600;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
+  gap: 10px;
+  padding: 0 12px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.15);
-  border-radius: 6px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.logo.collapsed {
+  justify-content: center;
+  padding: 0;
 }
 
 .logo-icon {
@@ -93,10 +102,12 @@ const handleMenuClick = ({ key }: { key: string }) => {
   align-items: center;
   justify-content: center;
   font-size: 10px;
+  flex: 0 0 auto;
 }
 
 .logo-text {
-  line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .layout-header {
@@ -110,11 +121,16 @@ const handleMenuClick = ({ key }: { key: string }) => {
 
 .layout-content {
   margin: 16px;
-  padding: 16px;
-  background: #fff;
 }
-</style>
 
-<style scoped>
-:deep(.ant-menu-title-content){white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+:deep(.ant-menu-item) {
+  margin-inline: 8px;
+  width: calc(100% - 16px);
+}
+
+:deep(.ant-menu-title-content) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 </style>
