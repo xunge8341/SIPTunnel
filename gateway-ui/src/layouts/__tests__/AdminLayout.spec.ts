@@ -44,7 +44,7 @@ describe('AdminLayout', () => {
     })
 
     const appStore = useAppStore()
-    expect(wrapper.text()).toContain('隧道网关')
-    expect(appStore.navigation.map((item) => item.label)).toEqual(['总览监控', '节点与隧道', '隧道映射', '访问日志', '运维审计', '告警与限流', '系统设置', '诊断与压测', '授权与安全'])
+    expect(wrapper.text()).toContain('SIPTunnel')
+    expect(appStore.navigation.map((item) => item.label)).toEqual(['总览监控', '节点与隧道', '隧道映射', '访问日志', '运维审计', '告警与保护', '系统设置', '诊断与压测', '授权与安全'])
   })
 })

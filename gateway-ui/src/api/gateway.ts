@@ -76,7 +76,15 @@ import type {
   AccessLogEntry,
   AccessLogFilters,
   SystemSettingsPayload,
-  DashboardOpsSummaryPayload
+  DashboardOpsSummaryPayload,
+  DashboardSummary,
+  DashboardOpsSummary,
+  NodeTunnelWorkspace,
+  MappingWorkspaceList,
+  AccessLogQuery,
+  AlertProtectionState,
+  SystemSettingsState,
+  SecurityCenterState
 } from '../types/gateway'
 
 const useMockMode = () => ((import.meta.env.VITE_API_MODE ?? 'real').toLowerCase() === 'mock')
@@ -98,6 +106,32 @@ interface TaskApiModel {
 }
 
 const normalizeTaskStatus = (status: string) => status as CommandTask['status']
+
+
+const mapDashboardSummary = (payload: {
+  system_health: string
+  active_connections: number
+  mapping_total: number
+  mapping_error_count: number
+  recent_failure_count: number
+  rate_limit_state: string
+  circuit_breaker_state: string
+}): DashboardSummary => ({
+  systemHealth: payload.system_health,
+  activeConnections: payload.active_connections,
+  mappingTotal: payload.mapping_total,
+  mappingErrorCount: payload.mapping_error_count,
+  recentFailureCount: payload.recent_failure_count,
+  rateLimitState: payload.rate_limit_state,
+  circuitBreakerState: payload.circuit_breaker_state
+})
+
+const mapDashboardOpsSummary = (payload: DashboardOpsSummaryPayload): DashboardOpsSummary => ({
+  hotMappings: payload.top_mappings,
+  topFailureMappings: payload.top_failed_mappings,
+  hotSourceIPs: payload.top_source_ips,
+  topFailureIPs: payload.top_failed_source_ips
+})
 
 const mapTask = (item: TaskApiModel): CommandTask => ({
   id: item.ID,
@@ -518,14 +552,16 @@ export const gatewayApi = {
     return unwrap(request<OpsLinkTestReport>('/ops/link-test', { method: 'GET' }))
   },
 
-  async fetchAccessLogs(filters: AccessLogFilters, page: number, pageSize: number) {
+  async fetchAccessLogs(filters: AccessLogQuery, page: number, pageSize: number) {
     const result = await unwrap<{ items: AccessLogEntry[]; pagination: { total: number; page: number; page_size: number } }>(
       request('/access-logs', {
         method: 'GET',
         params: {
           status: filters.status,
-          request_id: filters.requestId,
-          trace_id: filters.traceId,
+          mapping: filters.mapping,
+          source_ip: filters.sourceIP,
+          method: filters.method,
+          slow_only: filters.slowOnly,
           page,
           page_size: pageSize
         }
@@ -539,16 +575,97 @@ export const gatewayApi = {
     }
   },
 
-  async fetchSystemSettings() {
-    return unwrap(request<SystemSettingsPayload>('/system/settings', { method: 'GET' }))
-  },
-
-  async updateSystemSettings(payload: SystemSettingsPayload) {
-    return unwrap(request<SystemSettingsPayload>('/system/settings', { method: 'PUT', body: payload }))
+  async fetchDashboardSummary() {
+    const payload = await unwrap<{
+      system_health: string
+      active_connections: number
+      mapping_total: number
+      mapping_error_count: number
+      recent_failure_count: number
+      rate_limit_state: string
+      circuit_breaker_state: string
+    }>(request('/dashboard/summary', { method: 'GET' }))
+    return mapDashboardSummary(payload)
   },
 
   async fetchDashboardOpsSummary() {
-    return unwrap(request<DashboardOpsSummaryPayload>('/dashboard/ops-summary', { method: 'GET' }))
+    const payload = await unwrap<DashboardOpsSummaryPayload>(request('/dashboard/ops-summary', { method: 'GET' }))
+    return mapDashboardOpsSummary(payload)
+  },
+
+  async fetchNodeTunnelWorkspace() {
+    return unwrap<NodeTunnelWorkspace>(request('/node-tunnel/workspace', { method: 'GET' }))
+  },
+
+  async saveNodeTunnelWorkspace(payload: NodeTunnelWorkspace) {
+    return unwrap<NodeTunnelWorkspace>(request('/node-tunnel/workspace', { method: 'POST', body: payload }))
+  },
+
+  async fetchMappingWorkspaceList() {
+    const payload = await unwrap<TunnelMappingListPayload>(request('/mappings', { method: 'GET' }))
+    return {
+      items: payload.items.map((item) => ({
+        mappingId: item.mapping_id,
+        mappingName: item.name || item.mapping_id,
+        localEntry: `${item.local_bind_ip}:${item.local_bind_port}${item.local_base_path}`,
+        peerTarget: `${item.remote_target_ip}:${item.remote_target_port}${item.remote_base_path}`,
+        status: item.enabled ? 'enabled' : 'disabled',
+        lastTestResult: item.failure_reason ? 'failed' : 'passed',
+        requestCount: 0,
+        failureCount: item.failure_reason ? 1 : 0,
+        avgLatency: 0,
+        riskLevel: item.failure_reason ? 'high' : 'normal'
+      }))
+    } as MappingWorkspaceList
+  },
+
+  async fetchProtectionState() {
+    return unwrap<AlertProtectionState>(request('/protection/state', { method: 'GET' }))
+  },
+
+  async fetchSystemSettings() {
+    const payload = await unwrap<SystemSettingsPayload>(request('/system/settings', { method: 'GET' }))
+    return {
+      sqlitePath: payload.sqlite_path,
+      logPath: '/var/log/siptunnel',
+      logRetentionDays: payload.max_task_age_days,
+      auditRetentionDays: payload.max_audit_age_days,
+      accessLogRetentionDays: payload.max_access_log_age_days,
+      diagnosticsRetentionDays: payload.max_diagnostic_age_days,
+      loadtestRetentionDays: payload.max_loadtest_age_days,
+      cleanupCron: payload.log_cleanup_cron,
+      adminCIDR: payload.admin_allow_cidr,
+      mfaEnabled: payload.admin_require_mfa,
+      lastCleanupStatus: payload.cleaner_last_result
+    } as SystemSettingsState
+  },
+
+  async updateSystemSettings(payload: SystemSettingsState) {
+    const req: SystemSettingsPayload = {
+      sqlite_path: payload.sqlitePath,
+      log_cleanup_cron: payload.cleanupCron,
+      max_task_age_days: payload.logRetentionDays,
+      max_task_records: 20000,
+      max_access_log_age_days: payload.accessLogRetentionDays,
+      max_access_log_records: 20000,
+      max_audit_age_days: payload.auditRetentionDays,
+      max_audit_records: 50000,
+      max_diagnostic_age_days: payload.diagnosticsRetentionDays,
+      max_diagnostic_records: 2000,
+      max_loadtest_age_days: payload.loadtestRetentionDays,
+      max_loadtest_records: 2000,
+      admin_allow_cidr: payload.adminCIDR,
+      admin_require_mfa: payload.mfaEnabled,
+      cleaner_last_run_at: '',
+      cleaner_last_result: payload.lastCleanupStatus,
+      cleaner_last_removed_records: 0
+    }
+    await unwrap(request<SystemSettingsPayload>('/system/settings', { method: 'POST', body: req }))
+    return this.fetchSystemSettings()
+  },
+
+  async fetchSecurityState() {
+    return unwrap<SecurityCenterState>(request('/security/state', { method: 'GET' }))
   },
   async fetchSecuritySettings() {
     return unwrap(request<{ signer: string; encryption: string; verify_interval_min: number }>('/security/settings', { method: 'GET' }))

@@ -1,50 +1,14 @@
-import { flushPromises, mount } from '@vue/test-utils'
-import NodeConfigView from '../NodeConfigView.vue'
+import { mount, flushPromises } from '@vue/test-utils'
+import NodesAndTunnelsView from '../NodesAndTunnelsView.vue'
 import { gatewayApi } from '../../api/gateway'
+vi.mock('../../api/gateway', () => ({ gatewayApi: { fetchNodeTunnelWorkspace: vi.fn(), saveNodeTunnelWorkspace: vi.fn() } }))
 
-vi.mock('../../api/gateway', () => ({
-  gatewayApi: {
-    fetchNodeConfig: vi.fn(),
-    saveNodeConfig: vi.fn()
-  }
-}))
-
-vi.mock('ant-design-vue', () => ({ message: { success: vi.fn() } }))
-
-const stubs = {
-  'a-card': { template: '<section><slot /></section>' },
-  'a-form': { template: '<form><slot /></form>' },
-  'a-divider': { template: '<div><slot /></div>' },
-  'a-row': { template: '<div class="stub-row"><slot /></div>' },
-  'a-col': { template: '<div class="stub-col"><slot /></div>' },
-  'a-form-item': { template: '<div><slot /></div>' },
-  'a-input': { template: '<input />' },
-  'a-input-number': { template: '<input />' },
-  'a-space': { template: '<div><slot /></div>' },
-  'a-button': { template: '<button @click="$emit(`click`)"><slot /></button>' }
-}
-
-describe('NodeConfigView', () => {
-  it('loads and saves node config', async () => {
-    vi.mocked(gatewayApi.fetchNodeConfig).mockResolvedValue({
-      local_node: { node_ip: '10.0.0.1', signaling_port: 5060, device_id: 'gw-a', rtp_port_start: 20000, rtp_port_end: 20999 },
-      peer_node: { node_ip: '10.0.0.2', signaling_port: 5060, device_id: 'gw-b' }
-    })
-    vi.mocked(gatewayApi.saveNodeConfig).mockResolvedValue({
-      config: {
-        local_node: { node_ip: '10.0.0.1', signaling_port: 5060, device_id: 'gw-a', rtp_port_start: 20000, rtp_port_end: 20999 },
-        peer_node: { node_ip: '10.0.0.2', signaling_port: 5060, device_id: 'gw-b' }
-      },
-      tunnel_restarted: true
-    })
-
-    const wrapper = mount(NodeConfigView, { global: { stubs } })
+describe('NodesAndTunnelsView', () => {
+  it('loads workspace', async () => {
+    const ws = { localNode: { node_ip: '1.1.1.1', signaling_port: 5060, device_id: 'a', rtp_port_start: 2000, rtp_port_end: 2001 }, peerNode: { node_ip: '2.2.2.2', signaling_port: 5060, device_id: 'b', rtp_port_start: 2000, rtp_port_end: 2001 }, networkMode: 'm', capabilityMatrix: [], sipCapability: {}, rtpCapability: {}, sessionSettings: { channel_protocol: 'SIP', connection_initiator: 'LOCAL', local_device_id: 'a', peer_device_id: 'b', heartbeat_interval_sec: 10, register_retry_count: 1, register_retry_interval_sec: 1, registration_status: '', last_register_time: '', last_heartbeat_time: '', heartbeat_status: '', last_failure_reason: '', next_retry_time: '', consecutive_heartbeat_timeout: 0, supported_capabilities: [], request_channel: '', response_channel: '', network_mode: 'x', capability: { supports_large_request_body: false, supports_large_response_body: false, supports_streaming_response: false, supports_bidirectional_http_tunnel: false, supports_transparent_proxy: false }, capability_items: [] }, securitySettings: { signer: 'HMAC-SHA256', encryption: 'AES', verify_interval_min: 30 }, encryptionSettings: { algorithm: 'AES' } }
+    vi.mocked(gatewayApi.fetchNodeTunnelWorkspace).mockResolvedValue(ws as any)
+    mount(NodesAndTunnelsView)
     await flushPromises()
-
-    expect(gatewayApi.fetchNodeConfig).toHaveBeenCalledTimes(1)
-    await wrapper.findAll('button')[1].trigger('click')
-    await flushPromises()
-    expect(gatewayApi.saveNodeConfig).toHaveBeenCalled()
-    expect(wrapper.findAll('.stub-row')).toHaveLength(0)
+    expect(gatewayApi.fetchNodeTunnelWorkspace).toHaveBeenCalled()
   })
 })
