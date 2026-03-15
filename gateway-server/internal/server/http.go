@@ -19,6 +19,7 @@ import (
 	"siptunnel/internal/config"
 	"siptunnel/internal/nodeconfig"
 	"siptunnel/internal/observability"
+	"siptunnel/internal/persistence"
 	"siptunnel/internal/repository"
 	filerepo "siptunnel/internal/repository/file"
 	memrepo "siptunnel/internal/repository/memory"
@@ -54,6 +55,7 @@ type handlerDeps struct {
 	lastLinkTest LinkTestReport
 	tunnelConfig TunnelConfigPayload
 	sessionMgr   *tunnelSessionManager
+	sqliteStore  *persistence.SQLiteStore
 }
 
 type nodeConfigStore interface {
@@ -365,8 +367,13 @@ type capacityAssessmentRequest struct {
 
 type HandlerOptions struct {
 	LogDir                 string
+	LogRetention           observability.LogRetentionPolicy
 	AuditDir               string
 	DataDir                string
+	SQLitePath             string
+	UseMemoryBackend       bool
+	Retention              persistence.RetentionPolicy
+	CleanupInterval        time.Duration
 	SelfCheckProvider      func(context.Context) selfcheck.Report
 	NetworkStatusFunc      func(context.Context) NodeNetworkStatus
 	StartupSummaryProvider func(context.Context) startupsummary.Summary
@@ -389,20 +396,34 @@ func NewHandler() http.Handler {
 }
 
 func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, io.Closer, error) {
-	repo := memrepo.NewTaskRepository()
+	repo := repository.TaskRepository(memrepo.NewTaskRepository())
 	engine := taskengine.NewEngine(repo, service.RetryPolicy{MaxAttempts: 3, BaseBackoff: time.Second})
 	logger := observability.NewStructuredLogger(nil)
 	var logCloser io.Closer
 	if opts.LogDir != "" {
 		var err error
-		logger, logCloser, err = observability.NewStructuredLoggerWithFile(opts.LogDir)
+		logger, logCloser, err = observability.NewStructuredLoggerWithFile(opts.LogDir, opts.LogRetention)
 		if err != nil {
 			return nil, nil, fmt.Errorf("init logger: %w", err)
 		}
 	}
 	audit := observability.AuditStore(observability.NewInMemoryAuditStore())
+	var sqliteStore *persistence.SQLiteStore
 	var auditCloser io.Closer
-	if opts.AuditDir != "" {
+	if !opts.UseMemoryBackend && strings.TrimSpace(opts.SQLitePath) != "" {
+		store, err := persistence.OpenSQLiteStore(opts.SQLitePath, opts.Retention)
+		if err != nil {
+			if logCloser != nil {
+				_ = logCloser.Close()
+			}
+			return nil, nil, fmt.Errorf("init sqlite store: %w", err)
+		}
+		sqliteStore = store
+		repo = store.TaskRepository()
+		engine = taskengine.NewEngine(repo, service.RetryPolicy{MaxAttempts: 3, BaseBackoff: time.Second})
+		audit = store
+		auditCloser = store
+	} else if opts.AuditDir != "" {
 		store, err := observability.NewFileBackedAuditStore(opts.AuditDir)
 		if err != nil {
 			if logCloser != nil {
@@ -457,6 +478,18 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, io.Closer, error)
 		networkStatusFunc: opts.NetworkStatusFunc,
 		startupSummaryFn:  opts.StartupSummaryProvider,
 		tunnelConfig:      defaultTunnelConfigPayload(config.DefaultNetworkMode()),
+		sqliteStore:       sqliteStore,
+	}
+
+	if sqliteStore != nil {
+		_ = sqliteStore.SaveSystemConfig(context.Background(), "initial.limits", deps.limits)
+		cleanupInterval := opts.CleanupInterval
+		if cleanupInterval <= 0 {
+			cleanupInterval = 30 * time.Minute
+		}
+		cleaner := newSQLiteCleaner(sqliteStore, cleanupInterval)
+		cleaner.Start()
+		auditCloser = joinClosers(auditCloser, cleaner)
 	}
 	deps.sessionMgr = newTunnelSessionManager(tcpTunnelRegistrar{nodeStore: deps.nodeStore}, deps.tunnelConfig)
 	deps.sessionMgr.Start()
@@ -892,6 +925,9 @@ func (d handlerDeps) handleLimits(w http.ResponseWriter, r *http.Request) {
 		d.limits = OpsLimits(req)
 		updated := d.limits
 		d.mu.Unlock()
+		if d.sqliteStore != nil {
+			_ = d.sqliteStore.SaveSystemConfig(r.Context(), "ops.limits", updated)
+		}
 		d.recordOpsAudit(r, readOperator(r), "UPDATE_LIMITS", updated)
 		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: updated})
 	default:
@@ -1722,6 +1758,9 @@ func (d *handlerDeps) handleTunnelConfig(w http.ResponseWriter, r *http.Request)
 			return
 		}
 		d.sessionMgr.ApplyConfig(updated)
+		if d.sqliteStore != nil {
+			_ = d.sqliteStore.SaveSystemConfig(r.Context(), "tunnel.config", updated)
+		}
 		d.recordOpsAudit(r, readOperator(r), "UPDATE_TUNNEL_CONFIG", updated)
 		writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: updated})
 	default:
@@ -2293,6 +2332,9 @@ func (d handlerDeps) handleDiagnosticsExport(w http.ResponseWriter, r *http.Requ
 		{Name: "05_task_failure_summary.json", Description: "最近 task failure 摘要", Content: taskSummary},
 		{Name: "06_rate_limit_hit_summary.json", Description: "最近 rate limit 命中摘要", Content: rateLimitHits},
 		{Name: "07_profile_entry.json", Description: "profile 采集入口信息（如果启用）", Content: map[string]any{"enabled": strings.EqualFold(strings.TrimSpace(os.Getenv("GATEWAY_PPROF_ENABLED")), "true") || strings.TrimSpace(os.Getenv("GATEWAY_PPROF_ENABLED")) == "1", "listen_address": strings.TrimSpace(os.Getenv("GATEWAY_PPROF_LISTEN_ADDR")), "profile_url": "/debug/pprof/profile"}},
+	}
+	if d.sqliteStore != nil {
+		_ = d.sqliteStore.SaveDiagnosticRecord(r.Context(), jobID, nodeID, prefix+".zip", files)
 	}
 	d.recordOpsAudit(r, readOperator(r), "EXPORT_DIAGNOSTICS", map[string]any{"request_id": requestID, "trace_id": traceID})
 	writeJSON(w, http.StatusOK, responseEnvelope{Code: "OK", Message: "success", Data: DiagnosticExportData{GeneratedAt: generatedAt, JobID: jobID, NodeID: nodeID, RequestID: requestID, TraceID: traceID, FileName: prefix + ".zip", OutputDir: prefix, Files: files}})

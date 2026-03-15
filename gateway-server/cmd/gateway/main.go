@@ -25,6 +25,8 @@ import (
 
 	"siptunnel/internal/config"
 	"siptunnel/internal/diagnostics"
+	"siptunnel/internal/observability"
+	"siptunnel/internal/persistence"
 	"siptunnel/internal/selfcheck"
 	"siptunnel/internal/server"
 	"siptunnel/internal/service/filetransfer"
@@ -66,6 +68,7 @@ func runGatewayStartup(args []string) {
 		ensureWindowsDefaultDataDir(windowsExeDir)
 	}
 	paths := config.LoadStoragePathsFromEnv()
+	persistenceCfg := config.LoadPersistenceConfigFromEnv()
 	if err := paths.EnsureWritable(); err != nil {
 		log.Fatal(formatStartupFailure("startup directory validation", err, "", runtime.GOOS))
 	}
@@ -118,9 +121,25 @@ func runGatewayStartup(args []string) {
 	nodeID := resolveNodeID()
 	var unifiedSummary startupsummary.Summary
 	handler, closer, err := server.NewHandlerWithOptions(server.HandlerOptions{
-		LogDir:   paths.LogDir,
-		AuditDir: paths.AuditDir,
-		DataDir:  paths.FinalDir,
+		LogDir: paths.LogDir,
+		LogRetention: observability.LogRetentionPolicy{
+			MaxSizeMB:  persistenceCfg.LogRetention.MaxSizeMB,
+			MaxFiles:   persistenceCfg.LogRetention.MaxFiles,
+			MaxAgeDays: persistenceCfg.LogRetention.MaxAgeDays,
+		},
+		AuditDir:         paths.AuditDir,
+		DataDir:          paths.FinalDir,
+		SQLitePath:       persistenceCfg.SQLitePath,
+		UseMemoryBackend: strings.EqualFold(persistenceCfg.Backend, "memory"),
+		Retention: persistence.RetentionPolicy{
+			MaxTaskRecords:       persistenceCfg.Retention.MaxTaskRecords,
+			MaxTaskAgeDays:       persistenceCfg.Retention.MaxTaskAgeDays,
+			MaxAuditRecords:      persistenceCfg.Retention.MaxAuditRecords,
+			MaxAuditAgeDays:      persistenceCfg.Retention.MaxAuditAgeDays,
+			MaxDiagnosticRecords: persistenceCfg.Retention.MaxDiagnosticRecords,
+			MaxDiagnosticAgeDays: persistenceCfg.Retention.MaxDiagnosticAgeDays,
+		},
+		CleanupInterval: persistenceCfg.CleanupInterval,
 		SelfCheckProvider: func(ctx context.Context) selfcheck.Report {
 			return selfcheck.NewRunner().Run(ctx, selfCheckInput)
 		},

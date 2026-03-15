@@ -2,12 +2,11 @@ import { defineStore } from 'pinia'
 import type { NavigationItem } from '../types'
 
 const navigation: NavigationItem[] = [
-  { key: 'dashboard', label: '首页', path: '/dashboard' },
-  { key: 'node-config', label: '节点配置', path: '/node-config' },
-  { key: 'tunnel-config', label: '通道配置', path: '/tunnel-config' },
-  { key: 'tunnel-mappings', label: '隧道映射', path: '/tunnel-mappings' },
-  { key: 'audit-log', label: '日志', path: '/audit-logs' },
-  { key: 'ops-tools', label: '运维工具', path: '/ops-tools' }
+  { key: 'dashboard', label: 'Dashboard', path: '/dashboard' },
+  { key: 'node-config', label: 'Node Config', path: '/node-config' },
+  { key: 'tunnel-config', label: 'Tunnel Config', path: '/tunnel-config' },
+  { key: 'tunnel-mappings', label: 'Mapping', path: '/tunnel-mappings' },
+  { key: 'system-settings', label: 'System Settings', path: '/system-settings' }
 ]
 
 export const useAppStore = defineStore('app', {

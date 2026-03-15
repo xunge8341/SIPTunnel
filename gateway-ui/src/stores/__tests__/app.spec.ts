@@ -21,6 +21,6 @@ describe('app store', () => {
     const store = useAppStore()
     expect(store.navigation.length).toBeGreaterThan(0)
     expect(store.navigation.some((item) => item.path === '/dashboard')).toBe(true)
-    expect(store.navigation.some((item) => item.path === '/ops-tools')).toBe(true)
+    expect(store.navigation.some((item) => item.path === '/system-settings')).toBe(true)
   })
 })
