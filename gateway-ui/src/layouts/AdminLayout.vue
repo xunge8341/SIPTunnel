@@ -1,7 +1,7 @@
 <template>
   <a-app>
     <a-layout class="layout-shell">
-      <a-layout-sider v-model:collapsed="appStore.collapsed" collapsible :trigger="null">
+      <a-layout-sider v-model:collapsed="appStore.collapsed" collapsible :trigger="null" :width="220" :collapsed-width="80">
         <div class="logo">
           <span class="logo-icon" aria-hidden="true">◉</span>
           <span class="logo-text">隧道网关</span>
@@ -113,4 +113,8 @@ const handleMenuClick = ({ key }: { key: string }) => {
   padding: 16px;
   background: #fff;
 }
+</style>
+
+<style scoped>
+:deep(.ant-menu-title-content){white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 </style>

@@ -512,5 +512,18 @@ export const gatewayApi = {
   },
   async fetchLatestLinkTest() {
     return unwrap(request<OpsLinkTestReport>('/ops/link-test', { method: 'GET' }))
-  }
+  },
+  async fetchSecuritySettings() {
+    return unwrap(request<{ signer: string; encryption: string; verify_interval_min: number }>('/security/settings', { method: 'GET' }))
+  },
+  async updateSecuritySettings(payload: { signer: string; encryption: string; verify_interval_min: number }) {
+    return unwrap(request<{ signer: string; encryption: string; verify_interval_min: number }>('/security/settings', { method: 'PUT', body: payload }))
+  },
+  async fetchLicense() {
+    return unwrap(request<{ status: string; expire_at: string; features: string[]; last_verify_result: string }>('/license', { method: 'GET' }))
+  },
+  async updateLicense(payload: { token: string }) {
+    return unwrap(request<{ status: string; expire_at: string; features: string[]; last_verify_result: string }>('/license', { method: 'PUT', body: payload }))
+  },
+
 }

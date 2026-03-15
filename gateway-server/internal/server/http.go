@@ -52,10 +52,14 @@ type handlerDeps struct {
 	nodeConfigSource string
 	mappingSource    string
 
-	lastLinkTest LinkTestReport
-	tunnelConfig TunnelConfigPayload
-	sessionMgr   *tunnelSessionManager
-	sqliteStore  *persistence.SQLiteStore
+	lastLinkTest     LinkTestReport
+	tunnelConfig     TunnelConfigPayload
+	sessionMgr       *tunnelSessionManager
+	sqliteStore      *persistence.SQLiteStore
+	securitySettings SecuritySettingsPayload
+	licenseInfo      LicenseInfoPayload
+	securityPath     string
+	licensePath      string
 }
 
 type nodeConfigStore interface {
@@ -479,7 +483,14 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, io.Closer, error)
 		startupSummaryFn:  opts.StartupSummaryProvider,
 		tunnelConfig:      defaultTunnelConfigPayload(config.DefaultNetworkMode()),
 		sqliteStore:       sqliteStore,
+		securitySettings:  defaultSecuritySettings(),
+		licenseInfo:       defaultLicenseInfo(),
+		securityPath:      filepath.Join(dataDir, "security_settings.json"),
+		licensePath:       filepath.Join(dataDir, "license_info.json"),
 	}
+
+	deps.securitySettings = loadJSONOrDefault(deps.securityPath, deps.securitySettings)
+	deps.licenseInfo = loadJSONOrDefault(deps.licensePath, deps.licenseInfo)
 
 	if sqliteStore != nil {
 		_ = sqliteStore.SaveSystemConfig(context.Background(), "initial.limits", deps.limits)
@@ -610,6 +621,8 @@ func newMux(deps handlerDeps) http.Handler {
 	mux.HandleFunc("/api/ops/link-test", deps.handleLinkTest)
 	mux.HandleFunc("/api/diagnostics/export", deps.handleDiagnosticsExport)
 	mux.HandleFunc("/api/capacity/recommendation", deps.handleCapacityRecommendation)
+	mux.HandleFunc("/api/security/settings", deps.handleSecuritySettings)
+	mux.HandleFunc("/api/license", deps.handleLicense)
 	return deps.withObservability(mux)
 }
 

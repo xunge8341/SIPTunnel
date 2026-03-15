@@ -1,27 +1,20 @@
 <template>
-  <a-space direction="vertical" size="middle" style="width: 100%">
-    <a-typography-title :level="4" style="margin: 0">System Settings</a-typography-title>
-    <a-typography-paragraph type="secondary" style="margin: 0">
-      集中管理运维配置、审计、诊断与治理能力。
+  <a-card title="系统设置">
+    <a-typography-paragraph type="secondary">
+      集中管理配置治理、导入导出与保留策略。保存后将立即落库并可刷新回读。
     </a-typography-paragraph>
-
-    <a-row :gutter="16">
-      <a-col :span="12" v-for="item in items" :key="item.title">
-        <a-card :title="item.title" :bordered="true">
-          <a-typography-paragraph type="secondary">{{ item.desc }}</a-typography-paragraph>
-          <router-link :to="item.path">进入</router-link>
-        </a-card>
-      </a-col>
-    </a-row>
-  </a-space>
+    <a-tabs>
+      <a-tab-pane key="governance" tab="配置治理">
+        <ConfigGovernanceView />
+      </a-tab-pane>
+      <a-tab-pane key="transfer" tab="配置导入导出">
+        <ConfigTransferView />
+      </a-tab-pane>
+    </a-tabs>
+  </a-card>
 </template>
 
 <script setup lang="ts">
-const items = [
-  { title: 'Audit Logs', desc: '查询控制面与执行面的审计事件。', path: '/audit-logs' },
-  { title: 'Ops Tools', desc: '执行网络诊断、链路测试与配置校验。', path: '/ops-tools' },
-  { title: 'Config Governance', desc: '快照、对比与回滚配置。', path: '/config-governance' },
-  { title: 'Config Transfer', desc: '导入导出 JSON 配置模板。', path: '/config-transfer' },
-  { title: 'Rate Limits', desc: '统一维护限流与并发保护参数。', path: '/rate-limits' }
-]
+import ConfigGovernanceView from './ConfigGovernanceView.vue'
+import ConfigTransferView from './ConfigTransferView.vue'
 </script>
