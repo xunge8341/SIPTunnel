@@ -763,3 +763,90 @@ export interface DashboardOpsSummaryPayload {
   circuit_breaker_state: string
   protection_status: string
 }
+
+export interface DashboardSummary {
+  systemHealth: string
+  activeConnections: number
+  mappingTotal: number
+  mappingErrorCount: number
+  recentFailureCount: number
+  rateLimitState: string
+  circuitBreakerState: string
+}
+
+export interface DashboardOpsSummary {
+  hotMappings: DashboardOpsSummaryItem[]
+  topFailureMappings: DashboardOpsSummaryItem[]
+  hotSourceIPs: DashboardOpsSummaryItem[]
+  topFailureIPs: DashboardOpsSummaryItem[]
+}
+
+export interface NodeTunnelWorkspace {
+  localNode: NodeConfigEndpoint
+  peerNode: NodeConfigEndpoint
+  networkMode: string
+  capabilityMatrix: { key: string; supported: boolean }[]
+  sipCapability: Record<string, unknown>
+  rtpCapability: Record<string, unknown>
+  sessionSettings: TunnelConfigPayload
+  securitySettings: { signer: string; encryption: string; verify_interval_min: number }
+  encryptionSettings: { algorithm: string }
+}
+
+export interface MappingWorkspaceItem {
+  mappingName: string
+  localEntry: string
+  peerTarget: string
+  status: string
+  lastTestResult: string
+  requestCount: number
+  failureCount: number
+  avgLatency: number
+  riskLevel: string
+  mappingId: string
+}
+
+export interface MappingWorkspaceList {
+  items: MappingWorkspaceItem[]
+}
+
+export interface AccessLogQuery {
+  mapping?: string
+  sourceIP?: string
+  method?: string
+  status?: TaskStatus
+  timeRange?: [string, string]
+  slowOnly?: boolean
+}
+
+export interface AlertProtectionState {
+  alertRules: string[]
+  rateLimitRules: string[]
+  circuitBreakerRules: string[]
+  currentTriggered: string[]
+  lastTriggeredTime: string
+  lastTriggeredTarget: string
+}
+
+export interface SystemSettingsState {
+  sqlitePath: string
+  logPath: string
+  logRetentionDays: number
+  auditRetentionDays: number
+  accessLogRetentionDays: number
+  diagnosticsRetentionDays: number
+  loadtestRetentionDays: number
+  cleanupCron: string
+  adminCIDR: string
+  mfaEnabled: boolean
+  lastCleanupStatus: string
+}
+
+export interface SecurityCenterState {
+  licenseStatus: string
+  expiryTime: string
+  licensedFeatures: string[]
+  lastValidation: string
+  managementSecurity: string
+  signingAlgorithm: string
+}

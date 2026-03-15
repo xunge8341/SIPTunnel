@@ -666,7 +666,11 @@ func newMux(deps handlerDeps) http.Handler {
 	mux.HandleFunc("/api/license", deps.handleLicense)
 	mux.HandleFunc("/api/access-logs", deps.handleAccessLogs)
 	mux.HandleFunc("/api/system/settings", deps.handleSystemSettings)
+	mux.HandleFunc("/api/dashboard/summary", deps.handleDashboardSummary)
 	mux.HandleFunc("/api/dashboard/ops-summary", deps.handleDashboardOpsSummary)
+	mux.HandleFunc("/api/protection/state", deps.handleProtectionState)
+	mux.HandleFunc("/api/security/state", deps.handleSecurityState)
+	mux.HandleFunc("/api/node-tunnel/workspace", deps.handleNodeTunnelWorkspace)
 	return deps.withObservability(mux)
 }
 
@@ -1106,7 +1110,7 @@ func (d handlerDeps) handleMappings(w http.ResponseWriter, r *http.Request) {
 		d.runtime.SyncMappings(d.mappings.List())
 		d.recordOpsAudit(r, readOperator(r), "CREATE_MAPPING", map[string]any{"mapping_id": created.MappingID})
 		writeJSON(w, http.StatusCreated, responseEnvelope{Code: "OK", Message: "success", Data: MappingWithWarnings{Mapping: d.decorateMapping(created), BoundPeer: bindingFromMapping(created), Warnings: validation.Warnings}})
-	case http.MethodPut:
+	case http.MethodPut, http.MethodPatch:
 		if id == "" {
 			writeError(w, http.StatusBadRequest, "INVALID_ARGUMENT", "mapping id is required in path")
 			return
