@@ -58,8 +58,12 @@ type handlerDeps struct {
 	sqliteStore      *persistence.SQLiteStore
 	securitySettings SecuritySettingsPayload
 	licenseInfo      LicenseInfoPayload
+	systemSettings   SystemSettingsPayload
+	accessLogs       []AccessLogEntry
 	securityPath     string
 	licensePath      string
+	systemPath       string
+	cleaner          *sqliteCleaner
 }
 
 type nodeConfigStore interface {
@@ -92,6 +96,40 @@ type OpsLimits struct {
 	RPS           int `json:"rps"`
 	Burst         int `json:"burst"`
 	MaxConcurrent int `json:"max_concurrent"`
+}
+
+type AccessLogEntry struct {
+	ID            string `json:"id"`
+	OccurredAt    string `json:"occurred_at"`
+	MappingName   string `json:"mapping_name"`
+	SourceIP      string `json:"source_ip"`
+	Method        string `json:"method"`
+	Path          string `json:"path"`
+	StatusCode    int    `json:"status_code"`
+	DurationMS    int64  `json:"duration_ms"`
+	FailureReason string `json:"failure_reason"`
+	RequestID     string `json:"request_id"`
+	TraceID       string `json:"trace_id"`
+}
+
+type SystemSettingsPayload struct {
+	SQLitePath                string `json:"sqlite_path"`
+	LogCleanupCron            string `json:"log_cleanup_cron"`
+	MaxTaskAgeDays            int    `json:"max_task_age_days"`
+	MaxTaskRecords            int    `json:"max_task_records"`
+	MaxAccessLogAgeDays       int    `json:"max_access_log_age_days"`
+	MaxAccessLogRecords       int    `json:"max_access_log_records"`
+	MaxAuditAgeDays           int    `json:"max_audit_age_days"`
+	MaxAuditRecords           int    `json:"max_audit_records"`
+	MaxDiagnosticAgeDays      int    `json:"max_diagnostic_age_days"`
+	MaxDiagnosticRecords      int    `json:"max_diagnostic_records"`
+	MaxLoadtestAgeDays        int    `json:"max_loadtest_age_days"`
+	MaxLoadtestRecords        int    `json:"max_loadtest_records"`
+	AdminAllowCIDR            string `json:"admin_allow_cidr"`
+	AdminRequireMFA           bool   `json:"admin_require_mfa"`
+	CleanerLastRunAt          string `json:"cleaner_last_run_at"`
+	CleanerLastResult         string `json:"cleaner_last_result"`
+	CleanerLastRemovedRecords int    `json:"cleaner_last_removed_records"`
 }
 
 type OpsRoute struct {
@@ -491,6 +529,8 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, io.Closer, error)
 
 	deps.securitySettings = loadJSONOrDefault(deps.securityPath, deps.securitySettings)
 	deps.licenseInfo = loadJSONOrDefault(deps.licensePath, deps.licenseInfo)
+	deps.systemPath = filepath.Join(dataDir, "system_settings.json")
+	deps.systemSettings = loadJSONOrDefault(deps.systemPath, defaultSystemSettings(deps, opts.SQLitePath))
 
 	if sqliteStore != nil {
 		_ = sqliteStore.SaveSystemConfig(context.Background(), "initial.limits", deps.limits)
@@ -500,6 +540,7 @@ func NewHandlerWithOptions(opts HandlerOptions) (http.Handler, io.Closer, error)
 		}
 		cleaner := newSQLiteCleaner(sqliteStore, cleanupInterval)
 		cleaner.Start()
+		deps.cleaner = cleaner
 		auditCloser = joinClosers(auditCloser, cleaner)
 	}
 	deps.sessionMgr = newTunnelSessionManager(tcpTunnelRegistrar{nodeStore: deps.nodeStore}, deps.tunnelConfig)
@@ -623,6 +664,9 @@ func newMux(deps handlerDeps) http.Handler {
 	mux.HandleFunc("/api/capacity/recommendation", deps.handleCapacityRecommendation)
 	mux.HandleFunc("/api/security/settings", deps.handleSecuritySettings)
 	mux.HandleFunc("/api/license", deps.handleLicense)
+	mux.HandleFunc("/api/access-logs", deps.handleAccessLogs)
+	mux.HandleFunc("/api/system/settings", deps.handleSystemSettings)
+	mux.HandleFunc("/api/dashboard/ops-summary", deps.handleDashboardOpsSummary)
 	return deps.withObservability(mux)
 }
 

@@ -72,7 +72,11 @@ import type {
   TunnelSessionActionResponse,
   ConfigTransferPayload,
   ConfigTransferImportResult,
-  MappingTestPayload
+  MappingTestPayload,
+  AccessLogEntry,
+  AccessLogFilters,
+  SystemSettingsPayload,
+  DashboardOpsSummaryPayload
 } from '../types/gateway'
 
 const useMockMode = () => ((import.meta.env.VITE_API_MODE ?? 'real').toLowerCase() === 'mock')
@@ -512,6 +516,39 @@ export const gatewayApi = {
   },
   async fetchLatestLinkTest() {
     return unwrap(request<OpsLinkTestReport>('/ops/link-test', { method: 'GET' }))
+  },
+
+  async fetchAccessLogs(filters: AccessLogFilters, page: number, pageSize: number) {
+    const result = await unwrap<{ items: AccessLogEntry[]; pagination: { total: number; page: number; page_size: number } }>(
+      request('/access-logs', {
+        method: 'GET',
+        params: {
+          status: filters.status,
+          request_id: filters.requestId,
+          trace_id: filters.traceId,
+          page,
+          page_size: pageSize
+        }
+      })
+    )
+    return {
+      list: result.items,
+      total: result.pagination.total,
+      page: result.pagination.page,
+      pageSize: result.pagination.page_size
+    }
+  },
+
+  async fetchSystemSettings() {
+    return unwrap(request<SystemSettingsPayload>('/system/settings', { method: 'GET' }))
+  },
+
+  async updateSystemSettings(payload: SystemSettingsPayload) {
+    return unwrap(request<SystemSettingsPayload>('/system/settings', { method: 'PUT', body: payload }))
+  },
+
+  async fetchDashboardOpsSummary() {
+    return unwrap(request<DashboardOpsSummaryPayload>('/dashboard/ops-summary', { method: 'GET' }))
   },
   async fetchSecuritySettings() {
     return unwrap(request<{ signer: string; encryption: string; verify_interval_min: number }>('/security/settings', { method: 'GET' }))
