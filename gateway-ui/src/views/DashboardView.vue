@@ -72,10 +72,9 @@
         :message="systemStatus.peer_binding_error"
         style="margin-top: 12px"
       />
-      <a-descriptions bordered size="small" :column="2" style="margin-top: 12px">
-        <a-descriptions-item label="peer_node_id">{{ systemStatus.bound_peer?.peer_node_id ?? '-' }}</a-descriptions-item>
-        <a-descriptions-item label="peer_name">{{ systemStatus.bound_peer?.peer_name ?? '-' }}</a-descriptions-item>
-        <a-descriptions-item label="本端 / 对端角色" :span="2">{{ networkModeProfile?.flowLabel ?? '-' }}</a-descriptions-item>
+      <a-descriptions bordered size="small" :column="1" style="margin-top: 12px">
+        <a-descriptions-item label="本端 / 对端角色">{{ networkModeProfile?.flowLabel ?? '-' }}</a-descriptions-item>
+        <a-descriptions-item label="对端节点">{{ systemStatus.bound_peer?.peer_name || '未绑定' }}</a-descriptions-item>
       </a-descriptions>
       <a-space style="margin-top: 12px">
         <a-typography-title :level="5" style="margin: 0">能力矩阵</a-typography-title>
@@ -91,6 +90,27 @@
         <a-descriptions-item label="支持大文件上传">{{ yesNo(systemStatus.capability.supports_large_file_upload) }}</a-descriptions-item>
         <a-descriptions-item label="支持HTTP双向">{{ yesNo(systemStatus.capability.supports_bidirectional_http_tunnel) }}</a-descriptions-item>
       </a-descriptions>
+    </a-card>
+
+
+    <a-card title="运维决策视图" :bordered="false">
+      <a-row :gutter="12">
+        <a-col :xs="24" :lg="8">
+          <a-statistic title="当前限流状态" :value="opsSummary.rate_limit_status" />
+          <a-statistic title="当前熔断状态" :value="opsSummary.circuit_breaker_state" />
+          <a-statistic title="资源保护状态" :value="opsSummary.protection_status" />
+        </a-col>
+        <a-col :xs="24" :lg="16">
+          <a-row :gutter="12">
+            <a-col :span="12"><a-card size="small" title="热点映射 TopN"><a-list size="small" :data-source="opsSummary.top_mappings"><template #renderItem="{item}"><a-list-item>{{ item.name }}（{{ item.count }}）</a-list-item></template></a-list></a-card></a-col>
+            <a-col :span="12"><a-card size="small" title="来源 IP TopN"><a-list size="small" :data-source="opsSummary.top_source_ips"><template #renderItem="{item}"><a-list-item>{{ item.name }}（{{ item.count }}）</a-list-item></template></a-list></a-card></a-col>
+          </a-row>
+          <a-row :gutter="12" style="margin-top: 12px">
+            <a-col :span="12"><a-card size="small" title="失败最多映射 TopN"><a-list size="small" :data-source="opsSummary.top_failed_mappings"><template #renderItem="{item}"><a-list-item>{{ item.name }}（{{ item.count }}）</a-list-item></template></a-list></a-card></a-col>
+            <a-col :span="12"><a-card size="small" title="失败最多来源 IP TopN"><a-list size="small" :data-source="opsSummary.top_failed_source_ips"><template #renderItem="{item}"><a-list-item>{{ item.name }}（{{ item.count }}）</a-list-item></template></a-list></a-card></a-col>
+          </a-row>
+        </a-col>
+      </a-row>
     </a-card>
 
     <a-card :bordered="false">
@@ -192,7 +212,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { gatewayApi } from '../api/gateway'
-import type { DashboardPayload, DeploymentModePayload, StartupSummaryPayload, SystemStatusPayload } from '../types/gateway'
+import type { DashboardPayload, DashboardOpsSummaryPayload, DeploymentModePayload, StartupSummaryPayload, SystemStatusPayload } from '../types/gateway'
 import { getNetworkModeProfile } from '../utils/networkMode'
 
 const deploymentMode = ref<DeploymentModePayload>({
@@ -314,6 +334,16 @@ const loadSystemStatus = async () => {
 
 let statusPollingTimer: ReturnType<typeof setInterval> | undefined
 
+const opsSummary = ref<DashboardOpsSummaryPayload>({
+  top_mappings: [],
+  top_source_ips: [],
+  top_failed_mappings: [],
+  top_failed_source_ips: [],
+  rate_limit_status: '-',
+  circuit_breaker_state: '-',
+  protection_status: '-'
+})
+
 const dashboard = ref<DashboardPayload>({
   metrics: {
     successRate: 0,
@@ -336,14 +366,16 @@ const dashboard = ref<DashboardPayload>({
 })
 
 onMounted(async () => {
-  const [dashboardPayload, deploymentPayload, startupPayload] = await Promise.all([
+  const [dashboardPayload, deploymentPayload, startupPayload, opsSummaryPayload] = await Promise.all([
     gatewayApi.fetchDashboard(),
     gatewayApi.fetchDeploymentMode(),
-    gatewayApi.fetchStartupSummary()
+    gatewayApi.fetchStartupSummary(),
+    gatewayApi.fetchDashboardOpsSummary()
   ])
   dashboard.value = dashboardPayload
   deploymentMode.value = deploymentPayload
   startupSummary.value = startupPayload
+  opsSummary.value = opsSummaryPayload
   await loadSystemStatus()
   statusPollingTimer = setInterval(() => {
     void loadSystemStatus()

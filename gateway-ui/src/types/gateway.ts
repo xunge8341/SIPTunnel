@@ -711,3 +711,55 @@ export interface NodeOpsSnapshot {
   bindingFailures: PortBindingFailureEvent[]
   selfCheck: NodeSelfCheckSummary
 }
+
+
+export interface AccessLogEntry {
+  id: string
+  occurred_at: string
+  mapping_name: string
+  source_ip: string
+  method: string
+  path: string
+  status_code: number
+  duration_ms: number
+  failure_reason: string
+  request_id: string
+  trace_id: string
+}
+
+export interface AccessLogFilters {
+  status?: TaskStatus
+  requestId?: string
+  traceId?: string
+}
+
+export interface SystemSettingsPayload {
+  sqlite_path: string
+  log_cleanup_cron: string
+  max_task_age_days: number
+  max_task_records: number
+  max_access_log_age_days: number
+  max_access_log_records: number
+  max_audit_age_days: number
+  max_audit_records: number
+  max_diagnostic_age_days: number
+  max_diagnostic_records: number
+  max_loadtest_age_days: number
+  max_loadtest_records: number
+  admin_allow_cidr: string
+  admin_require_mfa: boolean
+  cleaner_last_run_at: string
+  cleaner_last_result: string
+  cleaner_last_removed_records: number
+}
+
+export interface DashboardOpsSummaryItem { name: string; count: number }
+export interface DashboardOpsSummaryPayload {
+  top_mappings: DashboardOpsSummaryItem[]
+  top_source_ips: DashboardOpsSummaryItem[]
+  top_failed_mappings: DashboardOpsSummaryItem[]
+  top_failed_source_ips: DashboardOpsSummaryItem[]
+  rate_limit_status: string
+  circuit_breaker_state: string
+  protection_status: string
+}

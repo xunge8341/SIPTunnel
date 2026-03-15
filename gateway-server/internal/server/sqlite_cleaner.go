@@ -8,10 +8,13 @@ import (
 )
 
 type sqliteCleaner struct {
-	store    *persistence.SQLiteStore
-	interval time.Duration
-	stop     chan struct{}
-	done     chan struct{}
+	store       *persistence.SQLiteStore
+	interval    time.Duration
+	stop        chan struct{}
+	done        chan struct{}
+	LastRunAt   string
+	LastResult  string
+	LastRemoved int
 }
 
 func newSQLiteCleaner(store *persistence.SQLiteStore, interval time.Duration) *sqliteCleaner {
@@ -26,7 +29,12 @@ func (c *sqliteCleaner) Start() {
 		for {
 			select {
 			case <-ticker.C:
-				_ = c.store.Cleanup(context.Background())
+				if err := c.store.Cleanup(context.Background()); err != nil {
+					c.LastResult = err.Error()
+				} else {
+					c.LastResult = "执行成功"
+				}
+				c.LastRunAt = time.Now().UTC().Format(time.RFC3339)
 			case <-c.stop:
 				return
 			}
