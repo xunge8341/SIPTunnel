@@ -56,8 +56,9 @@ const saveLicense = async () => {
 }
 
 const saveSettings = async () => {
-  await gatewayApi.updateSecuritySettings(settings)
+  await gatewayApi.updateSecuritySettings({ ...settings })
   message.success('安全配置已保存')
+  await load()
 }
 
 onMounted(load)
