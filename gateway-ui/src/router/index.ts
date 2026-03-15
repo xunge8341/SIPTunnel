@@ -23,7 +23,7 @@ const router = createRouter({
         { path: 'tunnel-mappings', name: 'tunnel-mappings', component: TunnelMappingsView, meta: { title: '隧道映射' } },
         { path: 'access-logs', name: 'access-logs', component: AccessLogsView, meta: { title: '访问日志' } },
         { path: 'ops-audits', name: 'ops-audits', component: OpsAuditsView, meta: { title: '运维审计' } },
-        { path: 'alerts-rate-limit', name: 'alerts-rate-limit', component: AlertsAndRateLimitView, meta: { title: '告警与限流' } },
+        { path: 'alerts-protection', name: 'alerts-protection', component: AlertsAndRateLimitView, meta: { title: '告警与保护' } },
         { path: 'system-settings', name: 'system-settings', component: SystemSettingsView, meta: { title: '系统设置' } },
         { path: 'diagnostics-loadtest', name: 'diagnostics-loadtest', component: DiagnosticsLoadtestView, meta: { title: '诊断与压测' } },
         { path: 'security-center', name: 'security-center', component: SecurityCenterView, meta: { title: '授权与安全' } }
