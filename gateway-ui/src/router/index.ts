@@ -17,6 +17,7 @@ import NodeConfigView from '../views/NodeConfigView.vue'
 import TunnelConfigView from '../views/TunnelConfigView.vue'
 import OpsToolsView from '../views/OpsToolsView.vue'
 import ConfigTransferView from '../views/ConfigTransferView.vue'
+import SystemSettingsView from '../views/SystemSettingsView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -30,7 +31,7 @@ const router = createRouter({
           path: 'dashboard',
           name: 'dashboard',
           component: DashboardView,
-          meta: { title: '首页', description: '系统关键指标与运行状态总览。' }
+          meta: { title: 'Dashboard', description: '系统关键指标与运行状态总览。' }
         },
         {
           path: 'command-tasks',
@@ -61,14 +62,14 @@ const router = createRouter({
           path: 'node-config',
           name: 'node-config',
           component: NodeConfigView,
-          meta: { title: '节点配置', description: '统一配置本端和对端节点，并触发通道重启。' }
+          meta: { title: 'Node Config', description: '统一配置本端节点与对端节点。' }
         },
 
         {
           path: 'tunnel-config',
           name: 'tunnel-config',
           component: TunnelConfigView,
-          meta: { title: '通道配置', description: '配置 GB28181 通道协议、请求/响应通道与网络模式，并自动生成能力矩阵。' }
+          meta: { title: 'Tunnel Config', description: '配置网络能力模式并查看能力矩阵。' }
         },
         {
           path: 'local-node-config',
@@ -92,7 +93,13 @@ const router = createRouter({
           path: 'tunnel-mappings',
           name: 'tunnel-mappings',
           component: TunnelMappingsView,
-          meta: { title: '映射规则', description: '维护映射规则（本端入口 -> 对端目标）核心字段，展示网络模式能力矩阵，并对超能力配置进行告警/拦截。' }
+          meta: { title: 'Mapping', description: '维护隧道映射（本端入口 -> 对端目标）并按能力矩阵校验。' }
+        },
+        {
+          path: 'system-settings',
+          name: 'system-settings',
+          component: SystemSettingsView,
+          meta: { title: 'System Settings', description: '集中管理审计、诊断、治理与导入导出。' }
         },
         {
           path: 'rate-limits',

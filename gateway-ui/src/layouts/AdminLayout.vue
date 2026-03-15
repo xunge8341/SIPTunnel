@@ -23,7 +23,7 @@
             </a-button>
             <a-typography-title :level="5" style="margin: 0">{{ currentTitle }}</a-typography-title>
           </a-space>
-          <a-tag color="blue">后台管理界面</a-tag>
+          <a-tag color="blue">Lightweight Tunnel Gateway</a-tag>
         </a-layout-header>
 
         <a-layout-content class="layout-content">

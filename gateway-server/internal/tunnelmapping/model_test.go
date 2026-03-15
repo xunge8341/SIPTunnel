@@ -42,6 +42,20 @@ func TestTunnelMappingValidate(t *testing.T) {
 	if err := invalid.Validate(); err == nil {
 		t.Fatalf("expected remote base path error")
 	}
+	invalid = validMapping()
+	invalid.LocalBindPort = 6666
+	if err := invalid.Validate(); err == nil {
+		t.Fatalf("expected browser unsafe local bind port error")
+	}
+}
+
+func TestIsBrowserUnsafePort(t *testing.T) {
+	if !isBrowserUnsafePort(6666) {
+		t.Fatalf("expected 6666 to be browser unsafe")
+	}
+	if isBrowserUnsafePort(18080) {
+		t.Fatalf("expected 18080 to be browser safe")
+	}
 }
 
 func TestTunnelMappingNormalizeDefaultsAllowedMethods(t *testing.T) {

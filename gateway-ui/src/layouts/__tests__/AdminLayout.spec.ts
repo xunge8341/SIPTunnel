@@ -45,6 +45,6 @@ describe('AdminLayout', () => {
 
     const appStore = useAppStore()
     expect(wrapper.text()).toContain('隧道网关')
-    expect(appStore.navigation.map((item) => item.label)).toEqual(['首页', '节点配置', '通道配置', '隧道映射', '日志', '运维工具'])
+    expect(appStore.navigation.map((item) => item.label)).toEqual(['Dashboard', 'Node Config', 'Tunnel Config', 'Mapping', 'System Settings'])
   })
 })
