@@ -1,2 +1,0 @@
-DROP TABLE IF EXISTS task_events;
-DROP TABLE IF EXISTS tasks;
