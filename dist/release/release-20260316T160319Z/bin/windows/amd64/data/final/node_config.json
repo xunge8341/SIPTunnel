@@ -1,0 +1,28 @@
+{
+  "local_node": {
+    "node_id": "3434",
+    "node_name": "3434",
+    "node_role": "gateway",
+    "network_mode": "SENDER_SIP__RECEIVER_RTP",
+    "sip_listen_ip": "192.168.3.90",
+    "sip_listen_port": 5060,
+    "sip_transport": "UDP",
+    "rtp_listen_ip": "192.168.3.90",
+    "rtp_port_start": 20000,
+    "rtp_port_end": 20100,
+    "rtp_transport": "TCP"
+  },
+  "peers": [
+    {
+      "peer_node_id": "4334",
+      "peer_name": "4334",
+      "peer_signaling_ip": "192.168.3.90",
+      "peer_signaling_port": 6070,
+      "peer_media_ip": "192.168.3.90",
+      "peer_media_port_start": 20000,
+      "peer_media_port_end": 20100,
+      "supported_network_mode": "SENDER_SIP__RECEIVER_RTP",
+      "enabled": true
+    }
+  ]
+}

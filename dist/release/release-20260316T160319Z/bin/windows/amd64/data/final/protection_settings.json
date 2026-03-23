@@ -1,0 +1,12 @@
+{
+  "alert_rules": [
+    "s",
+    "2"
+  ],
+  "circuit_breaker_rules": [
+    "1",
+    "1"
+  ],
+  "failure_threshold": 1,
+  "recovery_window_sec": 5
+}

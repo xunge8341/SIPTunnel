@@ -1,0 +1,19 @@
+{
+  "sqlite_path": "data\\gateway.db",
+  "log_cleanup_cron": "*/30 * * * *",
+  "max_task_age_days": 7,
+  "max_task_records": 20000,
+  "max_access_log_age_days": 7,
+  "max_access_log_records": 20000,
+  "max_audit_age_days": 30,
+  "max_audit_records": 50000,
+  "max_diagnostic_age_days": 1,
+  "max_diagnostic_records": 2000,
+  "max_loadtest_age_days": 15,
+  "max_loadtest_records": 2000,
+  "admin_allow_cidr": "127.0.0.1/32",
+  "admin_require_mfa": false,
+  "cleaner_last_run_at": "",
+  "cleaner_last_result": "",
+  "cleaner_last_removed_records": 0
+}

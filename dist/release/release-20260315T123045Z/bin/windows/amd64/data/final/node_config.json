@@ -1,0 +1,28 @@
+{
+  "local_node": {
+    "node_id": "200000000001",
+    "node_name": "200000000001",
+    "node_role": "gateway",
+    "network_mode": "SENDER_SIP__RECEIVER_RTP",
+    "sip_listen_ip": "192.168.3.90",
+    "sip_listen_port": 59226,
+    "sip_transport": "TCP",
+    "rtp_listen_ip": "192.168.3.90",
+    "rtp_port_start": 20000,
+    "rtp_port_end": 20100,
+    "rtp_transport": "UDP"
+  },
+  "peers": [
+    {
+      "peer_node_id": "200000000002",
+      "peer_name": "200000000002",
+      "peer_signaling_ip": "192.168.3.90",
+      "peer_signaling_port": 49226,
+      "peer_media_ip": "192.168.3.90",
+      "peer_media_port_start": 20000,
+      "peer_media_port_end": 20100,
+      "supported_network_mode": "SENDER_SIP__RECEIVER_RTP",
+      "enabled": true
+    }
+  ]
+}

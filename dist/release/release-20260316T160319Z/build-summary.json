@@ -1,0 +1,11 @@
+﻿{
+    "mode":  "native",
+    "ui_policy":  "delivery",
+    "build_nonce":  "f5210816-b972-4649-9afe-5bf72c71b2a5",
+    "created_at_utc":  "2026-03-16T16:04:08Z",
+    "ui_build_success":  true,
+    "ui_embed_dir":  "D:\\SIPTunnel\\gateway-server\\internal\\server\\embedded-ui",
+    "embed_validation":  "PASS",
+    "backend_output_path":  "D:\\SIPTunnel\\dist\\bin",
+    "final_delivery_package":  "D:\\SIPTunnel\\dist\\release\\release-20260316T160319Z"
+}

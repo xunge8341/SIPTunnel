@@ -1,0 +1,5 @@
+{
+  "signer": "HMAC-SHA256",
+  "encryption": "SM4",
+  "verify_interval_min": 30
+}
