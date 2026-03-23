@@ -1,0 +1,14 @@
+{
+  "all_passed": true,
+  "checks": {
+    "mapping_forward_keepalive_auto_exempt": true,
+    "generic_download_default_concurrency_2": true,
+    "open_ended_low_parallel_reason": true,
+    "segment_plan_logs_concurrency_reason": true,
+    "transfer_id_source_logging": true,
+    "request_header_kept_headers_logging": true,
+    "upstream_body_read_summary_logging": true,
+    "rtp_ps_sent_always_logged": true,
+    "tests_updated": true
+  }
+}

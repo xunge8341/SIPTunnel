@@ -1,0 +1,24 @@
+[Unit]
+Description=SIPTunnel Gateway Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__APP_USER__
+Group=__APP_GROUP__
+WorkingDirectory=__DATA_DIR__
+ExecStart=__BINARY_PATH__ -config __CONFIG_PATH__
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65535
+Environment=GATEWAY_DATA_DIR=__DATA_DIR__
+Environment=NODE_ROLE=receiver
+
+# 建议在生产中配置：
+# Environment=GATEWAY_PORT=18080
+# Environment=MEDIA_PORT_START=20000
+# Environment=MEDIA_PORT_END=20100
+
+[Install]
+WantedBy=multi-user.target

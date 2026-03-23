@@ -1,0 +1,35 @@
+{
+  "id": "AGENT-BOOTSTRAP-0001",
+  "title": "初始化 agent 层与统一门禁入口",
+  "goal": [
+    "建立 agent 控制面",
+    "建立统一门禁入口",
+    "建立证据归档目录结构",
+    "保持 Linux/Windows 执行入口同步"
+  ],
+  "scope": {
+    "include": [
+      "agent/**",
+      "scripts/agent/**",
+      "scripts/ci/**",
+      "scripts/longrun/**"
+    ],
+    "exclude": [
+      "gateway-server/internal/**",
+      "gateway-ui/src/**"
+    ]
+  },
+  "required_gates": [
+    "repo_consistency",
+    "strict_source"
+  ],
+  "success_criteria": [
+    "agent 控制面文件存在且可解析",
+    "run-task/run-gates/collect-evidence Linux 与 Windows 入口同时存在",
+    "门禁结果以 JSON + Markdown 输出",
+    "证据目录归档任务快照、配置快照和执行摘要"
+  ],
+  "priority": "P0",
+  "risk": "low",
+  "status": "active"
+}

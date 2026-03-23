@@ -1,0 +1,48 @@
+{
+  "id": "NET-META-0003",
+  "title": "搭建元数据旁带机制骨架，为后续 BMP-T / sideband metadata 演进留出兜底通道",
+  "goal": [
+    "将关键业务元数据从普通 Header 生存竞争中剥离",
+    "建立 metadata handle / sideband cache / lookup 协议骨架",
+    "在极限 MTU 场景下允许只传递短 token 并回取元数据上下文",
+    "保持与现有 transfer-id/range/generic profile 语义兼容"
+  ],
+  "scope": {
+    "include": [
+      "gateway-server/internal/server/mapping_runtime*.go",
+      "gateway-server/internal/server/gb28181_tunnel*.go",
+      "gateway-server/internal/server/gb28181_transport_helpers*.go",
+      "gateway-server/internal/persistence/**",
+      "gateway-server/internal/repository/**",
+      "gateway-server/internal/diagnostics/**",
+      "gateway-server/docs/**",
+      "gateway-server/tests/**"
+    ],
+    "exclude": [
+      "gateway-ui/**"
+    ]
+  },
+  "required_gates": [
+    "repo_consistency",
+    "strict_source",
+    "smoke"
+  ],
+  "success_criteria": [
+    "代码中存在可启停的 sideband metadata provider/consumer 骨架",
+    "极限 MTU 路径可切换为 metadata handle 模式而不是继续扩 Header 白名单",
+    "元数据缓存具备 TTL、trace id、audit 记录与清理机制",
+    "兼容现有 generic download / Range / routing label 主链路",
+    "附带演进说明，明确 BMP-T 或后续专用承载如何接入"
+  ],
+  "evidence_required": [
+    "patch.diff",
+    "gate-results.json",
+    "metadata-sideband-notes.md"
+  ],
+  "depends_on": [
+    "NET-MTU-0002"
+  ],
+  "priority": "P1",
+  "risk": "high",
+  "status": "backlog"
+}

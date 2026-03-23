@@ -1,0 +1,33 @@
+# 兼容示例：历史 route/api_code/template 模型（deprecated），仅迁移或兼容场景使用。
+routes:
+  - api_code: api.order.create
+    target_service: order-service
+    target_host: 127.0.0.1
+    target_port: 19001
+    http_method: POST
+    http_path: /v1/orders
+    content_type: application/json
+    timeout_ms: 1500
+    retry_times: 2
+    header_mapping:
+      X-Partner-ID: headers.partner_id
+      X-Biz-Type: headers.biz_type
+    body_mapping:
+      order_id: body.order_id
+      buyer_name: body.buyer_name
+      amount: body.amount
+
+  - api_code: api.account.freeze
+    target_service: account-service
+    target_host: 127.0.0.1
+    target_port: 19002
+    http_method: POST
+    http_path: /v1/accounts/freeze
+    content_type: application/json
+    timeout_ms: 2000
+    retry_times: 1
+    header_mapping:
+      X-Operator-ID: headers.operator_id
+    body_mapping:
+      account_id: body.account_id
+      reason: body.reason

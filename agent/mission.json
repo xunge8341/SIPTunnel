@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "name": "http-over-gbt28181-agent-mission",
+  "objectives": [
+    "stability-first：优先保证协议链路、下载事务、公网/专网播放主链路稳定",
+    "runtime-fact-source-authoritative：运行时事实源必须持续保持唯一可信来源",
+    "security-before-forwarding：所有代理转发必须先经过安全校验和洗涤层",
+    "evidence-driven-optimization：所有优化都必须带门禁结果、日志和可复盘证据",
+    "cross-platform-delivery：Linux 和 Windows 的任务入口、门禁入口、证据结构保持同步"
+  ],
+  "default_success_policy": {
+    "must_pass_all_required_gates": true,
+    "must_archive_evidence": true,
+    "must_not_silence_failures": true
+  }
+}

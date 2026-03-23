@@ -1,0 +1,43 @@
+{
+  "id": "ARC-LARGE-0005",
+  "title": "将大响应执行器拆成 orchestrator / executor / observer，降低 adaptive 路径耦合",
+  "goal": [
+    "把策略选择、执行调度、观测回写、generic breaker 回写拆开",
+    "收敛 copyForwardResponseAdaptive 的职责厚度",
+    "为后续 MTU/治理/安全逻辑前置插桩提供稳定插点",
+    "保持现有 stream-first / fixed-window fallback 行为不漂移"
+  ],
+  "scope": {
+    "include": [
+      "gateway-server/internal/server/adaptive_delivery*.go",
+      "gateway-server/internal/server/mapping_runtime*.go",
+      "gateway-server/internal/server/mapping_runtime_delivery.go",
+      "gateway-server/internal/server/mapping_runtime_strategy_test.go",
+      "gateway-server/internal/server/adaptive_delivery_test.go",
+      "gateway-server/docs/**"
+    ],
+    "exclude": [
+      "gateway-ui/**"
+    ]
+  },
+  "required_gates": [
+    "repo_consistency",
+    "strict_source",
+    "smoke"
+  ],
+  "success_criteria": [
+    "存在明确的 runLargeResponseStrategy 或等价 orchestrator 入口",
+    "策略选择、执行和观测回写分层且测试仍通过",
+    "generic stream-first / fixed-window fallback 的现有期望保持不变",
+    "顺序模式与并发模式的 segment telemetry builder 尽可能复用"
+  ],
+  "evidence_required": [
+    "patch.diff",
+    "gate-results.json",
+    "large-response-refactor-map.md"
+  ],
+  "depends_on": [],
+  "priority": "P1",
+  "risk": "medium",
+  "status": "backlog"
+}

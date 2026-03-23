@@ -1,0 +1,44 @@
+{
+  "id": "OBS-GEN-0006",
+  "title": "补齐 Generic Download 事务摘要日志，并拆清 transfer breaker / target breaker 口径",
+  "goal": [
+    "新增下载事务级 summary 日志",
+    "把 transfer breaker 与 target breaker 观测口径拆清",
+    "把 active_transfers/effective_bitrate/resume_count/gap_count 收口成单条摘要",
+    "直接服务现场吞吐诊断和限速排障"
+  ],
+  "scope": {
+    "include": [
+      "gateway-server/internal/server/mapping_runtime*.go",
+      "gateway-server/internal/server/access_log_store.go",
+      "gateway-server/internal/server/mapping_diagnostics.go",
+      "gateway-server/internal/diagnostics/**",
+      "gateway-server/docs/**"
+    ],
+    "exclude": [
+      "gateway-ui/dist/**"
+    ]
+  },
+  "required_gates": [
+    "repo_consistency",
+    "strict_source",
+    "smoke"
+  ],
+  "success_criteria": [
+    "新增 generic_download_summary 或等价聚合日志",
+    "transfer breaker / target breaker 具备独立字段与告警口径",
+    "摘要可直接回答错误并桶、持续限速、恢复次数等现场问题",
+    "诊断导出与 access log 可查询该摘要"
+  ],
+  "evidence_required": [
+    "patch.diff",
+    "gate-results.json",
+    "generic-summary-example.log"
+  ],
+  "depends_on": [
+    "ARC-LARGE-0005"
+  ],
+  "priority": "P1",
+  "risk": "medium",
+  "status": "backlog"
+}

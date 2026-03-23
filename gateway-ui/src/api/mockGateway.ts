@@ -1,0 +1,1378 @@
+import { buildTunnelCapabilityItems, deriveTunnelCapability } from '../utils/tunnelConfig'
+
+import type {
+  CommandTask,
+  DashboardPayload,
+  FileTask,
+  TaskDetail,
+  TaskKind,
+  TaskListFilters,
+  TaskListResult,
+  TaskStatus,
+  NetworkConfigPayload,
+  UpdateNetworkConfigPayload,
+  ConfigGovernancePayload,
+  ConfigSnapshotFilters,
+  RuntimeGatewayConfig,
+  DiagnosticExportJob,
+  DiagnosticExportCreatePayload,
+  DeploymentModePayload,
+  StartupSummaryPayload,
+  TunnelMapping,
+  TunnelMappingListPayload,
+  TunnelMappingSavePayload,
+  MappingTestPayload,
+  NodeDetailPayload,
+  LocalNodeConfig,
+  PeerNodeConfig,
+  NodeNetworkStatusPayload,
+  SystemStatusPayload,
+  NodeConfigPayload,
+  TunnelConfigPayload,
+  TunnelConfigUpdatePayload,
+  LocalResourceListPayload,
+  LocalResourceSavePayload,
+  TunnelCatalogPayload,
+  TunnelMappingOverviewPayload,
+  GB28181StatePayload,
+  LinkMonitorPayload,
+  TunnelCatalogActionPayload,
+  TunnelCatalogActionResponse,
+  ConfigTransferPayload,
+  ConfigTransferImportResult
+} from '../types/gateway'
+
+const wait = (ms = 200) => new Promise((resolve) => setTimeout(resolve, ms))
+
+const capabilityDescriptionsFromCapability = (capability: ReturnType<typeof deriveTunnelCapability>) => {
+  const items = buildTunnelCapabilityItems(capability)
+  const supported = items.filter((item) => item.supported).map((item) => item.description)
+  return supported.length > 0 ? supported : ['当前网络模式下暂无可用扩展能力']
+}
+
+let tunnelConfigState: Omit<TunnelConfigPayload, 'local_device_id' | 'peer_device_id'> = {
+  channel_protocol: 'GB/T 28181',
+  connection_initiator: 'LOCAL',
+  mapping_relay_mode: 'AUTO',
+  heartbeat_interval_sec: 60,
+  register_retry_count: 3,
+  register_retry_interval_sec: 10,
+  registration_status: 'registered',
+  last_register_time: '2026-03-14T10:00:00Z',
+  last_heartbeat_time: '2026-03-14T10:00:30Z',
+  heartbeat_status: 'healthy',
+  last_failure_reason: '',
+  next_retry_time: '',
+  consecutive_heartbeat_timeout: 0,
+  supported_capabilities: ['支持 MANSCDP 控制消息', '支持 Catalog 目录订阅', '支持 RTP 响应体回传'],
+  request_channel: 'SIP',
+  response_channel: 'RTP',
+  network_mode: 'SENDER_SIP__RECEIVER_RTP',
+  capability: deriveTunnelCapability({ network_mode: 'SENDER_SIP__RECEIVER_RTP' }),
+  capability_items: buildTunnelCapabilityItems(deriveTunnelCapability({ network_mode: 'SENDER_SIP__RECEIVER_RTP' })),
+  register_auth_enabled: true,
+  register_auth_username: '34020000002000000001',
+  register_auth_password: '',
+  register_auth_password_configured: true,
+  register_auth_realm: '3402000000',
+  register_auth_algorithm: 'MD5',
+  catalog_subscribe_expires_sec: 3600
+}
+
+
+let mappingState: TunnelMapping[] = [
+  {
+    mapping_id: 'map-orders',
+    device_id: '34020000001320000001',
+    name: '订单同步映射',
+    enabled: true,
+    peer_node_id: 'gateway-b-01',
+    local_bind_ip: '10.10.10.8',
+    local_bind_port: 18120,
+    local_base_path: '/orders',
+    remote_target_ip: '172.16.8.12',
+    remote_target_port: 8080,
+    remote_base_path: '/api/v1/orders',
+    allowed_methods: ['*'],
+    response_mode: 'AUTO',
+    max_inline_response_body: 65536,
+    connect_timeout_ms: 500,
+    request_timeout_ms: 3000,
+    response_timeout_ms: 3000,
+    max_request_body_bytes: 1048576,
+    max_response_body_bytes: 10485760,
+    require_streaming_response: false,
+    description: '用于订单写入与状态更新。',
+    updated_at: '2026-03-14T09:00:00Z',
+    link_status: 'connected',
+    link_status_text: '已连接',
+    status_reason: 'GB/T 28181 注册正常，心跳稳定，响应通道已建立。',
+    failure_reason: '链路状态正常。',
+    suggested_action: '无需处理，持续观察运行指标。'
+  },
+  {
+    mapping_id: 'map-query',
+    device_id: '34020000001320000002',
+    name: '查询映射',
+    enabled: true,
+    peer_node_id: 'gateway-b-02',
+    local_bind_ip: '10.10.10.8',
+    local_bind_port: 18121,
+    local_base_path: '/query',
+    remote_target_ip: '172.16.8.18',
+    remote_target_port: 8081,
+    remote_base_path: '/query',
+    allowed_methods: ['*'],
+    response_mode: 'RTP',
+    max_inline_response_body: 32768,
+    connect_timeout_ms: 500,
+    request_timeout_ms: 2000,
+    response_timeout_ms: 2000,
+    max_request_body_bytes: 1048576,
+    max_response_body_bytes: 5242880,
+    require_streaming_response: false,
+    description: '用于只读查询。',
+    updated_at: '2026-03-14T09:10:00Z',
+    link_status: 'abnormal',
+    link_status_text: '异常',
+    status_reason: '对端节点瞬时不可达，最近一次健康探测失败。',
+    failure_reason: '对端节点瞬时不可达，最近一次健康探测失败。',
+    suggested_action: '检查对端可达性并重试链路测试。'
+  }
+]
+
+
+
+let localNodeState: LocalNodeConfig = {
+  node_id: 'gateway-a-01',
+  node_name: 'Gateway A',
+  node_role: 'gateway',
+  network_mode: 'SENDER_SIP__RECEIVER_RTP',
+  sip_listen_ip: '0.0.0.0',
+  sip_listen_port: 5060,
+  sip_transport: 'UDP',
+  rtp_listen_ip: '0.0.0.0',
+  rtp_port_start: 20000,
+  rtp_port_end: 20999,
+  mapping_port_start: 18100,
+  mapping_port_end: 18999,
+  rtp_transport: 'UDP'
+}
+
+let peerNodeState: PeerNodeConfig[] = [
+  {
+    peer_node_id: 'peer-b-01',
+    peer_name: 'Peer B 生产',
+    peer_signaling_ip: '10.20.0.20',
+    peer_signaling_port: 5060,
+    peer_media_ip: '10.20.0.20',
+    peer_media_port_start: 32000,
+    peer_media_port_end: 32100,
+    supported_network_mode: 'SENDER_SIP__RECEIVER_RTP',
+    enabled: true
+  }
+]
+const statuses: TaskStatus[] = ['pending', 'running', 'succeeded', 'failed', 'retry_wait']
+
+const makeCommandTasks = (): CommandTask[] =>
+  Array.from({ length: 24 }).map((_, index) => ({
+    id: `cmd-${index + 1}`,
+    requestId: `REQ-CMD-${String(index + 1).padStart(4, '0')}`,
+    traceId: `TRACE-${(100000 + index).toString(16).toUpperCase()}`,
+    apiCode: ['ORDER_SYNC', 'USER_QUERY', 'POLICY_PUSH'][index % 3],
+    nodeId: `node-${(index % 4) + 1}`,
+    status: statuses[index % statuses.length],
+    createdAt: `2026-03-1${index % 8} 09:${String(index % 6)}0:00`,
+    updatedAt: `2026-03-1${index % 8} 09:${String((index % 6) + 2)}2:00`,
+    latencyMs: 80 + index * 7
+  }))
+
+const makeFileTasks = (): FileTask[] =>
+  Array.from({ length: 24 }).map((_, index) => {
+    const totalShards = 180 + index * 2
+    const missingShards = index % 4
+    const progress = Math.min(100, 72 + index)
+    return {
+      id: `file-${index + 1}`,
+      requestId: `REQ-FILE-${String(index + 1).padStart(4, '0')}`,
+      traceId: `TRACE-F-${(110000 + index).toString(16).toUpperCase()}`,
+      filename: `payload_${index + 1}.dat`,
+      status: statuses[(index + 1) % statuses.length],
+      totalShards,
+      missingShards,
+      retryRounds: index % 3,
+      checksumPassed: index % 6 !== 0,
+      progress,
+      createdAt: `2026-03-0${(index % 9) + 1} 11:${String(index % 6)}0:00`,
+      updatedAt: `2026-03-0${(index % 9) + 1} 11:${String((index % 6) + 3)}2:00`
+    }
+  })
+
+const commandTasks = makeCommandTasks()
+const fileTasks = makeFileTasks()
+
+const filterByCommon = <T extends { requestId: string; traceId: string; status: TaskStatus }>(
+  list: T[],
+  filters: TaskListFilters
+) =>
+  list.filter((item) => {
+    if (filters.status && item.status !== filters.status) return false
+    if (filters.requestId && !item.requestId.includes(filters.requestId.trim())) return false
+    if (filters.traceId && !item.traceId.includes(filters.traceId.trim())) return false
+    return true
+  })
+
+const paginate = <T>(list: T[], page: number, pageSize: number): TaskListResult<T> => {
+  const start = (page - 1) * pageSize
+  return {
+    list: list.slice(start, start + pageSize),
+    total: list.length,
+    page,
+    pageSize
+  }
+}
+
+export async function fetchDashboardMock(): Promise<DashboardPayload> {
+  await wait()
+  return {
+    metrics: {
+      successRate: 99.2,
+      failureRate: 0.8,
+      concurrency: 186,
+      rtpLossRate: 0.17,
+      rateLimitHits: 31,
+      sipProtocol: 'UDP',
+      sipListenPort: 5060,
+      rtpProtocol: 'UDP',
+      rtpPortRange: '20000-20999',
+      activeSessions: 128,
+      activeTransfers: 42,
+      currentConnections: 186,
+      failedTasks1h: 7,
+      transportErrors1h: 5,
+      rateLimitHits1h: 12
+    },
+    recentTrends: [
+      { time: '09:00', total: 120, success: 118, failed: 2 },
+      { time: '10:00', total: 132, success: 129, failed: 3 },
+      { time: '11:00', total: 150, success: 148, failed: 2 },
+      { time: '12:00', total: 142, success: 139, failed: 3 },
+      { time: '13:00', total: 166, success: 164, failed: 2 },
+      { time: '14:00', total: 158, success: 155, failed: 3 },
+      { time: '15:00', total: 171, success: 169, failed: 2 }
+    ]
+  }
+}
+
+
+export async function fetchDeploymentModeMock(): Promise<DeploymentModePayload> {
+  await wait()
+  return {
+    uiMode: 'embedded',
+    uiUrl: 'http://127.0.0.1:8360/ui',
+    apiUrl: 'http://127.0.0.1:8360/api',
+    configPath: '/etc/siptunnel/config.yaml',
+    configSource: 'local-file'
+  }
+}
+
+
+export async function fetchStartupSummaryMock(): Promise<StartupSummaryPayload> {
+  await wait()
+  return {
+    node_id: 'gateway-a-01',
+    network_mode: 'SENDER_SIP__RECEIVER_RTP',
+    capability: {
+      supports_large_request_body: false,
+      supports_large_response_body: true,
+      supports_streaming_response: false,
+      supports_bidirectional_http_tunnel: false,
+      supports_transparent_proxy: false
+    },
+    capability_summary: {
+      supported: ['small_request', 'large_response'],
+      unsupported: ['large_request', 'streaming_response', 'bidirectional_http_tunnel', 'transparent_proxy'],
+      items: [
+        { key: 'small_request', label: '小请求体', supported: true, note: '支持' },
+        { key: 'large_response', label: '大响应体', supported: true, note: '支持' },
+        { key: 'large_request', label: '大请求体', supported: false, note: '不支持' }
+      ]
+    },
+    config_path: '/etc/siptunnel/config.yaml',
+    config_source: 'local-file',
+    ui_mode: 'embedded',
+    ui_url: 'http://127.0.0.1:8360/ui',
+    api_url: 'http://127.0.0.1:8360/api',
+    transport_plan: {
+      request_meta_transport: 'sip_control',
+      request_body_transport: 'sip_body_only',
+      response_meta_transport: 'sip_control',
+      response_body_transport: 'rtp_stream',
+      request_body_size_limit: 65535,
+      response_body_size_limit: -1,
+      notes: ['transport 决策由全局网络模式推导，禁止在单条隧道映射上覆盖。'],
+      warnings: ['不支持大请求体上传；超过 SIP 限制的请求体将被拒绝。']
+    },
+    business_execution: {
+      state: 'protocol_only',
+      route_count: 0,
+      message: '协议层可启动，业务执行层未激活（未加载下游 HTTP 隧道映射）',
+      impact: '仅完成 SIP/RTP 协议交互，不会执行 A 网 HTTP 落地'
+    },
+    self_check_summary: {
+      generated_at: '2026-03-12T14:20:00Z',
+      overall: 'warn',
+      info: 8,
+      warn: 1,
+      error: 0
+    }
+  }
+}
+
+
+
+export async function fetchSystemStatusMock(): Promise<SystemStatusPayload> {
+  await wait()
+  return {
+    tunnel_status: 'connected',
+    connection_reason: 'SIP 控制面握手成功，RTP 回传链路可用',
+    network_mode: 'SENDER_SIP__RECEIVER_RTP',
+    registration_status: 'registered',
+    heartbeat_status: 'healthy',
+    last_register_time: '2026-03-14T10:00:00Z',
+    last_heartbeat_time: '2026-03-14T10:00:30Z',
+    mapping_total: 2,
+    mapping_abnormal_total: 1,
+    latest_mapping_error_reason: 'map-query：对端不可达，等待下一次心跳恢复。',
+    capability: {
+      supports_small_request_body: true,
+      supports_large_response_body: true,
+      supports_streaming_response: true,
+      supports_large_file_upload: false,
+      supports_bidirectional_http_tunnel: false
+    }
+  }
+}
+export async function fetchCommandTasksMock(
+  filters: TaskListFilters,
+  page: number,
+  pageSize: number
+): Promise<TaskListResult<CommandTask>> {
+  await wait()
+  return paginate(filterByCommon(commandTasks, filters), page, pageSize)
+}
+
+export async function fetchFileTasksMock(
+  filters: TaskListFilters,
+  page: number,
+  pageSize: number
+): Promise<TaskListResult<FileTask>> {
+  await wait()
+  return paginate(filterByCommon(fileTasks, filters), page, pageSize)
+}
+
+export async function fetchTaskDetailMock(id: string, taskKind: TaskKind): Promise<TaskDetail> {
+  await wait()
+  return {
+    id,
+    taskKind,
+    requestId: `${taskKind === 'command' ? 'REQ-CMD' : 'REQ-FILE'}-0088`,
+    traceId: 'TRACE-DET-75FA',
+    status: 'running',
+    nodeId: 'node-2',
+    createdAt: '2026-03-12 08:40:00',
+    updatedAt: '2026-03-12 08:46:31',
+    timeline: [
+      { stage: '任务创建', status: 'done', time: '08:40:00', operator: 'scheduler', detail: '接收到 SIP INVITE' },
+      { stage: 'SIP 协商', status: 'done', time: '08:40:08', operator: 'gateway-a', detail: '200 OK，建立会话' },
+      { stage: 'RTP 传输', status: 'processing', time: '08:44:21', operator: 'gateway-b', detail: '进行中，触发过 1 次重传' },
+      { stage: 'HTTP 执行', status: 'wait', time: '-', operator: '-', detail: '等待文件完整后触发' }
+    ],
+    sipEvents: [
+      { time: '08:40:00', method: 'INVITE', code: 100, summary: 'Trying' },
+      { time: '08:40:05', method: 'INVITE', code: 180, summary: 'Ringing' },
+      { time: '08:40:08', method: 'INVITE', code: 200, summary: 'OK' },
+      { time: '08:45:52', method: 'INFO', code: 200, summary: 'State sync success' }
+    ],
+    rtpStats: {
+      totalShards: 210,
+      receivedShards: 206,
+      missingShards: 4,
+      retransmittedShards: 4,
+      bitrateMbps: 46.8
+    },
+    httpResult: {
+      apiCode: 'ORDER_SYNC',
+      url: '/internal/api/order/sync',
+      method: 'POST',
+      statusCode: 202,
+      durationMs: 132,
+      responseSnippet: '{"message":"accepted","job_id":"JOB-8871"}'
+    },
+    auditSnippets: [
+      {
+        id: 'AUD-901',
+        time: '08:40:00',
+        actor: 'system',
+        action: 'CREATE_TASK',
+        summary: '从 SIP 控制面创建任务，初始化幂等键。'
+      },
+      {
+        id: 'AUD-902',
+        time: '08:41:10',
+        actor: 'ops_admin',
+        action: 'UPDATE_RATE_LIMIT',
+        summary: '调高 node-2 对 ORDER_SYNC 的并发阈值。'
+      }
+    ]
+  }
+}
+
+
+
+let localResourceState = mappingState.map((item) => ({
+  resource_code: item.device_id || item.mapping_id,
+  name: item.name || item.mapping_id,
+  enabled: item.enabled,
+  target_url: `http://${item.remote_target_ip}:${item.remote_target_port}${item.remote_base_path}`,
+  methods: item.allowed_methods?.length ? [...item.allowed_methods] : ['*'],
+  response_mode: (item.response_mode || 'RTP') as 'AUTO' | 'INLINE' | 'RTP',
+  description: item.description,
+  updated_at: item.updated_at
+}))
+export async function fetchMappingsMock(): Promise<TunnelMappingListPayload> {
+  await wait()
+  return { items: JSON.parse(JSON.stringify(mappingState)), warnings: [] }
+}
+
+export async function fetchLocalResourcesMock(): Promise<LocalResourceListPayload> {
+  await wait()
+  return {
+    items: localResourceState.map((item) => ({
+      resource_id: item.resource_code,
+      resource_code: item.resource_code,
+      device_id: item.resource_code,
+      resource_type: 'SERVICE',
+      name: item.name,
+      enabled: item.enabled,
+      target_url: item.target_url,
+      methods: [...item.methods],
+      response_mode: item.response_mode,
+      max_inline_response_body: item.response_mode === 'INLINE' ? 65536 : 262144,
+      max_request_body: 65535,
+      max_response_body: item.response_mode === 'INLINE' ? 65536 : 10485760,
+      body_limit_policy: item.response_mode === 'INLINE' ? 'SIP 内联' : 'RTP 回传',
+      description: item.description,
+      updated_at: item.updated_at
+    }))
+  }
+}
+
+export async function createLocalResourceMock(payload: LocalResourceSavePayload): Promise<void> {
+  await wait()
+  localResourceState = localResourceState.filter((item) => item.resource_code !== payload.resource_code)
+  localResourceState.push({ ...JSON.parse(JSON.stringify(payload)), updated_at: new Date().toISOString() })
+}
+
+export async function updateLocalResourceMock(resourceCode: string, payload: LocalResourceSavePayload): Promise<void> {
+  await wait()
+  const index = localResourceState.findIndex((item) => item.resource_code === resourceCode)
+  if (index < 0) throw new Error('LOCAL_RESOURCE_NOT_FOUND')
+  localResourceState[index] = { ...JSON.parse(JSON.stringify(payload)), updated_at: new Date().toISOString() }
+}
+
+export async function deleteLocalResourceMock(resourceCode: string): Promise<void> {
+  await wait()
+  localResourceState = localResourceState.filter((item) => item.resource_code !== resourceCode)
+}
+
+export async function createMappingMock(payload: TunnelMapping): Promise<TunnelMappingSavePayload> {
+  await wait()
+  const next = { ...JSON.parse(JSON.stringify(payload)), allowed_methods: payload.allowed_methods?.length ? payload.allowed_methods : ["*"], updated_at: new Date().toISOString() }
+  mappingState.push(next)
+  return { mapping: JSON.parse(JSON.stringify(next)), warnings: [] }
+}
+
+export async function updateMappingMock(id: string, payload: TunnelMapping): Promise<TunnelMappingSavePayload> {
+  await wait()
+  const index = mappingState.findIndex((item) => item.mapping_id === id)
+  if (index < 0) {
+    throw new Error('MAPPING_NOT_FOUND')
+  }
+  const next = { ...JSON.parse(JSON.stringify(payload)), allowed_methods: payload.allowed_methods?.length ? payload.allowed_methods : ["*"], updated_at: new Date().toISOString() }
+  mappingState[index] = next
+  return { mapping: JSON.parse(JSON.stringify(next)), warnings: [] }
+}
+
+export async function deleteMappingMock(id: string): Promise<void> {
+  await wait()
+  mappingState = mappingState.filter((item) => item.mapping_id !== id)
+}
+
+
+
+export async function testMappingMock(): Promise<MappingTestPayload> {
+  await wait()
+  return {
+    passed: false,
+    status: 'failed',
+    failure_stage: '对端可达',
+    stages: [
+      { key: 'local_listening', name: '本地监听可用', status: 'passed', passed: true, detail: 'SIP 监听正常；RTP 端口池可用。' },
+      { key: 'registration', name: '注册状态正常', status: 'passed', passed: true, detail: '当前注册状态：registered' },
+      { key: 'heartbeat', name: '心跳状态正常', status: 'passed', passed: true, detail: '当前心跳状态：healthy' },
+      { key: 'peer_reachability', name: '对端可达', status: 'failed', passed: false, detail: 'TCP 探测 10.20.0.20:5060 失败', blocking_reason: 'i/o timeout', suggested_action: '检查对端进程、ACL 与路由。' },
+      { key: 'session_ready', name: '会话已准备', status: 'blocked', passed: false, detail: '会话准备要求：注册正常 + 心跳正常 + 对端可达。', blocking_reason: '对端不可达', suggested_action: '按前置阶段提示恢复会话条件后重试。' },
+      { key: 'mapping_forward', name: '映射转发准备就绪', status: 'blocked', passed: false, detail: '会话尚未准备完成，暂不执行转发准备判定', blocking_reason: '依赖阶段“会话已准备”未通过', suggested_action: '先恢复注册/心跳/对端可达后重试。' }
+    ],
+    signaling_request: '成功',
+    response_channel: '正常',
+    registration_status: '正常',
+    failure_reason: 'i/o timeout',
+    suggested_action: '检查对端进程、ACL 与路由。'
+  }
+}
+
+let networkConfigState: NetworkConfigPayload = {
+  sip: {
+    listenIp: '0.0.0.0',
+    listenPort: 5060,
+    protocol: 'UDP',
+    advertisedAddress: 'sip.siptunnel.local:5060',
+    domain: 'siptunnel.local',
+    tcpKeepaliveEnabled: true,
+    tcpKeepaliveIntervalMs: 30000,
+    tcpReadBufferBytes: 65536,
+    tcpWriteBufferBytes: 65536,
+    maxConnections: 2048
+  },
+  rtp: {
+    listenIp: '0.0.0.0',
+    portRangeStart: 20000,
+    portRangeEnd: 20999,
+    protocol: 'UDP',
+    advertisedAddress: 'rtp.siptunnel.local',
+    maxConcurrentTransfers: 240
+  },
+  portPool: {
+    totalAvailablePorts: 1000,
+    occupiedPorts: 126,
+    activeTransfers: 58,
+    usageRate: 12.6
+  },
+  connectionErrors: [
+    {
+      id: "conn-001",
+      occurredAt: "2026-03-12 14:07:52",
+      transport: "SIP",
+      protocol: "UDP",
+      nodeId: "gateway-a-02",
+      errorCode: "SIP_CONN_RESET",
+      reason: "上游设备重启导致连接重置，重连耗时 1.4s。"
+    },
+    {
+      id: "conn-002",
+      occurredAt: "2026-03-12 14:18:11",
+      transport: "RTP",
+      protocol: "UDP",
+      nodeId: "gateway-b-01",
+      errorCode: "RTP_BIND_TIMEOUT",
+      reason: "端口池争抢导致端口绑定超时，自动重试恢复。"
+    }
+  ],
+  selfCheckItems: [
+    {
+      key: "sip-listener",
+      name: "sip.listen_port_occupancy",
+      level: "info",
+      message: "SIP 套接字响应正常，时延 < 10ms。",
+      suggestion: "无需处理。",
+      action_hint: "保持当前配置并纳入巡检基线。"
+    },
+    {
+      key: "sip-listen-ip",
+      name: "sip.listen_ip",
+      level: "warn",
+      message: "listen_ip=0.0.0.0 为通配地址，无法精确校验网卡存在性。",
+      suggestion: "若需严格约束到指定网卡，请改为明确的本机 IP。",
+      action_hint: "生产建议绑定业务网卡 IP，灰度发布后复核 /api/selfcheck。",
+      doc_link: "docs/troubleshooting.md#38-通配地址-0000-风险"
+    },
+    {
+      key: "downstream-http",
+      name: "downstream.http_base_reachability",
+      level: "warn",
+      message: "未配置下游 HTTP 隧道映射：当前处于协议层可启动、业务执行层未激活状态。",
+      suggestion: "请加载最小隧道映射配置（旧 httpinvoke route 为兼容格式）以激活业务执行层。",
+      action_hint: "补齐隧道映射（旧 api_code 为兼容索引）后重启并复核 /api/selfcheck。",
+      doc_link: "docs/troubleshooting.md#310-下游-http-未配置"
+    }
+  ],
+  linkTests: [
+    {
+      id: "lt-001",
+      scene: "A->B 控制链路基线",
+      status: "pass",
+      avgLatencyMs: 8.7,
+      packetLossRate: 0.03,
+      throughputMbps: 96.4,
+      executedAt: "2026-03-12 14:10:00"
+    },
+    {
+      id: "lt-002",
+      scene: "B->A 文件回传链路",
+      status: "warn",
+      avgLatencyMs: 27.4,
+      packetLossRate: 0.32,
+      throughputMbps: 81.2,
+      executedAt: "2026-03-12 14:20:00"
+    }
+  ]
+}
+
+export async function fetchNetworkConfigMock(): Promise<NetworkConfigPayload> {
+  await wait()
+  return JSON.parse(JSON.stringify(networkConfigState))
+}
+
+export async function updateNetworkConfigMock(payload: UpdateNetworkConfigPayload): Promise<NetworkConfigPayload> {
+  await wait()
+  networkConfigState = {
+    ...networkConfigState,
+    sip: JSON.parse(JSON.stringify(payload.sip)),
+    rtp: JSON.parse(JSON.stringify(payload.rtp))
+  }
+  const span = Math.max(0, networkConfigState.rtp.portRangeEnd - networkConfigState.rtp.portRangeStart + 1)
+  networkConfigState.portPool.totalAvailablePorts = span
+  networkConfigState.portPool.occupiedPorts = Math.min(span, Math.round(payload.rtp.maxConcurrentTransfers * 0.6))
+  networkConfigState.portPool.activeTransfers = Math.min(
+    networkConfigState.portPool.occupiedPorts,
+    Math.round(payload.rtp.maxConcurrentTransfers * 0.35)
+  )
+  networkConfigState.portPool.usageRate = span === 0 ? 0 : Number(((networkConfigState.portPool.occupiedPorts / span) * 100).toFixed(2))
+  return JSON.parse(JSON.stringify(networkConfigState))
+}
+
+
+const configSnapshotsSeed = [
+  { version: 'v2026.03.12.1', createdAt: '2026-03-12 09:10:00', operator: 'ops_admin', changeSummary: '调整 RTP 端口池容量', status: 'active' as const },
+  { version: 'v2026.03.12.2', createdAt: '2026-03-12 11:32:00', operator: 'secops', changeSummary: '切换 SIP 传输协议到 TCP', status: 'archived' as const },
+  { version: 'v2026.03.12.3', createdAt: '2026-03-12 13:45:00', operator: 'ops_admin', changeSummary: '提升 max_message_bytes 以支持大报文', status: 'pending' as const },
+  { version: 'v2026.03.12.4', createdAt: '2026-03-12 15:21:00', operator: 'release_bot', changeSummary: '校准 RTP 端口区间', status: 'archived' as const }
+]
+
+let snapshotState = [...configSnapshotsSeed]
+
+const runtimeCurrentConfig: RuntimeGatewayConfig = {
+  sip: {
+    listen_port: 5060,
+    transport: 'UDP',
+    listen_ip: '0.0.0.0'
+  },
+  rtp: {
+    port_start: 20000,
+    port_end: 20999,
+    transport: 'UDP',
+    listen_ip: '0.0.0.0'
+  },
+  max_message_bytes: 1048576,
+  heartbeat_interval_sec: 15
+}
+
+let runtimePendingConfig: RuntimeGatewayConfig = {
+  sip: {
+    listen_port: 5061,
+    transport: 'TCP',
+    listen_ip: '0.0.0.0'
+  },
+  rtp: {
+    port_start: 21000,
+    port_end: 21999,
+    transport: 'UDP',
+    listen_ip: '0.0.0.0'
+  },
+  max_message_bytes: 2097152,
+  heartbeat_interval_sec: 15
+}
+
+const buildDiff = (before: RuntimeGatewayConfig, after: RuntimeGatewayConfig) => [
+  { path: 'sip.listen_port', before: String(before.sip.listen_port), after: String(after.sip.listen_port), riskLevel: 'high' as const },
+  { path: 'sip.transport', before: before.sip.transport, after: after.sip.transport, riskLevel: 'high' as const },
+  { path: 'rtp.port_start', before: String(before.rtp.port_start), after: String(after.rtp.port_start), riskLevel: 'high' as const },
+  { path: 'rtp.port_end', before: String(before.rtp.port_end), after: String(after.rtp.port_end), riskLevel: 'high' as const },
+  { path: 'rtp.transport', before: before.rtp.transport, after: after.rtp.transport, riskLevel: 'high' as const },
+  { path: 'max_message_bytes', before: String(before.max_message_bytes), after: String(after.max_message_bytes), riskLevel: 'high' as const },
+  { path: 'heartbeat_interval_sec', before: String(before.heartbeat_interval_sec), after: String(after.heartbeat_interval_sec), riskLevel: 'low' as const }
+]
+
+const toYaml = (config: RuntimeGatewayConfig) => `sip:
+  listen_port: ${config.sip.listen_port}
+  transport: ${config.sip.transport}
+  listen_ip: ${config.sip.listen_ip}
+rtp:
+  port_start: ${config.rtp.port_start}
+  port_end: ${config.rtp.port_end}
+  transport: ${config.rtp.transport}
+  listen_ip: ${config.rtp.listen_ip}
+max_message_bytes: ${config.max_message_bytes}
+heartbeat_interval_sec: ${config.heartbeat_interval_sec}
+`
+
+export async function fetchConfigGovernanceMock(filters: ConfigSnapshotFilters): Promise<ConfigGovernancePayload> {
+  await wait()
+  const snapshots = snapshotState.filter((item) => {
+    if (filters.operator && !item.operator.includes(filters.operator.trim())) return false
+    if (filters.version && !item.version.includes(filters.version.trim())) return false
+    if (filters.startTime && item.createdAt < filters.startTime) return false
+    if (filters.endTime && item.createdAt > filters.endTime) return false
+    return true
+  })
+
+  return {
+    snapshots,
+    currentConfig: JSON.parse(JSON.stringify(runtimeCurrentConfig)),
+    pendingConfig: JSON.parse(JSON.stringify(runtimePendingConfig)),
+    diff: buildDiff(runtimeCurrentConfig, runtimePendingConfig)
+  }
+}
+
+export async function rollbackConfigMock(version: string): Promise<ConfigGovernancePayload> {
+  await wait()
+  snapshotState = snapshotState.map((item) => ({
+    ...item,
+    status: item.version === version ? 'active' : item.status === 'active' ? 'archived' : item.status
+  }))
+  runtimePendingConfig = JSON.parse(JSON.stringify(runtimeCurrentConfig))
+
+  return {
+    snapshots: snapshotState,
+    currentConfig: JSON.parse(JSON.stringify(runtimeCurrentConfig)),
+    pendingConfig: JSON.parse(JSON.stringify(runtimePendingConfig)),
+    diff: buildDiff(runtimeCurrentConfig, runtimePendingConfig)
+  }
+}
+
+export async function exportConfigYamlMock(target: 'current' | 'pending'): Promise<string> {
+  await wait(120)
+  return toYaml(target === 'current' ? runtimeCurrentConfig : runtimePendingConfig)
+}
+
+
+const diagnosticSectionsTemplate = [
+  { key: 'transport_config' as const, label: '当前 transport 配置' },
+  { key: 'connection_stats_snapshot' as const, label: '连接统计快照' },
+  { key: 'port_pool_status' as const, label: '端口池状态' },
+  { key: 'transport_error_summary' as const, label: '最近 transport 错误摘要' },
+  { key: 'task_failure_summary' as const, label: '最近 task failure 摘要' },
+  { key: 'rate_limit_hit_summary' as const, label: '最近 rate limit 命中摘要' },
+  { key: 'profile_entry' as const, label: 'profile 采集入口信息（如果启用）' }
+]
+
+const diagnosticJobs = new Map<string, {
+  job: DiagnosticExportJob
+  polls: number
+  failOnce: boolean
+}>()
+
+const makeDiagnosticFileName = (nodeId: string, jobId: string, requestId?: string, traceId?: string) => {
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '')
+  const normalizeToken = (value: string) => value.trim().replace(/[^a-zA-Z0-9_-]/g, '_').replace(/[-_]+/g, '_').replace(/^_+|_+$/g, '')
+  const normalizedNodeId = normalizeToken(nodeId)
+  const parts = [`diag_${normalizedNodeId}_${stamp}`]
+  if (requestId) parts.push(`req_${normalizeToken(requestId)}`)
+  if (traceId) parts.push(`trace_${normalizeToken(traceId)}`)
+  parts.push(jobId)
+  return `${parts.join('_')}.zip`
+}
+
+const cloneJob = (job: DiagnosticExportJob): DiagnosticExportJob => JSON.parse(JSON.stringify(job))
+
+export async function createDiagnosticExportMock(payload: DiagnosticExportCreatePayload): Promise<DiagnosticExportJob> {
+  await wait(150)
+  const jobId = `diag-${Math.random().toString(36).slice(2, 8)}`
+  const now = new Date().toISOString()
+  const job: DiagnosticExportJob = {
+    jobId,
+    nodeId: payload.nodeId,
+    status: 'pending',
+    progress: 0,
+    startedAt: now,
+    updatedAt: now,
+    fileName: makeDiagnosticFileName(payload.nodeId, jobId, payload.requestId, payload.traceId),
+    sections: diagnosticSectionsTemplate.map((item) => ({ ...item, done: false }))
+  }
+  diagnosticJobs.set(jobId, {
+    job,
+    polls: 0,
+    failOnce: payload.nodeId.endsWith('02')
+  })
+  return cloneJob(job)
+}
+
+export async function getDiagnosticExportMock(jobId: string): Promise<DiagnosticExportJob> {
+  await wait(180)
+  const record = diagnosticJobs.get(jobId)
+  if (!record) {
+    throw new Error('诊断任务不存在，请重新发起导出')
+  }
+
+  if (record.job.status === 'succeeded' || record.job.status === 'failed') {
+    return cloneJob(record.job)
+  }
+
+  record.polls += 1
+  const progress = Math.min(100, record.polls * 25)
+  record.job.progress = progress
+  record.job.updatedAt = new Date().toISOString()
+  record.job.status = progress < 40 ? 'collecting' : 'packaging'
+
+  const completedCount = Math.floor((progress / 100) * record.job.sections.length)
+  record.job.sections = record.job.sections.map((item, index) => ({ ...item, done: index < completedCount }))
+
+  if (progress >= 100) {
+    if (record.failOnce) {
+      record.job.status = 'failed'
+      record.job.errorMessage = '导出包生成失败：日志索引服务暂时不可用。'
+      record.failOnce = false
+    } else {
+      record.job.status = 'succeeded'
+      record.job.errorMessage = undefined
+      record.job.sections = record.job.sections.map((item) => ({ ...item, done: true }))
+      record.job.downloadUrl = `data:application/zip;base64,UEsFBgAAAAAAAAAAAAAAAAAAAAAAAA==`
+    }
+  }
+
+  return cloneJob(record.job)
+}
+
+export async function retryDiagnosticExportMock(jobId: string): Promise<DiagnosticExportJob> {
+  await wait(160)
+  const record = diagnosticJobs.get(jobId)
+  if (!record) {
+    throw new Error('诊断任务不存在，请重新发起导出')
+  }
+  const now = new Date().toISOString()
+  record.polls = 0
+  record.job.status = 'pending'
+  record.job.progress = 0
+  record.job.updatedAt = now
+  record.job.errorMessage = undefined
+  record.job.downloadUrl = undefined
+  record.job.sections = diagnosticSectionsTemplate.map((item) => ({ ...item, done: false }))
+  return cloneJob(record.job)
+}
+
+
+export async function exportConfigJsonMock(): Promise<ConfigTransferPayload> {
+  await wait(120)
+  return {
+    version: `mock-${new Date().toISOString().slice(0, 10)}`,
+    exported_at: new Date().toISOString(),
+    network_config: {
+      sip: JSON.parse(JSON.stringify(networkConfigState.sip)),
+      rtp: JSON.parse(JSON.stringify(networkConfigState.rtp))
+    },
+    tunnel_config: JSON.parse(JSON.stringify(tunnelConfigState)),
+    node_config: await fetchNodeConfigMock()
+  }
+}
+
+export async function importConfigJsonMock(payload: ConfigTransferPayload): Promise<ConfigTransferImportResult> {
+  await wait(160)
+  networkConfigState = {
+    ...networkConfigState,
+    sip: JSON.parse(JSON.stringify(payload.network_config.sip)),
+    rtp: JSON.parse(JSON.stringify(payload.network_config.rtp))
+  }
+  tunnelConfigState = JSON.parse(JSON.stringify(payload.tunnel_config))
+  await saveNodeConfigMock(payload.node_config)
+  return {
+    imported: true,
+    tunnel_restarted: true,
+    version: payload.version,
+    message: '配置导入成功，已应用网络/隧道/节点配置。'
+  }
+}
+
+export async function downloadConfigTemplateMock(): Promise<ConfigTransferPayload> {
+  await wait(100)
+  return {
+    version: 'template-v1',
+    exported_at: new Date().toISOString(),
+    network_config: {
+      sip: {
+        listenIp: '0.0.0.0',
+        listenPort: 5060,
+        protocol: 'UDP',
+        advertisedAddress: '',
+        domain: 'example.local',
+        tcpKeepaliveEnabled: true,
+        tcpKeepaliveIntervalMs: 30000,
+        tcpReadBufferBytes: 1048576,
+        tcpWriteBufferBytes: 1048576,
+        maxConnections: 2000
+      },
+      rtp: {
+        listenIp: '0.0.0.0',
+        portRangeStart: 20000,
+        portRangeEnd: 20999,
+        protocol: 'UDP',
+        advertisedAddress: '',
+        maxConcurrentTransfers: 512
+      }
+    },
+    tunnel_config: {
+      channel_protocol: 'GB/T 28181',
+      connection_initiator: 'LOCAL',
+      local_device_id: 'gateway-a-template',
+      peer_device_id: 'gateway-b-template',
+      heartbeat_interval_sec: 60,
+      register_retry_count: 3,
+      register_retry_interval_sec: 10,
+      registration_status: 'unregistered',
+      last_register_time: '',
+      last_heartbeat_time: '',
+      heartbeat_status: 'unknown',
+      last_failure_reason: '',
+      next_retry_time: '',
+      consecutive_heartbeat_timeout: 0,
+      supported_capabilities: ['支持小请求体（典型 SIP JSON 负载）', '支持大响应体回传', '支持流式响应'],
+      request_channel: 'SIP',
+      response_channel: 'RTP',
+      network_mode: 'SENDER_SIP__RECEIVER_RTP',
+      capability: deriveTunnelCapability({
+        network_mode: 'SENDER_SIP__RECEIVER_RTP'
+      }),
+      capability_items: buildTunnelCapabilityItems(
+        deriveTunnelCapability({
+          network_mode: 'SENDER_SIP__RECEIVER_RTP'
+        })
+      )
+    },
+    node_config: {
+      local_node: {
+        node_ip: '10.10.10.8',
+        signaling_port: 5060,
+        device_id: '34020000002000000001',
+        node_type: 'SERVER',
+        rtp_port_start: 20000,
+        rtp_port_end: 20999
+      },
+      peer_node: {
+        node_ip: '10.20.0.20',
+        signaling_port: 5060,
+        device_id: '34020000002000000002',
+        node_type: 'SERVER'
+      }
+    }
+  }
+}
+
+export async function fetchTunnelConfigMock(): Promise<TunnelConfigPayload> {
+  await wait()
+  const primaryPeer = peerNodeState[0]
+  return {
+    ...JSON.parse(JSON.stringify(tunnelConfigState)),
+    local_device_id: localNodeState.node_id,
+    peer_device_id: primaryPeer?.peer_node_id ?? ''
+  }
+}
+
+export async function saveTunnelConfigMock(payload: TunnelConfigUpdatePayload): Promise<TunnelConfigPayload> {
+  await wait()
+  const capability = deriveTunnelCapability(payload)
+  tunnelConfigState = {
+    channel_protocol: payload.channel_protocol,
+    connection_initiator: payload.connection_initiator,
+    mapping_relay_mode: payload.mapping_relay_mode ?? tunnelConfigState.mapping_relay_mode ?? 'AUTO',
+    heartbeat_interval_sec: payload.heartbeat_interval_sec,
+    register_retry_count: payload.register_retry_count,
+    register_retry_interval_sec: payload.register_retry_interval_sec,
+    registration_status: tunnelConfigState.registration_status,
+    last_register_time: tunnelConfigState.last_register_time,
+    last_heartbeat_time: tunnelConfigState.last_heartbeat_time,
+    heartbeat_status: tunnelConfigState.heartbeat_status,
+    last_failure_reason: tunnelConfigState.last_failure_reason,
+    next_retry_time: tunnelConfigState.next_retry_time,
+    consecutive_heartbeat_timeout: tunnelConfigState.consecutive_heartbeat_timeout,
+    supported_capabilities: capabilityDescriptionsFromCapability(capability),
+    request_channel: 'SIP',
+    response_channel: 'RTP',
+    network_mode: payload.network_mode,
+    capability,
+    capability_items: buildTunnelCapabilityItems(capability),
+    register_auth_enabled: payload.register_auth_enabled ?? tunnelConfigState.register_auth_enabled ?? false,
+    register_auth_username: payload.register_auth_username ?? tunnelConfigState.register_auth_username ?? '',
+    register_auth_password: payload.register_auth_password ?? '',
+    register_auth_password_configured: String(payload.register_auth_password ?? '').trim() ? true : (payload.register_auth_password_configured ?? tunnelConfigState.register_auth_password_configured ?? false),
+    register_auth_realm: payload.register_auth_realm ?? tunnelConfigState.register_auth_realm ?? '',
+    register_auth_algorithm: payload.register_auth_algorithm ?? tunnelConfigState.register_auth_algorithm ?? 'MD5',
+    catalog_subscribe_expires_sec: payload.catalog_subscribe_expires_sec ?? tunnelConfigState.catalog_subscribe_expires_sec ?? 3600
+  }
+  const primaryPeer = peerNodeState[0]
+  return {
+    ...JSON.parse(JSON.stringify(tunnelConfigState)),
+    local_device_id: localNodeState.node_id,
+    peer_device_id: primaryPeer?.peer_node_id ?? ''
+  }
+}
+
+export async function fetchTunnelCatalogMock(): Promise<TunnelCatalogPayload> {
+  await wait()
+  return {
+    resources: [
+      {
+        resource_code: '34020000001320000001',
+        device_id: '34020000001320000001',
+        resource_type: 'SERVICE',
+        name: '订单查询虚拟资源',
+        local_ports: [18081],
+        exposure_mode: 'MANUAL',
+        methods: ['GET', 'POST'],
+        method_list: ['GET', 'POST'],
+        response_mode: 'AUTO',
+        source: 'REMOTE',
+        status: 'ON',
+        max_inline_response_body: 65536,
+        max_request_body: 1048576,
+        mapping_ids: ['map-orders']
+      },
+      {
+        resource_code: '34020000001320000002',
+        device_id: '34020000001320000002',
+        resource_type: 'SERVICE',
+        name: '工单下载虚拟资源',
+        local_ports: [],
+        exposure_mode: 'UNEXPOSED',
+        methods: ['GET'],
+        method_list: ['GET'],
+        response_mode: 'RTP',
+        source: 'REMOTE',
+        status: 'ON',
+        max_inline_response_body: 32768,
+        max_request_body: 1048576,
+        mapping_ids: []
+      },
+      {
+        resource_code: '34020000001320000003',
+        device_id: '34020000001320000003',
+        resource_type: 'SERVICE',
+        name: '临时诊断资源',
+        local_ports: [],
+        exposure_mode: 'UNEXPOSED',
+        methods: ['GET'],
+        method_list: ['GET'],
+        response_mode: 'INLINE',
+        source: 'REMOTE',
+        status: 'OFF',
+        max_inline_response_body: 16384,
+        max_request_body: 262144,
+        mapping_ids: []
+      }
+    ],
+    summary: {
+      resource_total: 3,
+      manual_expose_num: 1,
+      unexposed_num: 2
+    }
+  }
+}
+
+export async function fetchTunnelMappingOverviewMock(): Promise<TunnelMappingOverviewPayload> {
+  await wait()
+  return {
+    items: [
+      {
+        resource_code: '34020000001320000001',
+        device_id: '34020000001320000001',
+        resource_type: 'SERVICE',
+        name: '订单查询虚拟资源',
+        source_node: '34020000002000000002',
+        methods: ['GET', 'POST'],
+        response_mode: 'AUTO',
+        resource_status: 'ON',
+        mapping_status: 'MANUAL',
+        mapping_ids: ['map-orders'],
+        listen_ip: '0.0.0.0',
+        listen_ports: [18081],
+        path_prefix: '/',
+        enabled: true
+      },
+      {
+        resource_code: '34020000001320000002',
+        device_id: '34020000001320000002',
+        resource_type: 'SERVICE',
+        name: '工单下载虚拟资源',
+        source_node: '34020000002000000002',
+        methods: ['GET'],
+        response_mode: 'RTP',
+        resource_status: 'ON',
+        mapping_status: 'UNMAPPED',
+        mapping_ids: [],
+        listen_ports: [],
+        enabled: false
+      },
+      {
+        resource_code: '34020000001320000003',
+        device_id: '34020000001320000003',
+        resource_type: 'SERVICE',
+        name: '临时诊断资源',
+        source_node: '34020000002000000002',
+        methods: ['GET'],
+        response_mode: 'INLINE',
+        resource_status: 'OFF',
+        mapping_status: 'UNMAPPED',
+        mapping_ids: [],
+        listen_ports: [],
+        enabled: false
+      }
+    ],
+    summary: {
+      resource_total: 3,
+      mapped_total: 1,
+      manual_total: 1,
+      unmapped_total: 2
+    }
+  }
+}
+
+export async function fetchGB28181StateMock(): Promise<GB28181StatePayload> {
+  await wait()
+  const cfg = await fetchTunnelConfigMock()
+  return {
+    session: {
+      registration_status: 'registered',
+      heartbeat_status: 'healthy',
+      phase: 'heartbeat_healthy',
+      phase_updated_at: '2026-03-14T10:00:30Z',
+      last_register_time: '2026-03-14T10:00:00Z',
+      last_heartbeat_time: '2026-03-14T10:00:30Z',
+      last_failure_reason: '',
+      next_retry_time: '',
+      consecutive_heartbeat_timeout: 0
+    },
+    config: cfg,
+    gb28181: {
+      peers: [
+        {
+          device_id: '34020000002000000002',
+          node_type: 'SERVER',
+          remote_addr: '10.20.0.20:5060',
+          callback_addr: '10.20.0.20:5060',
+          transport: 'TCP',
+          last_register_at: '2026-03-14T10:00:00Z',
+          register_expires_at: '2026-03-14T11:00:00Z',
+          last_keepalive_at: '2026-03-14T10:00:30Z',
+          subscribed_at: '2026-03-14T10:00:01Z',
+          subscription_expires_at: '2026-03-14T11:00:01Z',
+          last_catalog_notify_at: '2026-03-14T10:00:03Z',
+          auth_required: true,
+          last_error: ''
+        }
+      ],
+      pending_sessions: [
+        {
+          call_id: 'call-1001',
+          device_id: '34020000001320000002',
+          mapping_id: 'catalog.34020000001320000002',
+          response_mode: 'RTP',
+          stage: 'response_start_ok',
+          last_stage_at: '2026-03-14T10:01:03Z',
+          started_at: '2026-03-14T10:01:00Z'
+        }
+      ],
+      inbound_sessions: [
+        {
+          call_id: 'call-1000',
+          device_id: '34020000001320000001',
+          mapping_id: 'catalog.34020000001320000001',
+          callback_addr: '10.20.0.10:5060',
+          transport: 'TCP',
+          remote_rtp_ip: '10.20.0.10',
+          remote_rtp_port: 30000,
+          stage: 'rtp_body_sent',
+          last_stage_at: '2026-03-14T10:01:00Z',
+          started_at: '2026-03-14T10:00:55Z',
+          last_invoke_at: '2026-03-14T10:00:58Z'
+        }
+      ],
+      catalog: {
+        resource_total: 3,
+        exposed_total: 2
+      },
+      updated_at: '2026-03-14T10:01:05Z'
+    }
+  }
+}
+
+export async function fetchNodeConfigMock(): Promise<NodeConfigPayload> {
+  await wait()
+  const primaryPeer = peerNodeState[0]
+  return {
+    local_node: {
+      node_ip: localNodeState.sip_listen_ip,
+      signaling_port: localNodeState.sip_listen_port,
+      device_id: localNodeState.node_id,
+      node_type: 'SERVER',
+      rtp_port_start: localNodeState.rtp_port_start,
+      rtp_port_end: localNodeState.rtp_port_end,
+      mapping_port_start: localNodeState.mapping_port_start,
+      mapping_port_end: localNodeState.mapping_port_end
+    },
+    peer_node: primaryPeer
+      ? {
+          node_ip: primaryPeer.peer_signaling_ip,
+          signaling_port: primaryPeer.peer_signaling_port,
+          device_id: primaryPeer.peer_node_id,
+          node_type: 'SERVER'
+        }
+      : { node_ip: '', signaling_port: 5060, device_id: '', node_type: 'SERVER' }
+  }
+}
+
+export async function saveNodeConfigMock(payload: NodeConfigPayload): Promise<{ config: NodeConfigPayload; tunnel_restarted: boolean }> {
+  await wait()
+  localNodeState = {
+    ...localNodeState,
+    node_id: payload.local_node.device_id,
+    node_name: payload.local_node.device_id,
+    sip_listen_ip: payload.local_node.node_ip,
+    rtp_listen_ip: payload.local_node.node_ip,
+    sip_listen_port: payload.local_node.signaling_port,
+    rtp_port_start: payload.local_node.rtp_port_start ?? localNodeState.rtp_port_start,
+    rtp_port_end: payload.local_node.rtp_port_end ?? localNodeState.rtp_port_end,
+    mapping_port_start: payload.local_node.mapping_port_start ?? localNodeState.mapping_port_start,
+    mapping_port_end: payload.local_node.mapping_port_end ?? localNodeState.mapping_port_end
+  }
+  const nextPeer: PeerNodeConfig = {
+    peer_node_id: payload.peer_node.device_id,
+    peer_name: payload.peer_node.device_id,
+    peer_signaling_ip: payload.peer_node.node_ip,
+    peer_signaling_port: payload.peer_node.signaling_port,
+    peer_media_ip: payload.peer_node.node_ip,
+    peer_media_port_start: localNodeState.rtp_port_start,
+    peer_media_port_end: localNodeState.rtp_port_end,
+    supported_network_mode: localNodeState.network_mode,
+    enabled: true
+  }
+  const idx = peerNodeState.findIndex((item) => item.peer_node_id === nextPeer.peer_node_id)
+  if (idx >= 0) {
+    peerNodeState[idx] = nextPeer
+  } else {
+    peerNodeState = [nextPeer, ...peerNodeState]
+  }
+  return { config: JSON.parse(JSON.stringify(payload)), tunnel_restarted: true }
+}
+
+export async function fetchNodeDetailMock(): Promise<NodeDetailPayload> {
+  await wait()
+  return {
+    local_node: JSON.parse(JSON.stringify(localNodeState)),
+    current_network_mode: localNodeState.network_mode,
+    current_capability: {
+      supports_large_request_body: false,
+      supports_large_response_body: true,
+      supports_streaming_response: false,
+      supports_bidirectional_http_tunnel: false,
+      supports_transparent_proxy: false
+    },
+    compatibility_status: {
+      level: 'info',
+      message: '本端配置与当前网络模式兼容',
+      suggestion: '继续保持并定期复核。',
+      action_hint: '变更前先确认 peer 兼容性。'
+    }
+  }
+}
+
+export async function updateLocalNodeMock(payload: LocalNodeConfig): Promise<LocalNodeConfig> {
+  await wait()
+  localNodeState = JSON.parse(JSON.stringify(payload))
+  return JSON.parse(JSON.stringify(localNodeState))
+}
+
+export async function fetchPeersMock(): Promise<{ items: PeerNodeConfig[] }> {
+  await wait()
+  return { items: JSON.parse(JSON.stringify(peerNodeState)) }
+}
+
+export async function createPeerMock(payload: PeerNodeConfig): Promise<PeerNodeConfig> {
+  await wait()
+  peerNodeState.push(JSON.parse(JSON.stringify(payload)))
+  return JSON.parse(JSON.stringify(payload))
+}
+
+export async function updatePeerMock(peerNodeId: string, payload: Omit<PeerNodeConfig, 'peer_node_id'>): Promise<PeerNodeConfig> {
+  await wait()
+  const index = peerNodeState.findIndex((item) => item.peer_node_id === peerNodeId)
+  if (index < 0) {
+    throw new Error('PEER_NOT_FOUND')
+  }
+  const updated = { peer_node_id: peerNodeId, ...JSON.parse(JSON.stringify(payload)) }
+  peerNodeState[index] = updated
+  return JSON.parse(JSON.stringify(updated))
+}
+
+export async function deletePeerMock(peerNodeId: string): Promise<{ peer_node_id: string }> {
+  await wait()
+  peerNodeState = peerNodeState.filter((item) => item.peer_node_id !== peerNodeId)
+  return { peer_node_id: peerNodeId }
+}
+
+export async function fetchNodeNetworkStatusMock(): Promise<NodeNetworkStatusPayload> {
+  await wait()
+  return {
+    network_mode: localNodeState.network_mode,
+    capability: {
+      supports_large_request_body: false,
+      supports_large_response_body: true,
+      supports_streaming_response: false,
+      supports_bidirectional_http_tunnel: false,
+      supports_transparent_proxy: false
+    },
+    current_network_mode: localNodeState.network_mode,
+    current_capability: {
+      supports_large_request_body: false,
+      supports_large_response_body: true,
+      supports_streaming_response: false,
+      supports_bidirectional_http_tunnel: false,
+      supports_transparent_proxy: false
+    },
+    compatibility_status: {
+      level: 'info',
+      message: '节点配置与 network_mode 兼容。',
+      suggestion: '无需处理。',
+      action_hint: '保持当前配置并纳入巡检。'
+    },
+    capability_summary: {
+      supported: ['small_request', 'large_response'],
+      unsupported: ['large_request', 'streaming_response', 'bidirectional_http_tunnel', 'transparent_proxy'],
+      items: [
+        { key: 'small_request', label: '小请求体', supported: true, note: '支持' },
+        { key: 'large_response', label: '大响应体', supported: true, note: '支持' },
+        { key: 'large_request', label: '大请求体', supported: false, note: '不支持' }
+      ]
+    }
+  }
+}
+
+
+export async function fetchLinkMonitorMock(): Promise<LinkMonitorPayload> {
+  await wait()
+  const state = await fetchGB28181StateMock()
+  return {
+    session: state.session,
+    config: state.config,
+    gb28181: state.gb28181,
+    live_status: 'ok',
+    ready_status: 'ready',
+    readiness_reasons: [],
+    updated_at: new Date().toISOString()
+  }
+}
+
+
+export async function triggerTunnelCatalogActionMock(payload: TunnelCatalogActionPayload): Promise<TunnelCatalogActionResponse> {
+  await wait()
+  return { action: payload.action, subscribe_triggered: payload.action === "push_local" ? 0 : 1, notify_triggered: payload.action === "pull_remote" ? 0 : 1 }
+}

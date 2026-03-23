@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "description": "性能基线占位文件，后续由 benchmark smoke 或专项压测回填",
+  "updated_at": null,
+  "items": []
+}

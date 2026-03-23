@@ -1,0 +1,26 @@
+[
+  {
+    "item": "UDP compact preserve list contains downloadTransferIDHeader",
+    "passed": true
+  },
+  {
+    "item": "UDP severe budget path explicitly re-injects downloadTransferIDHeader",
+    "passed": true
+  },
+  {
+    "item": "regression test present: TestCompactTunnelRequestHeaders_UDPPreservesDownloadTransferID",
+    "passed": true
+  },
+  {
+    "item": "regression test present: TestCompactTunnelRequestHeadersForUDPBudget_PreservesDownloadTransferID",
+    "passed": true
+  },
+  {
+    "item": "regression test present: TestCompactTunnelRequestHeadersForUDPSevereBudget_PreservesDownloadTransferID",
+    "passed": true
+  },
+  {
+    "item": "regression test present: TestMappingRuntimeManager_PreservesDownloadTransferHeader",
+    "passed": true
+  }
+]

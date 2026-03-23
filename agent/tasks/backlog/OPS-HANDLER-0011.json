@@ -1,0 +1,43 @@
+{
+  "id": "OPS-HANDLER-0011",
+  "title": "继续把管理面 handler 按只读查询 / 运行态写动作 / 诊断导出拆目录",
+  "goal": [
+    "延续 http.go 与 ops_settings_logs.go 的边界收口",
+    "把 handler 再按查询类、写动作类、诊断导出类细分目录",
+    "降低策略反查成本并减少入口层再次回灌"
+  ],
+  "scope": {
+    "include": [
+      "gateway-server/internal/server/http_*.go",
+      "gateway-server/internal/server/ops_*.go",
+      "gateway-server/internal/server/http_ops_tasks_routes.go",
+      "scripts/check-consistency.py",
+      "docs/ENGINEERING_GUARDRAILS.md",
+      "gateway-server/docs/**"
+    ],
+    "exclude": [
+      "gateway-server/internal/server/mapping_runtime*.go",
+      "gateway-ui/**"
+    ]
+  },
+  "required_gates": [
+    "repo_consistency",
+    "strict_source",
+    "smoke"
+  ],
+  "success_criteria": [
+    "查询类、写动作类、诊断导出类 handler 目录边界清晰",
+    "一致性脚本新增防回灌硬检查",
+    "不重新把 settings/dashboard/protection/workspace/loadtest 逻辑混回大文件",
+    "更新 docs/ENGINEERING_GUARDRAILS.md 与任务边界说明"
+  ],
+  "evidence_required": [
+    "patch.diff",
+    "gate-results.json",
+    "handler-boundary-map.md"
+  ],
+  "depends_on": [],
+  "priority": "P2",
+  "risk": "medium",
+  "status": "backlog"
+}

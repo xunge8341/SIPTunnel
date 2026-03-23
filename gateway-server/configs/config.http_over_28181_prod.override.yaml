@@ -1,0 +1,10 @@
+transport_tuning:
+  # bulk download 改成“低并发 + 大窗口 + 同事务不平分”。
+  # 目标：保留多线程下载提速意义，但不再沿用播放链路那种 2MiB 小窗 + 段内平分思路。
+  generic_download_segment_concurrency: 1
+  generic_download_window_bytes: 2097152
+  generic_download_open_ended_window_bytes: 16777216
+  generic_download_same_transfer_split_enabled: false
+  generic_download_source_constrained_auto_singleflight_enabled: false
+  # 保持单条 RTP sender 的稳态速率 8Mbps；同一下载事务并发 2 段时允许聚合到更高总吞吐。
+  generic_download_rtp_bitrate_bps: 8388608

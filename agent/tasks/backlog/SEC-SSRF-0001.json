@@ -1,0 +1,49 @@
+{
+  "id": "SEC-SSRF-0001",
+  "title": "建立 Target Sandbox 与 Request Sanitizer，前置拦截 SSRF/越权目标",
+  "goal": [
+    "在数据转发进入 mappingForwarder 之前增加目标沙箱和请求洗涤层",
+    "默认拒绝 localhost/127.0.0.1/::1/本机管理口/未授权管理网段",
+    "对 Host/X-Forwarded-Host/X-Original-URL/代理认证头执行白名单洗涤",
+    "补齐拒绝事件审计和单元/回归测试"
+  ],
+  "scope": {
+    "include": [
+      "gateway-server/internal/security/**",
+      "gateway-server/internal/server/http_*.go",
+      "gateway-server/internal/server/mapping_runtime*.go",
+      "gateway-server/internal/server/http_runtime_mitigation*.go",
+      "gateway-server/internal/server/ops_protection_security_http.go",
+      "gateway-server/internal/server/*test.go",
+      "gateway-server/configs/**",
+      "gateway-server/docs/**",
+      "gateway-ui/src/api/**",
+      "gateway-ui/src/types/**",
+      "gateway-ui/src/views/**"
+    ],
+    "exclude": [
+      "gateway-ui/dist/**"
+    ]
+  },
+  "required_gates": [
+    "repo_consistency",
+    "strict_source",
+    "smoke"
+  ],
+  "success_criteria": [
+    "转发前统一经过 Request Sanitizer 与 Target Sandbox",
+    "CIDR/域名/端口白名单配置生效且可回读",
+    "对 127.0.0.1、localhost、::1、本机管理端口、未授权网段的请求返回明确拒绝",
+    "拒绝事件写入 access/audit/diagnostics 摘要并带 reason code",
+    "新增测试覆盖回环地址、域名解析落点、Header Override 绕过三类用例"
+  ],
+  "evidence_required": [
+    "patch.diff",
+    "gate-results.json",
+    "ssrf-reject-cases.md"
+  ],
+  "depends_on": [],
+  "priority": "P0",
+  "risk": "high",
+  "status": "backlog"
+}

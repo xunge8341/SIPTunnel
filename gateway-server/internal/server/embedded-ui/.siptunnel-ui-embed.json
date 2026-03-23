@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "generated_by": "scripts/embed-ui.sh",
+  "build_nonce": "20260323T013219-10327",
+  "embedded_at_local": "2026-03-23 01:32:45",
+  "ui_source_latest_write_local": "2026-03-23 01:30:40",
+  "dist_hash_sha256": "e176d39375e836d21e816e35105ea9b91b0cff926c2b208d6b8e3e0e4dad2856",
+  "embedded_hash_sha256": "59af649fd0e7c80977839772e2c03c4c0fecdf641c73ecefe6a7e2770502f6c6",
+  "delivery_guard_status": "aligned",
+  "delivery_guard_detail": "no legacy drift detected",
+  "delivery_guard_removed_count": 0,
+  "delivery_guard_remaining_count": 0,
+  "delivery_guard_hit_count": 0,
+  "dist_dir": "/mnt/data/sipt_fix_work/gateway-ui/dist",
+  "embedded_dir": "/mnt/data/sipt_fix_work/gateway-server/internal/server/embedded-ui"
+}

@@ -1,0 +1,146 @@
+# gateway.exe init-config 推荐示例（安全边界专网）
+# 端口规划建议：SIP=5060，RTP=20000-20999，节点映射=21000-21999，UI=18080。
+# 说明：当前实现按 1 个 RTP 传输占用 1 个端口估算；1000 个 RTP 端口≈1000 路理论上限。
+# 为避免端口耗尽和临时抖动，建议现场按 80% 稳定上限理解，即稳定并发先按 800 路以内规划。
+# INLINE 正文预算公式：udp_budget - reserve - envelope_overhead - headroom，再乘 3/4 预留 base64 膨胀。
+# 以本模板默认值计算，INLINE 推荐正文不超过 360 字节；超过后应优先走 RTP。
+
+sip:
+  # SIP 默认端口固定 5060。除非端口已被占用，否则不要改。
+  enabled: true
+  listen_ip: 0.0.0.0
+  listen_port: 5060
+  transport: TCP
+
+rtp:
+  # RTP 建议固定在 20000-20999，避免与 SIP/UI/节点映射端口重叠。
+  enabled: true
+  listen_ip: 0.0.0.0
+  port_start: 20000
+  port_end: 20999
+  transport: UDP
+
+storage:
+  temp_dir: ./data/temp
+  final_dir: ./data/final
+  audit_dir: ./data/audit
+  log_dir: ./data/logs
+
+observability:
+  log_level: info
+
+ui:
+  # 管理面默认只绑定 127.0.0.1:18080，不要暴露到公网，也不要放到 RTP/映射端口段中。
+  enabled: true
+  mode: embedded
+  listen_ip: 127.0.0.1
+  listen_port: 18080
+  base_path: /
+
+ops:
+  run_mode: dev
+
+transport_tuning:
+  # 当前默认档：性能优先，弱网时自动兜底；仅在连续流失败后才提升到 segmented_primary。
+  # mode 可选值：secure_boundary / boundary / strict_boundary；默认 secure_boundary。
+  mode: secure_boundary
+
+  # UDP 控制面单报文预算。可选/校验值：推荐 1300；范围 [1024,1400]；低于 1249 会重现现场 oversize。
+  udp_control_max_bytes: 1300
+  # 目录/分页查询控制面预算。可选/校验值：推荐 1300；范围 [1024,1400]。
+  udp_catalog_max_bytes: 1300
+
+  # INLINE 响应预算。可选/校验值：budget 推荐 1200，reserve 推荐 220，overhead 推荐 320，headroom_ratio 推荐 0.15。
+  # 公式：1200 - 220 - 320 - SIP头180 - XML包装96 - 15% ≈ 204 线速预算，正文约 153 字节；大响应应优先走 RTP。
+  inline_response_udp_budget_bytes: 1200
+  inline_response_safety_reserve_bytes: 220
+  inline_response_envelope_overhead_bytes: 320
+  inline_response_headroom_ratio: 0.15
+  inline_response_headroom_percent: 15
+
+  # 并发调度。可选/校验值：request/callback 推荐 6；bulk_open 推荐 4；segment_child 推荐 8；small wait 推荐 1500ms。
+  udp_request_parallelism_per_device: 6
+  udp_callback_parallelism_per_peer: 6
+  udp_bulk_parallelism_per_device: 4
+  udp_segment_parallelism_per_device: 8
+  generic_segmented_primary_threshold_bytes: 8388608
+  # 泛型下载：直接 segmented-primary 的阈值/窗口/并发/重试与恢复预算。
+  generic_download_window_bytes: 2097152
+  generic_download_open_ended_window_bytes: 16777216
+  generic_download_segment_concurrency: 1
+  generic_download_same_transfer_split_enabled: false
+  generic_download_source_constrained_auto_singleflight_enabled: false
+  generic_download_segment_retries: 2
+  generic_download_resume_max_attempts: 6
+  generic_download_resume_per_range_retries: 3
+  generic_download_penalty_wait_ms: 500
+  # 下载公平分享与熔断：按“外层下载事务”共享总带宽，而不是按内部 4MiB/16MiB segment child 逐个计数。
+  # total_bitrate 是全局总预算；min_per_transfer 只有在总预算足够覆盖所有活跃下载时才会生效。
+  generic_download_total_bitrate_bps: 33554432
+  generic_download_min_per_transfer_bitrate_bps: 2097152
+  generic_download_circuit_failure_threshold: 3
+  generic_download_circuit_open_ms: 30000
+  generic_download_rtp_bitrate_bps: 8388608
+  # 下载专用 RTP 参数：重点避免发送/接收失衡，不建议把 bitrate/reorder/loss/gap_timeout 一起放大。
+  # 运行时会把过激的 generic_download RTP 配置自动收口到稳态档（payload<=1200、bitrate<=min(total/2,16Mbps)、gap_timeout<=1200，并自动启用 FEC）。
+  generic_download_rtp_min_spacing_us: 650
+  generic_download_rtp_socket_buffer_bytes: 33554432
+  generic_download_rtp_reorder_window_packets: 512
+  generic_download_rtp_loss_tolerance_packets: 192
+  generic_download_rtp_gap_timeout_ms: 900
+  generic_download_rtp_fec_enabled: true
+  generic_download_rtp_fec_group_packets: 8
+  generic_prefetch_segments: 0
+  udp_small_request_max_wait_ms: 1500
+
+  # RTP 发送与接收容忍。可选/校验值：payload 推荐 1200；bitrate 推荐 33554432；spacing 推荐 250us；socket_buffer 推荐 16777216，并启用单丢包恢复型 FEC。
+  boundary_rtp_payload_bytes: 1200
+  boundary_rtp_bitrate_bps: 16777216
+  boundary_rtp_min_spacing_us: 250
+  boundary_rtp_socket_buffer_bytes: 16777216
+  # 通用乱序/丢包容忍：推荐 128 / 48 / 300，并配合 8 包一组的 XOR FEC。
+  boundary_rtp_reorder_window_packets: 128
+  boundary_rtp_loss_tolerance_packets: 48
+  boundary_rtp_gap_timeout_ms: 300
+  boundary_rtp_fec_enabled: true
+  boundary_rtp_fec_group_packets: 8
+  # 播放场景专用容忍：推荐 192 / 64 / 450，并配合 8 包一组的 XOR FEC。
+  boundary_playback_rtp_reorder_window_packets: 192
+  boundary_playback_rtp_loss_tolerance_packets: 64
+  boundary_playback_rtp_gap_timeout_ms: 450
+  boundary_playback_rtp_fec_enabled: true
+  boundary_playback_rtp_fec_group_packets: 8
+
+  # 热点播放与差网络：用内存换时间。可选/校验值：hot_window 推荐 8MiB；cache 推荐 512MiB；ttl 推荐 45000ms；prefetch 推荐 1（仅热点命中后再开）。
+  adaptive_playback_hot_window_bytes: 8388608
+  adaptive_playback_segment_cache_bytes: 536870912
+  adaptive_playback_segment_cache_ttl_ms: 45000
+  adaptive_playback_prefetch_segments: 1
+  # 连续流失败多少次后切到 segmented_primary。可选/校验值：推荐 2；范围 [1,4]。
+  adaptive_primary_segment_after_failures: 2
+  adaptive_loopback_playback_segment_concurrency: 2
+  adaptive_open_ended_range_initial_window_bytes: 8388608
+
+  # 边界 fallback：仅在流主路径失败后触发。可选/校验值：window 推荐 4MiB；threshold 推荐 256MiB；并发推荐 4；重试推荐 1。
+  boundary_fixed_window_bytes: 4194304
+  boundary_fixed_window_threshold_bytes: 268435456
+  boundary_segment_concurrency: 4
+  boundary_segment_retries: 1
+  # 主流 resume 次数与单窗口 range 重试。推荐 3 / 1。
+  boundary_resume_max_attempts: 3
+  boundary_resume_per_range_retries: 1
+  # response_start 等待。主请求推荐 12000ms；range/segment 推荐 45000ms。
+  boundary_response_start_wait_ms: 12000
+  boundary_range_response_start_wait_ms: 45000
+
+  # 边界 HTTP/TCP fallback。可选/校验值：window 推荐 4MiB；threshold 推荐 256MiB；并发推荐 4。
+  boundary_http_window_bytes: 4194304
+  boundary_http_window_threshold_bytes: 268435456
+  boundary_http_segment_concurrency: 4
+  boundary_http_segment_retries: 1
+
+  # 普通网络 fallback。可选/校验值：window 推荐 16MiB；threshold 推荐 256MiB；并发推荐 4。
+  standard_window_bytes: 16777216
+  standard_window_threshold_bytes: 268435456
+  standard_segment_concurrency: 4
+  standard_segment_retries: 1

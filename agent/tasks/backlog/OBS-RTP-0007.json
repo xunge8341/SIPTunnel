@@ -1,0 +1,42 @@
+{
+  "id": "OBS-RTP-0007",
+  "title": "新增统一 rtp_ps_summary，并给 GB28181 补 device/call 级摘要",
+  "goal": [
+    "把 reorder/FEC/gap/resume 收成单条 RTP 聚合摘要",
+    "把 REGISTER/Catalog/INVITE/回调关键字段收成 device/call 级 summary",
+    "降低一线现场靠多类日志拼图的成本"
+  ],
+  "scope": {
+    "include": [
+      "gateway-server/internal/server/gb28181_*.go",
+      "gateway-server/internal/server/rtp_*.go",
+      "gateway-server/internal/server/access_log_store.go",
+      "gateway-server/internal/diagnostics/**",
+      "gateway-server/docs/**"
+    ],
+    "exclude": [
+      "gateway-ui/**"
+    ]
+  },
+  "required_gates": [
+    "repo_consistency",
+    "strict_source",
+    "smoke"
+  ],
+  "success_criteria": [
+    "新增 rtp_ps_summary，至少包含 reorder_window/loss_tolerance/gap_count/fec_recovered/resume_count/final_result",
+    "新增 device/call 级 summary，覆盖 REGISTER/Catalog/INVITE/回调关键摘要字段",
+    "聚合摘要与现有明细日志字段对得上，不引入双重事实源",
+    "诊断导出可直接引用两类摘要"
+  ],
+  "evidence_required": [
+    "patch.diff",
+    "gate-results.json",
+    "rtp-summary-example.log",
+    "gb28181-call-summary-example.log"
+  ],
+  "depends_on": [],
+  "priority": "P1",
+  "risk": "medium",
+  "status": "backlog"
+}

@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "description": "弱网/netem 基线占位文件，后续由 Linux netem 验证回填",
+  "updated_at": null,
+  "items": []
+}

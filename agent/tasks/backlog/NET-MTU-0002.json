@@ -1,0 +1,46 @@
+{
+  "id": "NET-MTU-0002",
+  "title": "实现控制面 MTU 高危退化机制，停止依赖白名单补丁维持关键 Header 存活",
+  "goal": [
+    "建立控制面 Header 大小评估与高危阈值判定",
+    "高水位时主动裁剪非核心业务头，强保 Transfer-ID/Range/路由意图等核心语义",
+    "输出 Header_Truncated_For_MTU 事件并禁止静默进入不可控 IP 分片路径",
+    "补齐常态/高水位/极限水位测试"
+  ],
+  "scope": {
+    "include": [
+      "gateway-server/internal/server/gb28181_transport_helpers*.go",
+      "gateway-server/internal/server/mapping_runtime*.go",
+      "gateway-server/internal/server/gb28181_tunnel*.go",
+      "gateway-server/internal/security/**",
+      "gateway-server/internal/diagnostics/**",
+      "gateway-server/internal/startupsummary/**",
+      "gateway-server/docs/**",
+      "gateway-server/tests/**"
+    ],
+    "exclude": [
+      "gateway-ui/dist/**"
+    ]
+  },
+  "required_gates": [
+    "repo_consistency",
+    "strict_source",
+    "smoke"
+  ],
+  "success_criteria": [
+    "新增 Header 体积预算评估器与核心/非核心头分类",
+    "高危水位触发时自动裁剪非核心头并记录审计事件",
+    "关键业务元数据在高危水位下仍可达且不依赖 preserveOrder 不断扩白名单",
+    "极限水位无法安全承载时明确拒绝或切换旁带，不允许无声失败",
+    "新增覆盖 UDP normal/budget/severe budget 三条路径的回归测试"
+  ],
+  "evidence_required": [
+    "patch.diff",
+    "gate-results.json",
+    "mtu-degradation-matrix.md"
+  ],
+  "depends_on": [],
+  "priority": "P0",
+  "risk": "high",
+  "status": "backlog"
+}

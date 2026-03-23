@@ -1,0 +1,47 @@
+{
+  "id": "REL-WIN-0012",
+  "title": "补齐 Windows + Go1.25 原生门禁闭环，打通 server_targeted / strict acceptance / build-release",
+  "goal": [
+    "在 Windows 原生环境复跑并固化 server_targeted、strict acceptance、build-release",
+    "消除“源码已改但原生门禁未闭合”的交付边界",
+    "让 Linux/Windows 两套 agent 流都能归档统一证据"
+  ],
+  "scope": {
+    "include": [
+      "scripts/acceptance/**",
+      "scripts/ci/**",
+      "scripts/agent/**",
+      "scripts/build-release.ps1",
+      "agent/gates.json",
+      "agent/tasks/**",
+      "gateway-server/internal/server/protection_runtime*.go",
+      "gateway-server/go.mod",
+      "gateway-server/go.sum"
+    ],
+    "exclude": [
+      "gateway-ui/src/**"
+    ]
+  },
+  "required_gates": [
+    "repo_consistency",
+    "strict_source",
+    "ci_quality"
+  ],
+  "success_criteria": [
+    "Windows 原生环境可执行并归档 server_targeted、run_phase1_strict_acceptance.ps1、build-release.ps1 的统一结果",
+    "agent 层新增对 windows native gate 的证据归档约定",
+    "明确 Go 1.25+ 工具链前置检查和失败提示",
+    "补齐文档，说明哪些门禁必须在 Windows 执行，哪些可在 Linux 执行"
+  ],
+  "evidence_required": [
+    "patch.diff",
+    "gate-results.json",
+    "windows-native-gate-report.md"
+  ],
+  "depends_on": [
+    "GOV-HYST-0004"
+  ],
+  "priority": "P0",
+  "risk": "medium",
+  "status": "backlog"
+}

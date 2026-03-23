@@ -1,0 +1,125 @@
+html, body, #app {
+  min-height: 100%;
+}
+
+.ant-page-header {
+  padding: 0 0 8px;
+}
+
+.ant-page-header-heading {
+  row-gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ant-page-header-heading-left,
+.ant-page-header-heading-extra,
+.ant-card,
+.ant-card-body,
+.ant-row,
+.ant-col,
+.ant-space {
+  max-width: 100%;
+}
+
+.ant-card {
+  border-radius: 12px;
+}
+
+.ant-descriptions-item-content,
+.ant-list-item,
+.ant-statistic,
+.ant-tag,
+.ant-alert {
+  word-break: break-word;
+}
+
+.ant-descriptions-item-content {
+  min-width: 0;
+}
+
+.ant-card-body {
+  overflow: hidden;
+}
+
+.ant-table-wrapper {
+  width: 100%;
+}
+
+.ant-table-cell {
+  word-break: break-word;
+  vertical-align: top;
+}
+
+.ant-space-item {
+  max-width: 100%;
+}
+
+
+.ant-card {
+  margin-bottom: 0;
+}
+
+.ant-card-head,
+.ant-card-body {
+  max-width: 100%;
+}
+
+.ant-list-item {
+  align-items: flex-start;
+}
+
+.ant-table-placeholder {
+  min-height: 120px;
+}
+
+.wrap-break-anywhere {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.mono-inline-code,
+.mono-block-code {
+  font-family: ui-monospace, SFMono-Regular, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+.mono-inline-code {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.04);
+  overflow-wrap: anywhere;
+}
+
+.mono-block-code {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.03);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+
+.ant-space-compact > .gb-code-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.gb-code-input .ant-input,
+.gb-code-input textarea {
+  width: 100%;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  letter-spacing: 0.5px;
+}
+
+.gb-code-input .ant-input {
+  text-overflow: clip;
+}
+
+.page-section-hint {
+  color: rgba(0, 0, 0, 0.45);
+}

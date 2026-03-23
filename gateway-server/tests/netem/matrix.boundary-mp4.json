@@ -1,0 +1,30 @@
+{
+  "default_interface": "eth0",
+  "default_probe_command": "",
+  "cases": [
+    {
+      "name": "mp4-rtp-udp-light-loss-reorder",
+      "link": "RTP_UDP",
+      "interface": "eth0",
+      "target_port": 20000,
+      "protocol": "udp",
+      "condition": { "loss_percent": 0.5, "reorder_percent": 10, "delay_ms": 80, "jitter_ms": 20 }
+    },
+    {
+      "name": "mp4-rtp-udp-weaknet-window12-loss4",
+      "link": "RTP_UDP",
+      "interface": "eth0",
+      "target_port": 20000,
+      "protocol": "udp",
+      "condition": { "loss_percent": 1, "reorder_percent": 20, "delay_ms": 120, "jitter_ms": 40 }
+    },
+    {
+      "name": "mp4-rtp-udp-gap-timeout",
+      "link": "RTP_UDP",
+      "interface": "eth0",
+      "target_port": 20000,
+      "protocol": "udp",
+      "condition": { "loss_percent": 0.2, "delay_ms": 120, "jitter_ms": 40 }
+    }
+  ]
+}

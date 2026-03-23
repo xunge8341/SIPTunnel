@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "modules": [
+    {
+      "name": "control-plane",
+      "paths": [
+        "gateway-server/internal/control/**",
+        "gateway-server/internal/protocol/sip/**",
+        "gateway-server/internal/server/gb28181_*.go"
+      ],
+      "invariants": [
+        "must preserve REGISTER/INVITE/MESSAGE parsing semantics",
+        "must keep strict mode and control-plane routing consistent"
+      ]
+    },
+    {
+      "name": "data-plane",
+      "paths": [
+        "gateway-server/internal/service/httpinvoke/**",
+        "gateway-server/internal/protocol/rtpfile/**",
+        "gateway-server/internal/service/**"
+      ],
+      "invariants": [
+        "must preserve transfer semantics and fallback behavior unless task explicitly changes them",
+        "must keep transfer-id and range semantics observable"
+      ]
+    },
+    {
+      "name": "ops-and-runtime",
+      "paths": [
+        "gateway-server/internal/diagnostics/**",
+        "gateway-server/internal/startupsummary/**",
+        "gateway-server/internal/selfcheck/**",
+        "gateway-server/internal/security/**",
+        "gateway-ui/src/views/**",
+        "gateway-ui/src/api/**"
+      ],
+      "invariants": [
+        "runtime fact source must remain authoritative",
+        "settings must remain save/apply/readback consistent"
+      ]
+    },
+    {
+      "name": "agent-layer",
+      "paths": [
+        "agent/**",
+        "scripts/agent/**",
+        "scripts/ci/**",
+        "scripts/longrun/**"
+      ],
+      "invariants": [
+        "task card schema must remain machine-readable",
+        "gate results must remain JSON + Markdown",
+        "Linux and Windows entrypoints must stay behaviorally aligned"
+      ]
+    }
+  ]
+}

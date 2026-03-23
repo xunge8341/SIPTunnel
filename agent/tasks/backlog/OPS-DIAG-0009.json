@@ -1,0 +1,44 @@
+{
+  "id": "OPS-DIAG-0009",
+  "title": "扩充 /api/diagnostics/export，输出链路摘要页与异常热点页",
+  "goal": [
+    "在 diagnostics export 中补入策略快照、异常热点、关键计数与最新拒绝事件",
+    "让运维导出可直接回答当前策略、生效限额、热点对象和最近异常"
+  ],
+  "scope": {
+    "include": [
+      "gateway-server/internal/server/mapping_diagnostics.go",
+      "gateway-server/internal/server/http_ops_tasks_routes.go",
+      "gateway-server/internal/server/ops_dashboard_http.go",
+      "gateway-server/internal/server/ops_protection_security_http.go",
+      "gateway-server/internal/diagnostics/**",
+      "gateway-server/docs/**"
+    ],
+    "exclude": [
+      "gateway-ui/**"
+    ]
+  },
+  "required_gates": [
+    "repo_consistency",
+    "strict_source",
+    "smoke"
+  ],
+  "success_criteria": [
+    "导出结果新增链路摘要页、异常热点页、最近拒绝/裁剪事件页",
+    "能直接列出当前策略快照、source/mapping 热点和关键计数",
+    "导出内容与 access/audit/summary 字段一致，无重复事实源"
+  ],
+  "evidence_required": [
+    "patch.diff",
+    "gate-results.json",
+    "diagnostics-export-sample.md"
+  ],
+  "depends_on": [
+    "OBS-STARTUP-0008",
+    "OBS-GEN-0006",
+    "OBS-RTP-0007"
+  ],
+  "priority": "P1",
+  "risk": "medium",
+  "status": "backlog"
+}

@@ -1,0 +1,35 @@
+# Frontend
+gateway-ui/node_modules/
+gateway-ui/dist/
+gateway-ui/.vite/
+
+# Go / build
+gateway-server/bin/
+gateway-server/.cache/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Logs / diagnostics / generated artifacts
+artifacts/
+*.log
+*.pcap
+*.pcapng
+build-*.txt
+coverage.out
+test-results/
+tmp/
+tmp_*/
+**/tmp/
+**/tmp_*/
+**/.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Generated delivery reports should not live in source root
+/*验收报告*.md
+/*复核报告*.md
+/*决策落地*.md

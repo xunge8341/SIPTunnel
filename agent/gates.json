@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "gates": [
+    {
+      "name": "repo_consistency",
+      "description": "源码一致性检查",
+      "platforms": ["linux", "windows"],
+      "artifacts": ["report", "log"]
+    },
+    {
+      "name": "strict_source",
+      "description": "严格源码验收（源代码级）",
+      "platforms": ["linux", "windows"],
+      "artifacts": ["report", "log"]
+    },
+    {
+      "name": "smoke",
+      "description": "基础 smoke 验证",
+      "platforms": ["linux", "windows"],
+      "artifacts": ["log"]
+    },
+    {
+      "name": "longrun_smoke",
+      "description": "长稳 smoke 验证",
+      "platforms": ["linux", "windows"],
+      "artifacts": ["report", "log", "metrics"]
+    },
+    {
+      "name": "ci_quality",
+      "description": "统一质量门禁：单测、协议测试、UI 质量、benchmark smoke 等",
+      "platforms": ["linux", "windows"],
+      "artifacts": ["report", "log", "metrics"]
+    },
+    {
+      "name": "ui_delivery_guard",
+      "description": "UI 交付物守卫",
+      "platforms": ["linux", "windows"],
+      "artifacts": ["log"]
+    },
+    {
+      "name": "netem_smoke",
+      "description": "弱网/netem smoke，仅 Linux 支持",
+      "platforms": ["linux"],
+      "artifacts": ["report", "log"]
+    }
+  ],
+  "default_profiles": {
+    "safe": ["repo_consistency", "strict_source"],
+    "default": ["repo_consistency", "strict_source", "smoke"],
+    "extended": ["repo_consistency", "strict_source", "smoke", "longrun_smoke"],
+    "full": ["repo_consistency", "strict_source", "smoke", "longrun_smoke", "ci_quality", "ui_delivery_guard"]
+  }
+}

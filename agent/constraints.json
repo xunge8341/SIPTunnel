@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "constraints": [
+    "MUST NOT 跳过任务卡要求的 required_gates",
+    "MUST NOT 通过删测试、降门禁、改预期伪装通过",
+    "MUST NOT 修改 runtime fact source 的语义而不补读回与摘要",
+    "MUST NOT 修改 UI 构建链而不考虑 delivery guard 与 embed-ui 同步",
+    "MUST NOT 引入未审计的外部依赖或隐式联网行为",
+    "MUST archive task snapshot, gate results, logs, and execution summary for every run"
+  ],
+  "default_platforms": [
+    "linux",
+    "windows"
+  ]
+}

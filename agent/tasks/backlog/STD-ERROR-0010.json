@@ -1,0 +1,42 @@
+{
+  "id": "STD-ERROR-0010",
+  "title": "集中 failure reason 字典，统一 protection / runtime / RTP / download 的错误分类",
+  "goal": [
+    "把 rate_limit/max_concurrent/rtp_gap_timeout/rtp_sequence_gap/timeout/broken_pipe 等 reason 集中化",
+    "减少近义词漂移，提升告警聚合、审计查询与诊断导出质量",
+    "建立 reason code -> 文本/严重级别/归类的统一字典"
+  ],
+  "scope": {
+    "include": [
+      "gateway-server/internal/server/protection_runtime*.go",
+      "gateway-server/internal/server/mapping_runtime*.go",
+      "gateway-server/internal/server/rtp_*.go",
+      "gateway-server/internal/server/access_log_store.go",
+      "gateway-server/internal/diagnostics/**",
+      "gateway-server/docs/**"
+    ],
+    "exclude": [
+      "gateway-ui/**"
+    ]
+  },
+  "required_gates": [
+    "repo_consistency",
+    "strict_source",
+    "smoke"
+  ],
+  "success_criteria": [
+    "存在统一 failure reason 字典及常量定义",
+    "告警、审计、摘要与导出统一使用 reason code",
+    "旧近义 reason 被迁移或映射，不再继续扩散",
+    "新增 reason 规范说明与测试"
+  ],
+  "evidence_required": [
+    "patch.diff",
+    "gate-results.json",
+    "failure-reason-dictionary.md"
+  ],
+  "depends_on": [],
+  "priority": "P1",
+  "risk": "medium",
+  "status": "backlog"
+}

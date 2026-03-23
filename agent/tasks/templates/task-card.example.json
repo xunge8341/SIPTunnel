@@ -1,0 +1,33 @@
+{
+  "id": "OPT-EXAMPLE-0001",
+  "title": "示例任务：拆分大型执行器并保留既有行为",
+  "goal": [
+    "降低耦合",
+    "保留现有行为",
+    "补齐门禁与证据归档"
+  ],
+  "scope": {
+    "include": [
+      "gateway-server/internal/service/httpinvoke/**",
+      "gateway-server/internal/diagnostics/**",
+      "scripts/agent/**",
+      "agent/**"
+    ],
+    "exclude": [
+      "gateway-ui/**"
+    ]
+  },
+  "required_gates": [
+    "repo_consistency",
+    "strict_source",
+    "smoke"
+  ],
+  "success_criteria": [
+    "required_gates 全部通过",
+    "证据目录写入完整",
+    "不引入新的未归档失败"
+  ],
+  "priority": "P1",
+  "risk": "medium",
+  "status": "active"
+}

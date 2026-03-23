@@ -1,0 +1,3 @@
+[Attempt] go test ./internal/server -run "TestRuntimeHTTPKeepAlivePolicy_AutoExemptsMappingForwardClientOnWindowsGo126|TestAdaptiveSnapshotUsesConservativePlanForOpenEndedGenericDownload|TestCompactTunnelRequestHeaders" -count=1
+go: downloading go1.25.0 (linux/amd64)
+go: download go1.25.0: golang.org/toolchain@v0.0.1-go1.25.0.linux-amd64: Get "https://proxy.golang.org/golang.org/toolchain/@v/v0.0.1-go1.25.0.linux-amd64.zip": dial tcp: lookup proxy.golang.org on 168.63.129.16:53: read udp 172.30.0.47:41060->168.63.129.16:53: read: connection refused

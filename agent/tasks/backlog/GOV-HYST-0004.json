@@ -1,0 +1,50 @@
+{
+  "id": "GOV-HYST-0004",
+  "title": "把自动调优改造成带迟滞与冷却期的运行治理状态机",
+  "goal": [
+    "引入 NORMAL/PRESSURED/DEGRADED/COOLDOWN/RECOVERING 状态机",
+    "实现降级果断、恢复谨慎、迟滞区和冷却期",
+    "统一状态切换原因、配置项、观测项和审计事件",
+    "避免弱网和混合业务下频繁升降档抖振"
+  ],
+  "scope": {
+    "include": [
+      "gateway-server/internal/server/protection_runtime*.go",
+      "gateway-server/internal/server/http_runtime_mitigation*.go",
+      "gateway-server/internal/server/ops_runtime_strategy.go",
+      "gateway-server/internal/server/ops_system_settings_http.go",
+      "gateway-server/internal/server/ops_resource_usage*.go",
+      "gateway-server/internal/startupsummary/**",
+      "gateway-ui/src/api/**",
+      "gateway-ui/src/types/**",
+      "gateway-ui/src/views/**",
+      "gateway-server/docs/**"
+    ],
+    "exclude": [
+      "gateway-ui/dist/**"
+    ]
+  },
+  "required_gates": [
+    "repo_consistency",
+    "strict_source",
+    "smoke",
+    "longrun_smoke"
+  ],
+  "success_criteria": [
+    "新增 degrade_threshold/recovery_threshold/cooldown_period/min_stable_window/step_up_policy/step_down_policy 配置",
+    "状态切换带 from_state/to_state/trigger/metrics_snapshot/cooldown_remaining",
+    "恢复阈值显著严于降级阈值并可在资源页/保护页回读",
+    "新增抖振回归测试，验证边缘波动下不会高频升降档",
+    "长稳 smoke 不出现状态切换风暴或错误率异常放大"
+  ],
+  "evidence_required": [
+    "patch.diff",
+    "gate-results.json",
+    "hysteresis-state-machine.md",
+    "state-switch-samples.log"
+  ],
+  "depends_on": [],
+  "priority": "P0",
+  "risk": "high",
+  "status": "backlog"
+}

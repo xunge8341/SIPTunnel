@@ -1,0 +1,11 @@
+[
+  {
+    "resource_code": "31010900002000000003",
+    "name": "web",
+    "enabled": true,
+    "target_url": "http://127.0.0.1:80/",
+    "methods": ["GET"],
+    "response_mode": "RTP",
+    "description": "WEB 映射强制 RTP 示例"
+  }
+]
