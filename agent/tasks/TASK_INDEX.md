@@ -36,3 +36,13 @@
   - Linux：`./scripts/agent/run-task.sh agent/tasks/backlog/<TASK>.json`
   - Windows：`./scripts/agent/run-task.ps1 -TaskFile agent/tasks/backlog/<TASK>.json`
 - 任务推进时，建议将单张卡移动到 `agent/tasks/active/`，完成后移动到 `done/`，失败阻塞移到 `blocked/`。
+
+## Codex app Automations 顺序执行
+
+- 自动队列默认按 `P0 > P1 > P2` 选择任务。
+- 同优先级下，`active/` 先于 `backlog/`。
+- `depends_on` 未满足的任务不会被领取。
+- 队列一次只处理一张任务卡。
+- 推荐入口：
+  - Linux/macOS：`./scripts/agent/run-automation-cycle.sh`
+  - Windows：`./scripts/agent/run-automation-cycle.ps1`

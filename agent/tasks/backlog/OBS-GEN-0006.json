@@ -40,5 +40,6 @@
   ],
   "priority": "P1",
   "risk": "medium",
-  "status": "backlog"
+  "status": "backlog",
+  "queue_order": 6
 }

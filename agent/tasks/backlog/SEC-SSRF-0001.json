@@ -45,5 +45,6 @@
   "depends_on": [],
   "priority": "P0",
   "risk": "high",
-  "status": "backlog"
+  "status": "backlog",
+  "queue_order": 1
 }

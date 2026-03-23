@@ -50,3 +50,15 @@
 - 统一门禁结果格式：JSON + Markdown
 - Linux 使用 shell 入口；Windows 使用 PowerShell 入口
 - 能跨平台的门禁必须提供两侧脚本；仅 Linux 可用的门禁需要在 `agent/gates.json` 中明确标注
+
+
+## Codex app Automations
+
+本仓已为 Codex app Automations 准备以下入口：
+
+- `AGENTS.md`：仓库级自动执行约束
+- `.agents/skills/task-card-executor/`：单张任务卡执行技能
+- `.codex/prompts/automation-run-next-task.md`：Automation 提示词模板
+- `scripts/agent/claim-next-task.*`：顺序领卡
+- `scripts/agent/finalize-task.*`：按门禁结果归档
+- `scripts/agent/run-automation-cycle.*`：单次自动执行入口

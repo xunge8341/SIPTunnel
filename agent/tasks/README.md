@@ -13,7 +13,8 @@
 - `success_criteria`：成功标准数组
 - `priority`：P0/P1/P2
 - `risk`：low/medium/high
-- `status`：backlog/active/done/blocked
+- `status`：backlog/active/in_progress/done/blocked
+- `queue_order`：同优先级内的顺序号，供自动队列稳定排序
 
 执行入口：
 
@@ -24,3 +25,12 @@
 推荐先阅读：
 
 - `agent/tasks/TASK_INDEX.md`：任务卡执行顺序与依赖关系
+
+
+任务状态目录：
+
+- `backlog/`：待执行
+- `active/`：人工提升优先级的待执行任务
+- `in_progress/`：当前由自动队列锁定并执行中的任务
+- `done/`：门禁通过
+- `blocked/`：门禁失败或需要人工继续拆解
